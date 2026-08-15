@@ -5,7 +5,7 @@
 - 仓库：`winTEuser/Genshin_StarRail_fps_unlocker`
 - 许可证：MIT（见 `upstream/LICENSE`）
 - 派生自：`34736384/genshin-fps-unlock`（MIT）
-- 内嵌组件：`inih/INIReader`（BSD-3-Clause，`upstream/src/inireader.h` 引用 LICENSE.txt，上游未随包提供，分发时需保留 BSD 声明）
+- 内嵌组件：`inih/INIReader`（BSD-3-Clause，`upstream/src/inireader.h` 引用 LICENSE.txt，上游未随包提供；官方原文副本放于 `adapter/licenses/inih-LICENSE.txt`，分发时保留 BSD 声明）
 
 ## 导入方式
 
@@ -46,6 +46,16 @@ git subtree add --squash --prefix=native/HoyoTouchCore/upstream \
   5=扫描失败，6=注入失败。
 - 同步风险：上游 main() 扫描特征或注入时序变化时需同步更新本函数对应段落；
   上游主流程重构时需重新评估。
+
+### TLS 回调条件编译（NTSYSAPI.h，Sparxie 构建启用）
+
+- 位置：`upstream/src/NTSYSAPI.h` 的 `TLS_CALLBACK`。
+- 内容：`SPARXIE_DISABLE_TLS_INIT` 宏下跳过 DLL_PROCESS_ATTACH 时的 `init_API()`
+  调用（默认行为不改，仅 Sparxie 构建由 CMake 定义该宏）。
+- 原因：TLS 回调在 loader lock 内调 init_API，失败时在 loader lock 内
+  ExitProcess，导致 DLL 在 .NET 进程（SessionHost）加载即崩 C0000409。
+  init_API 由 `sparxie_hoyo_bootstrap` 显式调用，加载期初始化对 Sparxie 冗余。
+- 同步风险：若上游改动 TLS 回调逻辑需重新评估；宏默认关闭不影响上游行为。
 
 以下差异全部放在 subtree 外的 adapter/：
 
