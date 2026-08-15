@@ -28,6 +28,8 @@ public static class SessionLauncher
         psi.Environment[HostEnvironment.SessionId] = sessionId;
         psi.Environment[HostEnvironment.HostPipeName] = pipeName;
         psi.Environment[HostEnvironment.ProfileJson] = ProfileJson.Format(profile);
+        // 统一应用根目录：恢复记录 recovery/zzz 与 Broker 同目录（发布包内两者本就同目录）
+        psi.Environment["SPARXIE_APP_DIR"] = AppContext.BaseDirectory;
 
         var process = Process.Start(psi)
             ?? throw new InvalidOperationException("启动 SessionHost 失败");

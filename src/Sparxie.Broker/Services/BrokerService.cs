@@ -5,6 +5,7 @@ using Sparxie.Broker.Sessions;
 using Sparxie.Broker.Validation;
 using Sparxie.Contracts.Errors;
 using Sparxie.Contracts.Rpc;
+using Sparxie.Infrastructure.Zzz;
 
 namespace Sparxie.Broker.Services;
 
@@ -182,12 +183,45 @@ public sealed class BrokerService : SparxieBroker.SparxieBrokerBase
             Message = ev.Message,
         });
 
+        var removedSession = _registry.Remove(ev.SessionId);
+        var isZzz = removedSession is not null
+            && string.Equals(removedSession.Game, "zenlessZoneZero", StringComparison.Ordinal);
+
         if (ev.State is "Exited" or "Failed" or "HostCrashedBeforeRunning" or "HostCrashedAfterRunning")
         {
-            if (_registry.Remove(ev.SessionId) is { } session)
+            if (removedSession is not null)
             {
-                await session.DisposeAsync().ConfigureAwait(false);
+                await removedSession.DisposeAsync().ConfigureAwait(false);
             }
+        }
+
+        // ZZZ Host 在 Running 前异常死亡：本次会话立即走共享恢复例程恢复 PC 配置。
+        // 只处理 Running 前崩溃；Running 后恢复记录应已删除，不重建。
+        if (ev.State == "HostCrashedBeforeRunning" && isZzz)
+        {
+            await TryRecoverZzzConfigAsync(ev.SessionId).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>共享恢复例程：存在恢复记录时执行；成功或无需恢复都算正常收尾。</summary>
+    private async Task TryRecoverZzzConfigAsync(string sessionId)
+    {
+        try
+        {
+            var record = ZzzRecoveryStore.TryLoad(sessionId);
+            if (record is null)
+            {
+                return;
+            }
+
+            // 确认本次游戏进程已退出（临时 Job 已终止），再由恢复例程校验并恢复。
+            ZzzRecoveryStore.Restore(record);
+            _logger.LogInformation("ZZZ 配置已在本次会话恢复: session={SessionId}", sessionId);
+        }
+        catch (Exception ex)
+        {
+            // 恢复失败或无法确认游戏退出：保留恢复资产，由下次启动兜底。
+            _logger.LogError(ex, "ZZZ 配置本次恢复失败，遗留记录留给下次启动兜底: session={SessionId}", sessionId);
         }
     }
 

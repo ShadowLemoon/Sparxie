@@ -1,16 +1,26 @@
 using System.Diagnostics;
 using Sparxie.Contracts.Models;
+using Sparxie.Contracts.Rpc;
 
 namespace Sparxie.SessionHost.Sessions;
 
 /// <summary>
-/// 游戏 Runtime 控制器抽象：进入 Running 前的注入/安装/校验步骤。
-/// 第四步以 Null 占位；ZZZ 与 Hoyo 控制器在后续步骤接入。
+/// 游戏 Runtime 控制器抽象。ZZZ 控制器负责启动前配置切换与恢复记录，
+/// Hoyo 控制器负责扫描与 Patch。所有步骤全部成功才进入 Running。
 /// </summary>
 public interface IGameController : IDisposable
 {
+    /// <summary>启动游戏进程前调用：ZZZ 备份 PC 配置、写入触屏配置并建立恢复记录；Hoyo 无操作。</summary>
+    Task PrepareLaunchAsync(ProfileSnapshot profile, CancellationToken cancellationToken);
+
     /// <summary>注入并安装 Runtime，全部成功后才返回；失败抛异常。返回后可调用 SetTargetFps。</summary>
     Task InstallAsync(Process gameProcess, HoyoProfileSettings? hoyo, CancellationToken cancellationToken);
+
+    /// <summary>注入成功后、宣布 Running 前调用：ZZZ 按已验证时序恢复 PC 文件配置并删除恢复记录；Hoyo 无操作。</summary>
+    Task PostInstallAsync(CancellationToken cancellationToken);
+
+    /// <summary>失败路径清理：恢复 PC 配置并清理恢复资产（游戏进程已被终止后调用）。</summary>
+    Task AbortAsync(CancellationToken cancellationToken);
 
     /// <summary>热调主目标 FPS；纯触屏或未启用 FPS 时抛 NotSupportedException。</summary>
     Task SetTargetFpsAsync(int targetFps, CancellationToken cancellationToken);
@@ -19,7 +29,16 @@ public interface IGameController : IDisposable
 /// <summary>占位控制器：立即成功，用于 Running 前失效保护与生命周期验证。</summary>
 public sealed class NullGameController : IGameController
 {
+    public Task PrepareLaunchAsync(ProfileSnapshot profile, CancellationToken cancellationToken)
+        => Task.CompletedTask;
+
     public Task InstallAsync(Process gameProcess, HoyoProfileSettings? hoyo, CancellationToken cancellationToken)
+        => Task.CompletedTask;
+
+    public Task PostInstallAsync(CancellationToken cancellationToken)
+        => Task.CompletedTask;
+
+    public Task AbortAsync(CancellationToken cancellationToken)
         => Task.CompletedTask;
 
     public Task SetTargetFpsAsync(int targetFps, CancellationToken cancellationToken)

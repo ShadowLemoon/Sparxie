@@ -53,6 +53,9 @@ public sealed class GameSession : IAsyncDisposable
                 return;
             }
 
+            // 启动游戏进程前的 Runtime 准备（ZZZ：备份 PC 配置并写入触屏配置）
+            await _controller.PrepareLaunchAsync(_options.Profile, cancellationToken).ConfigureAwait(false);
+
             _job = PreRunningJob.Create();
             _gameProcess = StartGameProcess();
             _job.Assign(_gameProcess.SafeHandle);
@@ -61,6 +64,9 @@ public sealed class GameSession : IAsyncDisposable
 
             // Runtime 安装/注入：全部成功才进入 Running
             await _controller.InstallAsync(_gameProcess, _options.Profile.Hoyo.ToModel(), cancellationToken).ConfigureAwait(false);
+
+            // 注入成功后、Running 前的配置收尾（ZZZ：恢复 PC 文件配置并删除恢复记录）
+            await _controller.PostInstallAsync(cancellationToken).ConfigureAwait(false);
 
             // 进入 Running 前撤销 kill-on-close，转换失败即整次失败
             try
@@ -91,6 +97,17 @@ public sealed class GameSession : IAsyncDisposable
         finally
         {
             Cleanup();
+
+            // 失败路径配置回滚（ZZZ：恢复 PC 配置并清理恢复资产）
+            try
+            {
+                await _controller.AbortAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // 恢复失败不吞掉，但不再改变会话终态；遗留记录由 Broker/下次启动兜底
+                await EmitAsync(SessionStates.Failed, StageCode.Cleanup, ErrorCode.ZzzRecoveryFailed, $"配置恢复失败: {ex.Message}", CancellationToken.None).ConfigureAwait(false);
+            }
         }
     }
 

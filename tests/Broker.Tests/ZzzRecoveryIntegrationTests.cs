@@ -3,28 +3,35 @@ using Grpc.Core;
 using Grpc.Net.Client;
 using Sparxie.Contracts.Rpc;
 using Sparxie.Infrastructure.Rpc;
+using Sparxie.Infrastructure.Zzz;
+using Xunit;
 
 namespace Broker.Tests;
 
 /// <summary>
-/// 全链路集成：真实 Broker + 真实 SessionHost + 假游戏进程，
-/// 验证 StartSession → Host 私有管道 → 事件转发 → Running/Exited 的完整闭环。
+/// ZZZ 失败路径集成：真实 Broker + 真实 SessionHost + 假绝区零安装目录。
+/// 注入阶段因 ZZZTouchCore.dll 不存在而失败，验证：
+/// 1) PrepareLaunch 已写入恢复记录并切换触屏配置；
+/// 2) 失败后本次会话 AbortAsync 恢复 PC 配置并删除恢复记录；
+/// 3) 无遗留恢复记录。
 /// </summary>
 [Collection("SessionHostProcess")]
-public sealed class HostPipelineIntegrationTests : IAsyncLifetime
+public sealed class ZzzRecoveryIntegrationTests : IAsyncLifetime
 {
     private Process? _brokerProcess;
-    private Process? _hostProcess;
     private readonly string _brokerPipe = $"sparxie-pipe-{Guid.NewGuid():N}";
-    private readonly string _fakeGameDir = Path.Combine(Path.GetTempPath(), "sparxie-fakegame", Guid.NewGuid().ToString("N"));
+    private readonly string _fakeGameDir = Path.Combine(Path.GetTempPath(), "sparxie-zzz-fakegame", Guid.NewGuid().ToString("N"));
 
     public Task InitializeAsync()
     {
-        // 假游戏：复制 ping.exe 并命名为白名单内的 StarRail.exe（无参数运行立即退出）
-        Directory.CreateDirectory(_fakeGameDir);
-        File.Copy(Path.Combine(Environment.SystemDirectory, "ping.exe"), FakeGamePath);
+        // 假绝区零安装目录：白名单 EXE + 合法 Sleepy 编码 GENERAL_DATA.bin（PC 模式）
+        var dataDir = Path.Combine(_fakeGameDir, "ZenlessZoneZero_Data", "Persistent", "LocalStorage");
+        Directory.CreateDirectory(dataDir);
+        var generalDataPath = Path.Combine(dataDir, "GENERAL_DATA.bin");
+        ZzzGeneralData.WriteRawString(generalDataPath, "{\"LocalUILayoutPlatform\": 2}");
+        File.Copy(Path.Combine(Environment.SystemDirectory, "ping.exe"),
+            Path.Combine(_fakeGameDir, "ZenlessZoneZero.exe"));
 
-        // SessionHost.exe 不在测试输出目录：显式指向其构建输出
         Environment.SetEnvironmentVariable(
             Sparxie.Broker.Hosting.SessionLauncher.SessionHostExeEnv,
             LocateSessionHostExe());
@@ -44,19 +51,29 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
         return Task.CompletedTask;
     }
 
-    private string FakeGamePath => Path.Combine(_fakeGameDir, "StarRail.exe");
-
     public async Task DisposeAsync()
     {
-        foreach (var process in new[] { _brokerProcess, _hostProcess })
+        if (_brokerProcess is { HasExited: false })
         {
-            if (process is { HasExited: false })
-            {
-                process.Kill(entireProcessTree: true);
-                await process.WaitForExitAsync();
-            }
+            _brokerProcess.Kill(entireProcessTree: true);
+            await _brokerProcess.WaitForExitAsync();
+        }
 
-            process?.Dispose();
+        _brokerProcess?.Dispose();
+
+        // 清理测试留下的恢复记录
+        foreach (var record in ZzzRecoveryStore.FindAll())
+        {
+            if (record.GeneralDataPath.StartsWith(_fakeGameDir, StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    ZzzRecoveryStore.Delete(record);
+                }
+                catch
+                {
+                }
+            }
         }
 
         try
@@ -69,13 +86,14 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task 完整会话链路事件流到达Running与Exited()
+    public async Task ZZZ注入失败后本次会话恢复PC配置且无遗留记录()
     {
+        var generalDataPath = Path.Combine(
+            _fakeGameDir, "ZenlessZoneZero_Data", "Persistent", "LocalStorage", "GENERAL_DATA.bin");
         var client = CreateBrokerClient();
         var events = new List<SessionEvent>();
 
-        // 先订阅事件流
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var eventTask = Task.Run(async () =>
         {
             var stream = client.StreamEvents(new StreamEventsRequest
@@ -92,55 +110,30 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
             }
         });
 
-        // 启动会话
-        StartSessionResponse startResponse = null!;
-        Exception? lastError = null;
-        for (var i = 0; i < 60 && startResponse is null; i++)
+        var response = await client.StartSessionAsync(new StartSessionRequest
         {
-            try
+            ProtocolVersion = RpcContract.ProtocolVersion,
+            RequestId = Guid.NewGuid().ToString("N"),
+            Profile = new ProfileSnapshot
             {
-                startResponse = await client.StartSessionAsync(new StartSessionRequest
-                {
-                    ProtocolVersion = RpcContract.ProtocolVersion,
-                    RequestId = Guid.NewGuid().ToString("N"),
-                    Profile = new ProfileSnapshot
-                    {
-                        ProfileId = "p1",
-                        DisplayName = "假星铁",
-                        Game = "starRail",
-                        Variant = "intl",
-                        ExecutablePath = FakeGamePath,
-                        Hoyo = new HoyoSettings
-                        {
-                            FpsUnlockEnabled = true,
-                            TargetFps = 120,
-                            BackgroundFps = 10,
-                            ProcessPriority = "normal",
-                            GenshinPreset30Fps = 60,
-                            GenshinPreset60Fps = 1000,
-                            GenshinTouchUiScalePercent = 400,
-                        },
-                    },
-                }, cancellationToken: cts.Token);
-            }
-            catch (Exception ex)
-            {
-                lastError = ex;
-                await Task.Delay(250);
-            }
-        }
+                ProfileId = "zzz1",
+                DisplayName = "假绝区零",
+                Game = "zenlessZoneZero",
+                Variant = "cn",
+                ExecutablePath = Path.Combine(_fakeGameDir, "ZenlessZoneZero.exe"),
+            },
+        }, cancellationToken: cts.Token);
 
-        Assert.NotNull(startResponse);
-        Assert.True(startResponse.Accepted, lastError?.Message);
-        _hostProcess = Process.GetProcessesByName("Sparxie.SessionHost").FirstOrDefault();
+        Assert.True(response.Accepted, response.Message);
+        var sessionId = response.SessionId;
 
-        // 等待事件流出现 Exited
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+        // 等待失败事件
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
         while (DateTime.UtcNow < deadline)
         {
             lock (events)
             {
-                if (events.Any(e => e.State == "Exited"))
+                if (events.Any(e => e.State == "Failed"))
                 {
                     break;
                 }
@@ -155,10 +148,21 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
             snapshot = [.. events];
         }
 
-        var states = string.Join(" → ", snapshot.Select(e => e.State));
-        Assert.Contains(snapshot, e => e.State == "Starting");
-        Assert.Contains(snapshot, e => e.State == "Running");
-        Assert.Contains(snapshot, e => e.State == "Exited");
+        Assert.Contains(snapshot, e => e.State == "Failed");
+
+        // Host 进程自行退出意味着 finally（Cleanup + AbortAsync 恢复配置）已执行完
+        var hostDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+        while (DateTime.UtcNow < hostDeadline
+               && Process.GetProcessesByName("Sparxie.SessionHost").Length > 0)
+        {
+            await Task.Delay(200);
+        }
+
+        Assert.Empty(Process.GetProcessesByName("Sparxie.SessionHost"));
+
+        // 注入失败 → 失败路径 AbortAsync 恢复 PC 配置并删除恢复记录
+        Assert.Equal(ZzzGeneralData.PlatformPc, ZzzGeneralData.ReadPlatform(generalDataPath));
+        Assert.Null(ZzzRecoveryStore.TryLoad(sessionId));
 
         cts.Cancel();
         try
@@ -168,7 +172,7 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
         catch (OperationCanceledException)
         {
         }
-        catch (Grpc.Core.RpcException)
+        catch (RpcException)
         {
         }
     }

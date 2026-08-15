@@ -14,6 +14,7 @@ using Sparxie.Infrastructure.Rpc;
 namespace Broker.Tests;
 
 /// <summary>真实命名管道 gRPC 集成测试：同进程启动 Kestrel 管道端点，客户端经管道连接。</summary>
+[Collection("SessionHostProcess")]
 public sealed class BrokerPipeIntegrationTests : IAsyncLifetime
 {
     private WebApplication? _app;

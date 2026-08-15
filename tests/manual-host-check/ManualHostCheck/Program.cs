@@ -18,6 +18,8 @@ internal static class Program
             FileName = hostExe,
             UseShellExecute = false,
             WorkingDirectory = Path.GetDirectoryName(hostExe)!,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
         };
         psi.Environment[HostEnvironment.SessionId] = "manual";
         psi.Environment[HostEnvironment.HostPipeName] = pipeName;
@@ -25,9 +27,9 @@ internal static class Program
         {
             ProfileId = "p1",
             DisplayName = "x",
-            Game = "starRail",
-            Variant = "intl",
-            ExecutablePath = @"D:\nonexistent\StarRail.exe",
+            Game = "zenlessZoneZero",
+            Variant = "cn",
+            ExecutablePath = @"D:\Code\Sparxie\.pai-temp-fakegame\ZenlessZoneZero.exe",
             Hoyo = new HoyoSettings
             {
                 FpsUnlockEnabled = true,
@@ -42,6 +44,23 @@ internal static class Program
 
         var host = Process.Start(psi)!;
         Console.WriteLine($"host started pid={host.Id}");
+
+        // 读取 Host 输出，便于诊断崩溃
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var text = host.StandardError.ReadToEnd();
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    Console.WriteLine("--- HOST STDERR ---");
+                    Console.WriteLine(text);
+                }
+            }
+            catch
+            {
+            }
+        });
 
         // 探测管道就绪
         for (var i = 0; i < 40; i++)

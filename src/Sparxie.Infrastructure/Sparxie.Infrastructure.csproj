@@ -4,6 +4,11 @@
     <ProjectReference Include="..\Sparxie.Contracts\Sparxie.Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Zzz.Tests" />
+    <InternalsVisibleTo Include="Broker.Tests" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

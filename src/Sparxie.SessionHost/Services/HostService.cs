@@ -29,9 +29,8 @@ public sealed class HostService : SparxieHost.SparxieHostBase
         var options = HostOptions.FromEnvironment();
         var events = Channel.CreateUnbounded<HostEvent>();
 
-        using var controller = new NullGameController();
+        using var controller = CreateController(options);
         await using var session = new GameSession(options, controller, ev => events.Writer.WriteAsync(ev).AsTask());
-
         var reportTask = Task.Run(async () =>
         {
             try
@@ -85,4 +84,10 @@ public sealed class HostService : SparxieHost.SparxieHostBase
         // commandTask 作为后台任务随进程退出终止。
         _lifetime.StopApplication();
     }
+
+    private static IGameController CreateController(HostOptions options) => options.Profile.Game switch
+    {
+        "zenlessZoneZero" => new ZzzGameController(options.SessionId),
+        _ => new NullGameController(),
+    };
 }

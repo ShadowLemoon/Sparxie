@@ -40,6 +40,7 @@ public enum ErrorCode
     RecoveryPathInvalid,
     RecoveryGameStillRunning,
     RecoveryRestoreFailed,
+    ZzzRecoveryFailed,
 
     // Host/运行期
     HostCrashedBeforeRunning,
