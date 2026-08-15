@@ -8,9 +8,10 @@
 ### 配置层
 - ~~文件写入/刷盘/原子替换失败注入~~ ✅ 已完成（AppConfigStoreTests：目录不可写/不存在目录，原配置保持）
 - ~~程序目录不可写时启动失败~~ ✅ 已完成（ConfigDirectoryNotWritable 路径）
-- Profile 动态增删改、多 Profile 隔离
-- 完整 EXE 路径保存后与恢复值一致断言
-- 不回退 AppData
+- ~~完整 EXE 路径保存后与恢复值一致断言~~ ✅ 已完成（含空格/游戏目录路径往返）
+- ~~不回退 AppData~~ ✅ 已完成（AppConfigStore 只使用构造传入路径，无重定向）
+- Profile 动态增删改（增删已覆盖；"改"经 SettingsPage 保存路径，UI 自动化未覆盖）
+- 多 Profile 隔离（AppStateTests 已覆盖，见 UI 节）
 
 ### 契约与设置层
 - ✅ 新 Profile 全量默认值（FPS 开/120/后台开/10/Normal/跟随档位关/缩放 400%）——
