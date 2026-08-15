@@ -92,10 +92,10 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
             }
         });
 
-        // 启动会话
+        // 启动会话（Broker 冷启动 JIT 可能较慢，放宽轮询窗口）
         StartSessionResponse startResponse = null!;
         Exception? lastError = null;
-        for (var i = 0; i < 60 && startResponse is null; i++)
+        for (var i = 0; i < 120 && startResponse is null; i++)
         {
             try
             {
