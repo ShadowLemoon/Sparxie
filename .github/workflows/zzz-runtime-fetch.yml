@@ -1,0 +1,81 @@
+# ZZZ 私有 Runtime 接入：按 build/zzz-runtime.json 固定版本下载、校验并复制到 staging。
+# 使用 CI Secret 访问私有 Release；客户端不包含私库凭据。
+name: zzz-runtime-fetch
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["build/zzz-runtime.json", ".github/workflows/zzz-runtime-fetch.yml"]
+
+jobs:
+  fetch:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 校验清单字段
+        shell: pwsh
+        run: |
+          $m = Get-Content build/zzz-runtime.json -Raw | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace($m.runtimeVersion)) { throw "runtimeVersion 为空" }
+          if ([string]::IsNullOrWhiteSpace($m.releaseAsset)) { throw "releaseAsset 为空" }
+          if ($m.sha256 -notmatch '^[0-9a-fA-F]{64}$') { throw "sha256 非法" }
+          foreach ($f in $m.files) {
+            if ($f -match '[\\/]' -or $f -match '\.\.') { throw "非法文件名: $f" }
+          }
+          Write-Host "manifest OK: $($m.runtimeVersion)"
+
+      - name: 下载私有 Release 资产
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.PRIVATE_RUNTIME_TOKEN }}
+        run: |
+          $m = Get-Content build/zzz-runtime.json -Raw | ConvertFrom-Json
+          $repo = "${{ vars.PRIVATE_RUNTIME_REPO }}"
+          if ([string]::IsNullOrWhiteSpace($repo)) { throw "PRIVATE_RUNTIME_REPO 未配置" }
+          $url = "https://api.github.com/repos/$repo/releases/tags/$($m.runtimeVersion)"
+          $release = Invoke-RestMethod -Uri $url -Headers @{ Authorization = "Bearer $env:GITHUB_TOKEN" }
+          $asset = $release.assets | Where-Object { $_.name -eq $m.releaseAsset }
+          if (-not $asset) { throw "Release 资产不存在: $($m.releaseAsset)" }
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "zzz-runtime.zip" `
+            -Headers @{ Authorization = "Bearer $env:GITHUB_TOKEN" }
+
+      - name: 校验 SHA-256
+        shell: pwsh
+        run: |
+          $m = Get-Content build/zzz-runtime.json -Raw | ConvertFrom-Json
+          $actual = (Get-FileHash zzz-runtime.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $m.sha256.ToLowerInvariant()) {
+            throw "SHA-256 不符: 期望 $($m.sha256) 实际 $actual"
+          }
+          Write-Host "SHA-256 OK"
+
+      - name: 解压并校验 DLL 与导出
+        shell: pwsh
+        run: |
+          $m = Get-Content build/zzz-runtime.json -Raw | ConvertFrom-Json
+          Expand-Archive zzz-runtime.zip -DestinationPath runtime/zzz -Force
+          foreach ($f in $m.files) {
+            if (-not (Test-Path "runtime/zzz/$f")) { throw "缺少 $f" }
+          }
+          if (-not (Test-Path "runtime/zzz/ZZZTouchCore.dll")) { throw "缺少 ZZZTouchCore.dll" }
+          if (-not (Test-Path "runtime/zzz/ZZZTouchFilterHook.dll")) { throw "缺少 ZZZTouchFilterHook.dll" }
+
+      - name: 导出冒烟检查
+        shell: pwsh
+        run: |
+          $exports = @('ZZZTouchInjectToProcess', 'ZZZTouchWaitGameExit', 'ZZZTouchRelease')
+          $bytes = [System.IO.File]::ReadAllBytes((Resolve-Path 'runtime/zzz/ZZZTouchCore.dll'))
+          $text = [System.Text.Encoding]::ASCII.GetString($bytes)
+          foreach ($e in $exports) {
+            if (-not $text.Contains($e)) { throw "ZZZTouchCore.dll 缺少导出: $e" }
+          }
+          Write-Host "导出冒烟 OK"
+
+      - name: 上传 staging 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: zzz-runtime-staging
+          path: runtime/zzz/
+          retention-days: 7

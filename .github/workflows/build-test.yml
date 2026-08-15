@@ -1,0 +1,44 @@
+# 离线构建 + 全部测试。发布阻塞验收（实机六项）在 release 流程中单独执行。
+name: build-test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: 还原并构建
+        run: dotnet build Sparxie.sln -c Release --nologo
+
+      - name: 运行全部测试
+        run: dotnet test Sparxie.sln -c Release --no-build --nologo -v q
+
+      - name: 打包便携 ZIP（不含 ZZZ Runtime，由 zzz-runtime-fetch 工作流合并）
+        shell: pwsh
+        run: |
+          $staging = "artifacts/Sparxie"
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
+          Copy-Item "src/Sparxie.App/bin/Release/net10.0-windows/win-x64/publish/*" $staging -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item "src/Sparxie.Broker/bin/Release/net10.0-windows/win-x64/publish/*" $staging -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item "src/Sparxie.SessionHost/bin/Release/net10.0-windows/win-x64/publish/*" $staging -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item LICENSE, THIRD-PARTY-NOTICES.md $staging -Force
+          Compress-Archive -Path "$staging/*" -DestinationPath "artifacts/Sparxie-portable.zip" -Force
+
+      - name: 上传 ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: sparxie-portable
+          path: artifacts/Sparxie-portable.zip
+          retention-days: 14
