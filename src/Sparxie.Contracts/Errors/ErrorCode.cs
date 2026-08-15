@@ -21,6 +21,7 @@ public enum ErrorCode
     GameAlreadyRunning,
     MutexConflict,
     ProfileNotFound,
+    SessionNotFound,
     InvalidExecutableName,
     ExecutableNotFound,
     JobSetupFailed,

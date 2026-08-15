@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package sparxie.rpc;
+
+option csharp_namespace = "Sparxie.Contracts.Rpc";
+
+// 协议版本：首版为 1。
+message PingRequest {
+  int32 protocol_version = 1;
+  string request_id = 2;
+}
+
+message PingResponse {
+  int32 protocol_version = 1;
+  string broker_version = 2;
+}
+
+// 不可变 Profile 快照：UI 侧归一化，Broker 边界重新验证。
+message HoyoSettings {
+  bool fps_unlock_enabled = 1;
+  int32 target_fps = 2;
+  bool background_fps_limit_enabled = 3;
+  int32 background_fps = 4;
+  string process_priority = 5;
+  bool genshin_follow_in_game_preset = 6;
+  int32 genshin_preset_30_fps = 7;
+  int32 genshin_preset_60_fps = 8;
+  bool genshin_touch_ui_scale_override_enabled = 9;
+  int32 genshin_touch_ui_scale_percent = 10;
+}
+
+message ProfileSnapshot {
+  string profile_id = 1;
+  string display_name = 2;
+  string game = 3;
+  string variant = 4;
+  string executable_path = 5;
+  HoyoSettings hoyo = 6;
+}
+
+message StartSessionRequest {
+  int32 protocol_version = 1;
+  string request_id = 2;
+  ProfileSnapshot profile = 3;
+}
+
+message StartSessionResponse {
+  bool accepted = 1;
+  string session_id = 2;
+  int32 stage = 3;
+  int32 error_code = 4;
+  string message = 5;
+}
+
+message SetTargetFpsRequest {
+  string request_id = 1;
+  string session_id = 2;
+  int32 target_fps = 3;
+}
+
+message SetTargetFpsResponse {
+  bool applied = 1;
+  int32 stage = 2;
+  int32 error_code = 3;
+  string message = 4;
+}
+
+message StreamEventsRequest {
+  int32 protocol_version = 1;
+  string request_id = 2;
+}
+
+message SessionEvent {
+  string session_id = 1;
+  string state = 2;
+  int32 stage = 3;
+  int32 error_code = 4;
+  string message = 5;
+}
+
+service SparxieBroker {
+  rpc Ping(PingRequest) returns (PingResponse);
+  rpc StartSession(StartSessionRequest) returns (StartSessionResponse);
+  rpc SetTargetFps(SetTargetFpsRequest) returns (SetTargetFpsResponse);
+  rpc StreamEvents(StreamEventsRequest) returns (stream SessionEvent);
+}
