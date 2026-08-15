@@ -48,6 +48,10 @@ public sealed class HostService : SparxieHost.SparxieHostBase
             {
                 // 管道中断
             }
+            catch (RpcException)
+            {
+                // Broker 断连/崩溃：Host 会话仍独立收尾，事件上报放弃
+            }
         });
 
         var commandTask = Task.Run(async () =>
@@ -78,11 +82,22 @@ public sealed class HostService : SparxieHost.SparxieHostBase
         await session.RunAsync(context.CancellationToken).ConfigureAwait(false);
 
         events.Writer.TryComplete();
-        await reportTask.ConfigureAwait(false);
-
-        // 会话生命周期已结束：立即停止 Host，不等待命令流优雅关闭。
-        // commandTask 作为后台任务随进程退出终止。
-        _lifetime.StopApplication();
+        try
+        {
+            // 会话已结束，事件上报最多再等一小段（Broker 断连时 WriteAsync 可能挂起，
+            // 不能因上报阻塞 Host 收尾——计划：Host 独立收尾不依赖 Broker 存活）。
+            await reportTask.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // 上报任务异常或超时均不阻塞 Host 收尾（Broker 可能已断连）
+        }
+        finally
+        {
+            // 会话生命周期已结束：立即停止 Host，不等待命令流优雅关闭。
+            // commandTask 作为后台任务随进程退出终止。
+            _lifetime.StopApplication();
+        }
     }
 
     private static IGameController CreateController(HostOptions options) => options.Profile.Game switch
