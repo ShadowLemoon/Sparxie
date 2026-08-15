@@ -69,14 +69,15 @@ docs/                      # 架构、第三方许可证
 ## 当前状态与阻塞点
 
 - 已完成：骨架、Contracts/配置、UI/Broker/SessionHost 闭环、ZZZ 配置恢复与
-  Running 前失效保护、Hoyo subtree 与 C ABI、bootstrap 入口、设置页与 FPS 热调、
-  便携发布验证；全量测试 66 个通过。
+  Running 前失效保护、Hoyo subtree 与 C ABI、bootstrap 入口（CET 兼容修复、
+  纯触屏分支、Job 失效保护、错误静默）、Hoyo 真实接入 SessionHost、设置页与
+  FPS 热调、Broker 断连独立收尾、发布许可证交付；全量测试 105 个通过
+  （Debug/Release 均全绿），发布产物审计通过。
 - 阻塞项：
-  1. HoyoTouchCore.dll 在 SessionHost 进程内 bootstrap 调用 init_API 崩溃
-     （C0000409），HostService 路由保持 NullGameController 占位，待 native 调试；
-  2. `build/zzz-runtime.json` 的 runtimeVersion/releaseAsset/sha256 待用户提供
+  1. `build/zzz-runtime.json` 的 runtimeVersion/releaseAsset/sha256 待用户提供
      私有 Release 信息；
-  3. 六个正式服（原神/星铁/绝区零 × 国服/国际服）实机验收需真实游戏环境。
+  2. 六个正式服（原神/星铁/绝区零 × 国服/国际服）实机验收需真实游戏环境，
+     含 Hoyo/ZZZ 真实注入、Running 前后强杀 Host 的进程级验证。
 
 ## 发布
 
