@@ -2028,7 +2028,12 @@ int main(/*int argc, char** argvA*/void)
 
     if (isGenshin && is_old_version == 0)
     {
-        Unityplayer_baseAddr = RemoteDll_Inject(pi->hProcess, 0);
+        // DIAG: 早期返回定位崩溃
+        TerminateProcess_Internal(pi->hProcess, 0);
+        CloseHandle_Internal(pi->hProcess);
+        VirtualFree_Internal(_imgbase_PE_buffer, 0, MEM_RELEASE);
+        free(boot_info);
+        return 8; // DIAG
     }
     else
     {
@@ -2535,7 +2540,7 @@ __Continue:
 // 此补丁是"无法在 subtree 外实现的入口条件"，属于计划允许的最小上游差异。
 // ============================================================================
 
-extern "C" __declspec(dllexport) int __stdcall sparxie_hoyo_bootstrap(
+static int __stdcall sparxie_hoyo_bootstrap_impl(
     const wchar_t* game_executable_path,
     int32_t game_type,             // 0 = genshin, 1 = starRail
     int32_t fps_unlock_enabled,    // 0/1
@@ -2591,14 +2596,8 @@ extern "C" __declspec(dllexport) int __stdcall sparxie_hoyo_bootstrap(
     std::wstring processDir = gamePath.substr(0, gamePath.find_last_of(L"\\"));
     std::wstring procName = gamePath.substr(gamePath.find_last_of(L"\\") + 1);
 
-    // ---- 拒绝接管已运行游戏（与 main() 一致）----
-    DWORD existingPid = GetPID(procName.c_str());
-    if (existingPid)
-    {
-        return 3; // HOYO_ERR_PROCESS_NOT_FOUND 语义复用：已运行拒绝
-    }
+    // ---- 已运行检测由 SessionHost 托管层（GameProcessDetector）完成，bootstrap 不重复执行 ----
 
-    // ---- 创建挂起进程（与 main() 一致，使用 NtCreateProcess 路径）----
     size_t bootsize = sizeof(STARTUPINFOW) + sizeof(PROCESS_INFORMATION) + 0x20;
     LPVOID boot_info = malloc(bootsize);
     if (!boot_info)
@@ -2618,7 +2617,12 @@ extern "C" __declspec(dllexport) int __stdcall sparxie_hoyo_bootstrap(
         return 4; // HOYO_ERR_INTERNAL
     }
 
-    // ---- 加载模块与扫描（复用 main() 流程，去掉控制台输出与插件）----
+    // ---- DIAG: CreateProcess 后立即返回，定位崩溃 ----
+    TerminateProcess_Internal(pi->hProcess, 0);
+    CloseHandle_Internal(pi->hProcess);
+    free(boot_info);
+    return 9; // DIAG
+
     inject_arg injectarg = { 0 };
     Hook_func_list GI_Func = { 0 };
     LPVOID _imgbase_PE_buffer = 0;
@@ -2834,3 +2838,43 @@ extern "C" __declspec(dllexport) int __stdcall sparxie_hoyo_bootstrap(
     free(boot_info);
     return 0; // HOYO_OK
 }
+
+extern "C" __declspec(dllexport) int __stdcall sparxie_hoyo_bootstrap(
+    const wchar_t* game_executable_path,
+    int32_t game_type,
+    int32_t fps_unlock_enabled,
+    int32_t target_fps,
+    int32_t background_fps_limit_enabled,
+    int32_t background_fps,
+    int32_t priority_class,
+    int32_t genshin_follow_in_game_preset,
+    int32_t genshin_preset_30_fps,
+    int32_t genshin_preset_60_fps,
+    int32_t genshin_touch_ui_scale_override_enabled,
+    int32_t genshin_touch_ui_scale_percent,
+    uint32_t* out_pid,
+    uint32_t* out_fps_value_addr)
+{
+    __try
+    {
+        return sparxie_hoyo_bootstrap_impl(
+            game_executable_path, game_type, fps_unlock_enabled, target_fps,
+            background_fps_limit_enabled, background_fps, priority_class,
+            genshin_follow_in_game_preset, genshin_preset_30_fps, genshin_preset_60_fps,
+            genshin_touch_ui_scale_override_enabled, genshin_touch_ui_scale_percent,
+            out_pid, out_fps_value_addr);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        FILE* f = nullptr;
+        fopen_s(&f, "hoyo-seh.log", "a");
+        if (f)
+        {
+            fprintf(f, "SEH code=0x%X\n", GetExceptionCode());
+            fclose(f);
+        }
+
+        return 7;
+    }
+}
+

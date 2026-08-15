@@ -8,23 +8,38 @@
 //     控制台热键循环，错误弹窗按上游逻辑仅在注入失败路径出现，不改变成功路径。
 
 #include "hoyo_touch_core_abi.h"
+#include <Windows.h>
 
 #include <atomic>
 #include <cstdint>
-#include <mutex>
+
 
 namespace
 {
 struct HoyoSession
 {
     HoyoLaunchRequest request{};
-    std::atomic<uint32_t> fps_value{120};
+    volatile LONG fps_value = 120;
+    uint32_t game_pid = 0;
     bool active = false;
     bool launched = false;
 };
 
-std::mutex g_session_mutex;
+CRITICAL_SECTION g_session_cs;
 HoyoSession* g_session = nullptr;
+
+struct CriticalSectionInitializer
+{
+    CriticalSectionInitializer() { InitializeCriticalSection(&g_session_cs); }
+    ~CriticalSectionInitializer() { DeleteCriticalSection(&g_session_cs); }
+};
+static CriticalSectionInitializer g_cs_init;
+
+struct CsLock
+{
+    CsLock() { EnterCriticalSection(&g_session_cs); }
+    ~CsLock() { LeaveCriticalSection(&g_session_cs); }
+};
 } // namespace
 
 // upstream 导出：sparxie_hoyo_bootstrap（追加于 main.cpp）
@@ -107,7 +122,7 @@ HoyoTouchError hoyo_create_session(
     }
 
     {
-        std::lock_guard<std::mutex> lock(g_session_mutex);
+        CsLock _lock;
         if (g_session != nullptr && g_session->active)
         {
             result->error_code = HOYO_ERR_SESSION_NOT_ACTIVE;
@@ -118,7 +133,7 @@ HoyoTouchError hoyo_create_session(
 
         auto* session = new HoyoSession();
         session->request = *request;
-        session->fps_value.store(request->target_fps, std::memory_order_relaxed);
+        InterlockedExchange(&session->fps_value, request->target_fps);
         session->active = true;
         g_session = session;
         *session_out = session;
@@ -141,7 +156,7 @@ HoyoTouchError hoyo_launch(void* session_handle, uint32_t game_pid, HoyoResult* 
 
     auto* session = static_cast<HoyoSession*>(session_handle);
     {
-        std::lock_guard<std::mutex> lock(g_session_mutex);
+        CsLock _lock;
         if (!session->active)
         {
             result->error_code = HOYO_ERR_SESSION_NOT_ACTIVE;
@@ -192,10 +207,10 @@ HoyoTouchError hoyo_launch(void* session_handle, uint32_t game_pid, HoyoResult* 
         return static_cast<HoyoTouchError>(result->error_code);
     }
 
-    // 启动成功：记录热调值（bootstrap 已把 FpsValue 设为 target_fps）
-    session->fps_value.store(r.target_fps, std::memory_order_relaxed);
+    // 启动成功：记录 pid 与热调值（bootstrap 已把 FpsValue 设为 target_fps）
+    InterlockedExchange(&session->fps_value, r.target_fps);
+    session->game_pid = out_pid;
     session->launched = true;
-    (void)out_pid;
     (void)out_fps_addr;
 
     result->stage = HOYO_STAGE_INSTALL_CONFIRM;
@@ -223,7 +238,7 @@ HoyoTouchError hoyo_set_target_fps(void* session_handle, int32_t target_fps, Hoy
 
     auto* session = static_cast<HoyoSession*>(session_handle);
     {
-        std::lock_guard<std::mutex> lock(g_session_mutex);
+        CsLock _lock;
         if (!session->active)
         {
             result->error_code = HOYO_ERR_SESSION_NOT_ACTIVE;
@@ -232,7 +247,7 @@ HoyoTouchError hoyo_set_target_fps(void* session_handle, int32_t target_fps, Hoy
             return HOYO_ERR_SESSION_NOT_ACTIVE;
         }
         // 对齐 32 位原子写（create 后即可设置初始目标，launch 后为运行中热调）
-        session->fps_value.store(target_fps, std::memory_order_relaxed);
+        InterlockedExchange(&session->fps_value, target_fps);
     }
 
     result->error_code = HOYO_OK;
@@ -249,9 +264,43 @@ HoyoTouchError hoyo_wait_game_exit(void* session_handle, uint32_t timeout_ms, Ho
     }
     result->size = sizeof(HoyoResult);
     result->stage = HOYO_STAGE_WAIT;
-    result->error_code = HOYO_ERR_NOT_SUPPORTED;
-    result->message = L"Hoyo wait 尚未接入";
-    result->message_chars = 17;
+
+    auto* session = static_cast<HoyoSession*>(session_handle);
+    {
+        CsLock _lock;
+        if (!session->active || !session->launched || session->game_pid == 0)
+        {
+            result->error_code = HOYO_ERR_SESSION_NOT_ACTIVE;
+            result->message = L"会话未启动";
+            result->message_chars = 11;
+            return HOYO_ERR_SESSION_NOT_ACTIVE;
+        }
+    }
+
+    HANDLE hProcess = OpenProcess(SYNCHRONIZE, FALSE, session->game_pid);
+    if (hProcess == nullptr)
+    {
+        // 进程已不存在，视为已退出
+        result->error_code = HOYO_OK;
+        result->message = nullptr;
+        result->message_chars = 0;
+        return HOYO_OK;
+    }
+
+    const DWORD wait = WaitForSingleObject(hProcess, timeout_ms == 0 ? INFINITE : timeout_ms);
+    CloseHandle(hProcess);
+
+    if (wait == WAIT_OBJECT_0)
+    {
+        result->error_code = HOYO_OK;
+        result->message = nullptr;
+        result->message_chars = 0;
+        return HOYO_OK;
+    }
+
+    result->error_code = HOYO_ERR_NOT_SUPPORTED; // 超时语义由调用方按结果码区分
+    result->message = L"等待超时";
+    result->message_chars = 9;
     return HOYO_ERR_NOT_SUPPORTED;
 }
 
@@ -263,7 +312,7 @@ HoyoTouchError hoyo_release(void* session_handle)
     }
     auto* session = static_cast<HoyoSession*>(session_handle);
     {
-        std::lock_guard<std::mutex> lock(g_session_mutex);
+        CsLock _lock;
         if (g_session == session)
         {
             g_session = nullptr;

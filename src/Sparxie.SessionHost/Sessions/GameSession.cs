@@ -56,9 +56,13 @@ public sealed class GameSession : IAsyncDisposable
             // 启动游戏进程前的 Runtime 准备（ZZZ：备份 PC 配置并写入触屏配置）
             await _controller.PrepareLaunchAsync(_options.Profile, cancellationToken).ConfigureAwait(false);
 
-            _job = PreRunningJob.Create();
-            _gameProcess = StartGameProcess();
-            _job.Assign(_gameProcess.SafeHandle);
+            // Hoyo：Runtime 自行创建游戏进程（bootstrap 内部 CreateProcess）；其余由 SessionHost 预创建。
+            if (!_controller.CreatesProcess)
+            {
+                _job = PreRunningJob.Create();
+                _gameProcess = StartGameProcess();
+                _job.Assign(_gameProcess.SafeHandle);
+            }
 
             await EmitAsync(SessionStates.Starting, StageCode.CreateProcess, ErrorCode.None, null, cancellationToken).ConfigureAwait(false);
 
@@ -69,20 +73,31 @@ public sealed class GameSession : IAsyncDisposable
             await _controller.PostInstallAsync(cancellationToken).ConfigureAwait(false);
 
             // 进入 Running 前撤销 kill-on-close，转换失败即整次失败
-            try
+            if (_job is not null)
             {
-                _job.ReleaseKillOnClose();
-            }
-            catch (Exception ex)
-            {
-                await FailAsync((StageCode.Job, ErrorCode.JobSetupFailed, $"撤销 Running 前失效保护失败: {ex.Message}"), cancellationToken).ConfigureAwait(false);
-                return;
+                try
+                {
+                    _job.ReleaseKillOnClose();
+                }
+                catch (Exception ex)
+                {
+                    await FailAsync((StageCode.Job, ErrorCode.JobSetupFailed, $"撤销 Running 前失效保护失败: {ex.Message}"), cancellationToken).ConfigureAwait(false);
+                    return;
+                }
             }
 
             _announcedRunning = true;
             await EmitAsync(SessionStates.Running, StageCode.Running, ErrorCode.None, null, cancellationToken).ConfigureAwait(false);
 
-            await _gameProcess.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            if (_gameProcess is not null)
+            {
+                await _gameProcess.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                // Hoyo：Runtime 创建的进程由 controller 等待退出
+                await _controller.WaitExitAsync(cancellationToken).ConfigureAwait(false);
+            }
 
             await EmitAsync(SessionStates.Exited, StageCode.Wait, ErrorCode.None, null, cancellationToken).ConfigureAwait(false);
         }

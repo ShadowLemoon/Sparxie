@@ -11,21 +11,25 @@ namespace Sparxie.SessionHost.Sessions;
 /// </summary>
 public sealed class HoyoGameController : IGameController
 {
+    public bool CreatesProcess => true;
+
     private const uint ABI_VERSION = 1;
     private const int HOYO_OK = 0;
 
     private IntPtr _session;
+    private string? _launchPath;
     private bool _disposed;
 
     public async Task PrepareLaunchAsync(ProfileSnapshot profile, CancellationToken cancellationToken)
     {
-        // Hoyo 无启动前配置切换；会话在校验后由 InstallAsync 创建。
+        // Hoyo 无启动前配置切换；记录 EXE 路径供 bootstrap 创建进程。
+        _launchPath = profile.ExecutablePath;
         await Task.CompletedTask.ConfigureAwait(false);
     }
 
-    public async Task InstallAsync(Process gameProcess, HoyoProfileSettings? hoyo, CancellationToken cancellationToken)
+    public async Task InstallAsync(Process? gameProcess, HoyoProfileSettings? hoyo, CancellationToken cancellationToken)
     {
-        var request = BuildRequest(gameProcess, hoyo);
+        var request = BuildRequest(hoyo);
         var result = new HoyoResult { Size = (uint)Marshal.SizeOf<HoyoResult>() };
 
         try
@@ -38,7 +42,8 @@ public sealed class HoyoGameController : IGameController
 
             _session = session;
             result = new HoyoResult { Size = (uint)Marshal.SizeOf<HoyoResult>() };
-            var launchRc = hoyo_launch(session, (uint)gameProcess.Id, ref result);
+            // bootstrap 自行创建游戏进程，gameProcess 仅占位（null）
+            var launchRc = hoyo_launch(session, 0, ref result);
             if (launchRc != HOYO_OK)
             {
                 hoyo_release(session);
@@ -63,7 +68,7 @@ public sealed class HoyoGameController : IGameController
 
     public Task AbortAsync(CancellationToken cancellationToken)
     {
-        // 失败路径：释放 native 会话（游戏进程由 GameSession 终止）
+        // 失败路径：释放 native 会话（bootstrap 失败时已自行终止游戏进程）
         if (_session != IntPtr.Zero)
         {
             hoyo_release(_session);
@@ -71,6 +76,27 @@ public sealed class HoyoGameController : IGameController
         }
 
         return Task.CompletedTask;
+    }
+
+    public async Task WaitExitAsync(CancellationToken cancellationToken)
+    {
+        if (_session == IntPtr.Zero)
+        {
+            return;
+        }
+
+        // 轮询等待：每 500ms 查询一次，直到游戏退出或取消
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            var result = new HoyoResult { Size = (uint)Marshal.SizeOf<HoyoResult>() };
+            var rc = hoyo_wait_game_exit(_session, 500, ref result);
+            if (rc == HOYO_OK)
+            {
+                return; // 游戏已退出
+            }
+
+            await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     public async Task SetTargetFpsAsync(int targetFps, CancellationToken cancellationToken)
@@ -105,10 +131,11 @@ public sealed class HoyoGameController : IGameController
         }
     }
 
-    private static HoyoLaunchRequest BuildRequest(Process gameProcess, HoyoProfileSettings? hoyo)
+    private HoyoLaunchRequest BuildRequest(HoyoProfileSettings? hoyo)
     {
         var settings = hoyo ?? new HoyoProfileSettings { FpsUnlockEnabled = true, TargetFps = 120, ProcessPriority = ProcessPriority.Normal };
-        var path = gameProcess.MainModule?.FileName ?? string.Empty;
+        // Hoyo 由 Runtime 创建进程：路径来自启动请求（bootstrap 内部 CreateProcess）
+        var path = _launchPath ?? string.Empty;
 
         return new HoyoLaunchRequest
         {
@@ -169,6 +196,9 @@ public sealed class HoyoGameController : IGameController
 
     [DllImport("HoyoTouchCore.dll", CallingConvention = CallingConvention.Cdecl)]
     private static extern int hoyo_set_target_fps(IntPtr session, int targetFps, ref HoyoResult result);
+
+    [DllImport("HoyoTouchCore.dll", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int hoyo_wait_game_exit(IntPtr session, uint timeoutMs, ref HoyoResult result);
 
     [DllImport("HoyoTouchCore.dll", CallingConvention = CallingConvention.Cdecl)]
     private static extern int hoyo_release(IntPtr session);

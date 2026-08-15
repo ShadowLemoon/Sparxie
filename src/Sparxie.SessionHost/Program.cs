@@ -12,6 +12,33 @@ using HostOptions = Sparxie.SessionHost.Hosting.HostOptions;
 
 var options = HostOptions.FromEnvironment();
 
+// 全局异常兜底：未处理/未观察异常写诊断文件（崩溃前可定位），不静默 failfast。
+AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+{
+    try
+    {
+        File.AppendAllText(
+            Path.Combine(AppContext.BaseDirectory, "logs", $"host-crash-{DateTime.Now:yyyyMMddHHmmss}.log"),
+            $"[{DateTime.Now:O}] Unhandled: {e.ExceptionObject}\n");
+    }
+    catch
+    {
+    }
+};
+TaskScheduler.UnobservedTaskException += (_, e) =>
+{
+    try
+    {
+        File.AppendAllText(
+            Path.Combine(AppContext.BaseDirectory, "logs", $"host-crash-{DateTime.Now:yyyyMMddHHmmss}.log"),
+            $"[{DateTime.Now:O}] Unobserved: {e.Exception}\n");
+    }
+    catch
+    {
+    }
+    e.SetObserved();
+};
+
 var builder = WebApplication.CreateBuilder();
 
 // 结构化滚动日志：logs/host-*.log，保留 7 天

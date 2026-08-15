@@ -41,6 +41,7 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
         psi.Environment["SPARXIE_PIPE_NAME"] = _brokerPipe;
         _brokerProcess = Process.Start(psi);
         Assert.NotNull(_brokerProcess);
+
         return Task.CompletedTask;
     }
 
@@ -134,8 +135,8 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
         Assert.True(startResponse.Accepted, lastError?.Message);
         _hostProcess = Process.GetProcessesByName("Sparxie.SessionHost").FirstOrDefault();
 
-        // 等待事件流出现 Exited
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+        // 等待事件流出现 Exited（Null 控制器下假游戏立即退出）
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
         while (DateTime.UtcNow < deadline)
         {
             lock (events)

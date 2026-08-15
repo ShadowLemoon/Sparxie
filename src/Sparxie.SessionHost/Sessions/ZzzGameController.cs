@@ -12,6 +12,8 @@ namespace Sparxie.SessionHost.Sessions;
 /// </summary>
 public sealed class ZzzGameController : IGameController
 {
+    public bool CreatesProcess => false;
+
     private const uint WindowWaitMs = 60_000;
     private const int ClientAreaReadyTimeoutMs = 120_000;
     private const int PostClientAreaDelayMs = 5_000;
@@ -63,7 +65,7 @@ public sealed class ZzzGameController : IGameController
         await Task.CompletedTask.ConfigureAwait(false);
     }
 
-    public async Task InstallAsync(Process gameProcess, Sparxie.Contracts.Models.HoyoProfileSettings? hoyo, CancellationToken cancellationToken)
+    public async Task InstallAsync(Process? gameProcess, Sparxie.Contracts.Models.HoyoProfileSettings? hoyo, CancellationToken cancellationToken)
     {
         TargetPid = (uint)gameProcess.Id;
         var result = ZZZTouchInjectToProcess(TargetPid, quiet: true, WindowWaitMs);
@@ -109,6 +111,9 @@ public sealed class ZzzGameController : IGameController
         _record = null;
         return Task.CompletedTask;
     }
+
+    public Task WaitExitAsync(CancellationToken cancellationToken)
+        => Task.CompletedTask; // ZZZ 由 SessionHost 预创建并等待
 
     public Task SetTargetFpsAsync(int targetFps, CancellationToken cancellationToken)
         => throw new NotSupportedException("绝区零不提供 FPS 热调");
