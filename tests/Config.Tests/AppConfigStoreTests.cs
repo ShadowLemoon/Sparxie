@@ -1,3 +1,4 @@
+using Sparxie.Contracts.Errors;
 using Sparxie.Contracts.Models;
 using Sparxie.Infrastructure.Configuration;
 
@@ -259,5 +260,47 @@ otepad.exe",
         store.Save(config);
         var reloaded = store.Load();
         Assert.Equal(ConfigLoadState.Loaded, reloaded.State);
+    }
+
+    [Fact]
+    public void 目录不可写时创建配置失败且原文件不变()
+    {
+        // 预置一个有效配置
+        var store = new AppConfigStore(ConfigPath);
+        store.Save(new AppConfig());
+        var originalBytes = File.ReadAllBytes(ConfigPath);
+
+        // 注入不可写：用"目录被文件占用"模拟程序目录不可写
+        // （config 路径的父目录是一个已存在文件 → 创建/写入必然失败）
+        var blockedDir = Path.Combine(_dir, "blocked-as-file");
+        File.WriteAllText(blockedDir, "占用目录名的文件");
+        var blockedStore = new AppConfigStore(Path.Combine(blockedDir, "config.json"));
+
+        var result = blockedStore.Load();
+        Assert.Equal(ConfigLoadState.Failed, result.State);
+        Assert.Equal(ErrorCode.ConfigDirectoryNotWritable, result.Error!.Code);
+        Assert.False(File.Exists(Path.Combine(blockedDir, "config.json")), "不可写目录不应生成新配置");
+
+        // 原配置不受影响，仍可正常读取
+        var reloaded = store.Load();
+        Assert.Equal(ConfigLoadState.Loaded, reloaded.State);
+    }
+
+    [Fact]
+    public void 保存到不存在目录失败且不破坏已有配置()
+    {
+        // 先保存一个有效配置
+        var store = new AppConfigStore(ConfigPath);
+        store.Save(new AppConfig());
+        var originalBytes = File.ReadAllBytes(ConfigPath);
+
+        // 目标目录不存在（父目录存在但子目录被删除）→ 原子保存应失败
+        var badDir = Path.Combine(_dir, "no-such-subdir");
+        var badStore = new AppConfigStore(Path.Combine(badDir, "config.json"));
+        Assert.ThrowsAny<Exception>(() => badStore.Save(new AppConfig()));
+
+        // 原配置不受影响
+        var after = File.ReadAllBytes(ConfigPath);
+        Assert.Equal(originalBytes, after);
     }
 }
