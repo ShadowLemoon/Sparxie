@@ -45,6 +45,7 @@ NTSTATUS init_API(void);
 
 void NTAPI TLS_CALLBACK(PVOID DllHandle, DWORD Reason, PVOID Reserved)
 {
+#ifndef SPARXIE_DISABLE_TLS_INIT
     if (Reason == DLL_PROCESS_ATTACH)
     {
         if (NTSTATUS r = init_API())
@@ -52,6 +53,9 @@ void NTAPI TLS_CALLBACK(PVOID DllHandle, DWORD Reason, PVOID Reserved)
             return ExitProcess(r);
         }
     }
+#else
+    (void)DllHandle; (void)Reason; (void)Reserved;
+#endif
 }
 
 #pragma const_seg(".CRT$XLB")
