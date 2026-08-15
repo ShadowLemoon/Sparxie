@@ -6,10 +6,11 @@
 ## 可离线继续补齐（未做）
 
 ### 配置层
-- 文件写入/刷盘/原子替换失败注入（原 config.json 保持不变并明确退出）
+- ~~文件写入/刷盘/原子替换失败注入~~ ✅ 已完成（AppConfigStoreTests：目录不可写/不存在目录，原配置保持）
+- ~~程序目录不可写时启动失败~~ ✅ 已完成（ConfigDirectoryNotWritable 路径）
 - Profile 动态增删改、多 Profile 隔离
 - 完整 EXE 路径保存后与恢复值一致断言
-- 程序目录不可写时启动失败；不回退 AppData
+- 不回退 AppData
 
 ### 契约与设置层
 - 新 Profile 全量默认值（FPS 开/120/后台开/10/Normal/跟随档位关/缩放 400%）
@@ -28,8 +29,9 @@
 - 句柄不继承给无关子进程、外部/嵌套 Job、Running 前转换失败
 
 ### 发布与诊断
-- 发布 staging/ZIP 内容清单（DLL/EXE/许可证/Notices 完整、无 CI Secret）
-- 自包含目录运行；目录不可写退出
+- ~~发布 staging/ZIP 内容清单（DLL/EXE/许可证/Notices 完整、无 CI Secret）~~ ✅ 已完成（ReleaseArtifactAuditTests：关键文件、PDB、凭据/私库痕迹扫描）
+- ~~目录不可写退出~~ ✅ 已完成（配置层）
+- 自包含目录运行
 - 完整诊断包敏感项审计（config.invalid-*、凭据、路径组合）
 
 ### WPF UI（当前无 UI 测试项目）
