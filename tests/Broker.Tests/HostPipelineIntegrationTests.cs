@@ -8,7 +8,8 @@ namespace Broker.Tests;
 
 /// <summary>
 /// 全链路集成：真实 Broker + 真实 SessionHost + 假游戏进程，
-/// 验证 StartSession → Host 私有管道 → 事件转发 → Running/Exited 的完整闭环。
+/// 验证 StartSession → Host 私有管道 → 事件转发 → Failed（Hoyo 假游戏
+/// bootstrap 真实执行失败，不误报成功）的完整闭环。
 /// </summary>
 [Collection("SessionHostProcess")]
 public sealed class HostPipelineIntegrationTests : IAsyncLifetime
@@ -70,7 +71,7 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task 完整会话链路事件流到达Running与Exited()
+    public async Task Hoyo假游戏失败路径事件流到达Failed()
     {
         var client = CreateBrokerClient();
         var events = new List<SessionEvent>();
@@ -135,13 +136,13 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
         Assert.True(startResponse.Accepted, lastError?.Message);
         _hostProcess = Process.GetProcessesByName("Sparxie.SessionHost").FirstOrDefault();
 
-        // 等待事件流出现 Exited（Null 控制器下假游戏立即退出）
+        // 等待事件流出现 Failed（Hoyo 假游戏：bootstrap 真实执行 → 扫描失败 → 整次失败，不误报成功）
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
         while (DateTime.UtcNow < deadline)
         {
             lock (events)
             {
-                if (events.Any(e => e.State == "Exited"))
+                if (events.Any(e => e.State == "Failed"))
                 {
                     break;
                 }
@@ -158,8 +159,8 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
 
         var states = string.Join(" → ", snapshot.Select(e => e.State));
         Assert.Contains(snapshot, e => e.State == "Starting");
-        Assert.Contains(snapshot, e => e.State == "Running");
-        Assert.Contains(snapshot, e => e.State == "Exited");
+        Assert.Contains(snapshot, e => e.State == "Failed");
+        Assert.DoesNotContain(snapshot, e => e.State is "Running" or "Exited");
 
         cts.Cancel();
         try

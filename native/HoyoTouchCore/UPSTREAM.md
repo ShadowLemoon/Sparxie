@@ -5,7 +5,7 @@
 - 仓库：`winTEuser/Genshin_StarRail_fps_unlocker`
 - 许可证：MIT（见 `upstream/LICENSE`）
 - 派生自：`34736384/genshin-fps-unlock`（MIT）
-- 内嵌组件：`inih/INIReader`（BSD-3-Clause，`upstream/src/inireader.h` 引用 LICENSE.txt，上游未随包提供，分发时需保留 BSD 声明）
+- 内嵌组件：`inih/INIReader`（BSD-3-Clause，`upstream/src/inireader.h` 引用 LICENSE.txt，上游未随包提供；官方原文副本放于 `adapter/licenses/inih-LICENSE.txt`，分发时保留 BSD 声明）
 
 ## 导入方式
 
@@ -42,10 +42,39 @@ git subtree add --squash --prefix=native/HoyoTouchCore/upstream \
 - 纯触屏条件：`fps_unlock_enabled=0` 时跳过 FPS Patch 安装路径。
 - Sync failed 弹窗与 AutoExit 解耦：bootstrap 内 `AutoExit=1` 仅跳过控制台热键循环，
   不改变上游错误弹窗语义。
+- Job 失效保护：新增 `job_handle` 参数（可空）；CreateProcess 成功后立即
+  AssignProcessToJobObject，Job 分配失败时终止进程并整次失败（返回 6）。
+  进入 Running 前由 SessionHost 撤销 KILL_ON_JOB_CLOSE，保证 Running 前 Host
+  异常退出时游戏进程被终止、Running 后保留。
 - 返回码：0=成功，1=参数错误，2=API 初始化失败，3=已运行拒绝，4=创建失败，
-  5=扫描失败，6=注入失败。
+  5=扫描失败，6=注入失败（含 Job 分配失败），7=SEH 异常。
 - 同步风险：上游 main() 扫描特征或注入时序变化时需同步更新本函数对应段落；
   上游主流程重构时需重新评估。
+
+### CET 兼容性约束（SessionHost 构建配置，非上游补丁）
+
+- 现象：HoyoTouchCore.dll 在 SessionHost（ASP.NET Core/gRPC 进程）加载后调用
+  bootstrap 即崩 C0000409（STATUS_STACK_BUFFER_OVERRUN）；在 testhost 探针进程
+  正常。
+- 根因：.NET 9+ 的 apphost 默认标记 CET（硬件强制 shadow stack）兼容；上游
+  `syscall.asm` 的 `asm_syscall` 手写汇编用 `jmp rcx` 跳转 syscall stub 后
+  `ret` 返回，CET 下 shadow stack 校验失败触发 #CP → C0000409。
+- 修复：`Sparxie.SessionHost.csproj` 设 `<CETCompat>false</CETCompat>` 禁用 CET，
+  加载与 bootstrap 恢复正常（假游戏路径返回扫描失败而非崩溃）。上游代码未改动。
+- 验证：HoyoAbi 测试（testhost 无 CET）与 HostPipeline 集成测试（真实 SessionHost
+  禁用 CET 后走 HoyoGameController → bootstrap → Failed）均通过。
+- 同步风险：上游若重写 syscall 汇编使其兼容 CET，可移除该禁用；届时需回归
+  SessionHost 加载与 bootstrap 全流程。
+
+### TLS 回调条件编译（NTSYSAPI.h，Sparxie 构建启用）
+
+- 位置：`upstream/src/NTSYSAPI.h` 的 `TLS_CALLBACK`。
+- 内容：`SPARXIE_DISABLE_TLS_INIT` 宏下跳过 DLL_PROCESS_ATTACH 时的 `init_API()`
+  调用（默认行为不改，仅 Sparxie 构建由 CMake 定义该宏）。
+- 原因：TLS 回调在 loader lock 内调 init_API，失败时在 loader lock 内
+  ExitProcess，导致 DLL 在 .NET 进程（SessionHost）加载即崩 C0000409。
+  init_API 由 `sparxie_hoyo_bootstrap` 显式调用，加载期初始化对 Sparxie 冗余。
+- 同步风险：若上游改动 TLS 回调逻辑需重新评估；宏默认关闭不影响上游行为。
 
 以下差异全部放在 subtree 外的 adapter/：
 

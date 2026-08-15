@@ -65,8 +65,14 @@ public sealed class ZzzGameController : IGameController
         await Task.CompletedTask.ConfigureAwait(false);
     }
 
-    public async Task InstallAsync(Process? gameProcess, Sparxie.Contracts.Models.HoyoProfileSettings? hoyo, CancellationToken cancellationToken)
+    public async Task InstallAsync(Process? gameProcess, IntPtr jobHandle, Sparxie.Contracts.Models.HoyoProfileSettings? hoyo, CancellationToken cancellationToken)
     {
+        // ZZZ 由 SessionHost 预创建进程（CreatesProcess=false），运行期 gameProcess 非空
+        if (gameProcess is null)
+        {
+            throw new InvalidOperationException("ZZZ 游戏进程未创建");
+        }
+
         TargetPid = (uint)gameProcess.Id;
         var result = ZZZTouchInjectToProcess(TargetPid, quiet: true, WindowWaitMs);
         if (result != 0)

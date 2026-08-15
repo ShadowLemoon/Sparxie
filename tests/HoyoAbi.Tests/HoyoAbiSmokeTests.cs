@@ -56,6 +56,9 @@ public class HoyoAbiSmokeTests
     private static extern int hoyo_create_session(ref HoyoLaunchRequest request, ref HoyoResult result, out IntPtr session);
 
     [DllImport("HoyoTouchCore.dll", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int hoyo_attach_job(IntPtr session, IntPtr jobHandle, ref HoyoResult result);
+
+    [DllImport("HoyoTouchCore.dll", CallingConvention = CallingConvention.Cdecl)]
     private static extern int hoyo_set_target_fps(IntPtr session, int targetFps, ref HoyoResult result);
 
     [DllImport("HoyoTouchCore.dll", CallingConvention = CallingConvention.Cdecl)]
@@ -69,11 +72,12 @@ public class HoyoAbiSmokeTests
 
     private static string LocateDll()
     {
-        // 测试输出目录或 native 构建输出目录
+        // 优先 native 构建输出目录（新产物），测试输出目录仅作兜底，
+        // 避免"源=目标"导致永远复制不到新构建的 DLL。
         var candidates = new[]
         {
-            Path.Combine(AppContext.BaseDirectory, "HoyoTouchCore.dll"),
             Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "native", "HoyoTouchCore", "build", "Release", "HoyoTouchCore.dll"),
+            Path.Combine(AppContext.BaseDirectory, "HoyoTouchCore.dll"),
         };
         foreach (var candidate in candidates)
         {
@@ -86,14 +90,29 @@ public class HoyoAbiSmokeTests
         throw new FileNotFoundException("未找到 HoyoTouchCore.dll，请先构建 native/HoyoTouchCore");
     }
 
+    private static string? _preparedSourceHash;
+
     private static void EnsureDllAvailable()
     {
         var dll = LocateDll();
+        var sourceHash = HashFile(dll);
         var dest = Path.Combine(AppContext.BaseDirectory, "HoyoTouchCore.dll");
-        if (!File.Exists(dest) || !string.Equals(Path.GetFullPath(dll), Path.GetFullPath(dest), StringComparison.OrdinalIgnoreCase))
+
+        // 已就绪（同源且存在）则跳过；避免 DLL 被 testhost 加载锁定后重复复制失败
+        if (_preparedSourceHash == sourceHash && File.Exists(dest))
         {
-            File.Copy(dll, dest, overwrite: true);
+            return;
         }
+
+        File.Copy(dll, dest, overwrite: true);
+        _preparedSourceHash = sourceHash;
+    }
+
+    private static string HashFile(string path)
+    {
+        using var stream = File.OpenRead(path);
+        var hash = System.Security.Cryptography.SHA256.HashData(stream);
+        return Convert.ToHexString(hash);
     }
 
     [Fact]
@@ -193,6 +212,51 @@ public class HoyoAbiSmokeTests
         var result = new HoyoResult();
         var rc = hoyo_launch(IntPtr.Zero, 12345, ref result);
         Assert.Equal(HOYO_ERR_INVALID_ARGUMENT, rc);
+    }
+
+    [Fact]
+    public void AttachJob未创建会话被拒绝()
+    {
+        EnsureDllAvailable();
+        var result = new HoyoResult();
+        var rc = hoyo_attach_job(IntPtr.Zero, new IntPtr(0x1234), ref result);
+        Assert.Equal(HOYO_ERR_INVALID_ARGUMENT, rc);
+    }
+
+    [Fact]
+    public void AttachJob正常会话绑定成功()
+    {
+        EnsureDllAvailable();
+        var path = Path.Combine(Path.GetTempPath(), "sparxie-abi-test", "StarRail.exe");
+        var request = new HoyoLaunchRequest
+        {
+            Size = (uint)Marshal.SizeOf<HoyoLaunchRequest>(),
+            AbiVersion = ABI_VERSION,
+            GameType = 1,
+            FpsUnlockEnabled = 1,
+            TargetFps = 120,
+            GameExecutablePath = Marshal.StringToHGlobalUni(path),
+            GameExecutablePathChars = (uint)path.Length,
+        };
+        var result = new HoyoResult();
+        try
+        {
+            var rc = hoyo_create_session(ref request, ref result, out var session);
+            Assert.Equal(HOYO_OK, rc);
+            Assert.NotEqual(IntPtr.Zero, session);
+
+            // 任意非零句柄仅做传递验证（不实际 Assign 进程）
+            result = new HoyoResult();
+            rc = hoyo_attach_job(session, new IntPtr(0x1), ref result);
+            Assert.Equal(HOYO_OK, rc);
+
+            rc = hoyo_release(session);
+            Assert.Equal(HOYO_OK, rc);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(request.GameExecutablePath);
+        }
     }
 
     [Fact]

@@ -56,10 +56,11 @@ public sealed class GameSession : IAsyncDisposable
             // 启动游戏进程前的 Runtime 准备（ZZZ：备份 PC 配置并写入触屏配置）
             await _controller.PrepareLaunchAsync(_options.Profile, cancellationToken).ConfigureAwait(false);
 
-            // Hoyo：Runtime 自行创建游戏进程（bootstrap 内部 CreateProcess）；其余由 SessionHost 预创建。
+            // Running 前失效保护 Job：所有游戏在 Running 前都要覆盖本次进程。
+            // Hoyo 由 bootstrap 创建进程后 Assign；其余由 SessionHost 预创建并 Assign。
+            _job = PreRunningJob.Create();
             if (!_controller.CreatesProcess)
             {
-                _job = PreRunningJob.Create();
                 _gameProcess = StartGameProcess();
                 _job.Assign(_gameProcess.SafeHandle);
             }
@@ -67,7 +68,7 @@ public sealed class GameSession : IAsyncDisposable
             await EmitAsync(SessionStates.Starting, StageCode.CreateProcess, ErrorCode.None, null, cancellationToken).ConfigureAwait(false);
 
             // Runtime 安装/注入：全部成功才进入 Running
-            await _controller.InstallAsync(_gameProcess, _options.Profile.Hoyo.ToModel(), cancellationToken).ConfigureAwait(false);
+            await _controller.InstallAsync(_gameProcess, _job.JobHandle, _options.Profile.Hoyo.ToModel(), cancellationToken).ConfigureAwait(false);
 
             // 注入成功后、Running 前的配置收尾（ZZZ：恢复 PC 文件配置并删除恢复记录）
             await _controller.PostInstallAsync(cancellationToken).ConfigureAwait(false);

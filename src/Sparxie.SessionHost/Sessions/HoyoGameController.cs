@@ -18,16 +18,33 @@ public sealed class HoyoGameController : IGameController
 
     private IntPtr _session;
     private string? _launchPath;
+    private string _gameType = "genshin";
     private bool _disposed;
 
     public async Task PrepareLaunchAsync(ProfileSnapshot profile, CancellationToken cancellationToken)
     {
-        // Hoyo 无启动前配置切换；记录 EXE 路径供 bootstrap 创建进程。
+        // Hoyo 无启动前配置切换；记录 EXE 路径与游戏类型供 bootstrap 使用。
         _launchPath = profile.ExecutablePath;
+        _gameType = profile.Game;
         await Task.CompletedTask.ConfigureAwait(false);
     }
 
-    public async Task InstallAsync(Process? gameProcess, HoyoProfileSettings? hoyo, CancellationToken cancellationToken)
+    public void AttachPreRunningJob(IntPtr jobHandle)
+    {
+        if (_session == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var result = new HoyoResult { Size = (uint)Marshal.SizeOf<HoyoResult>() };
+        var rc = hoyo_attach_job(_session, jobHandle, ref result);
+        if (rc != HOYO_OK)
+        {
+            throw new InvalidOperationException($"Hoyo Job 绑定失败: {rc} {Marshal.PtrToStringUni(result.Message)}");
+        }
+    }
+
+    public async Task InstallAsync(Process? gameProcess, IntPtr jobHandle, HoyoProfileSettings? hoyo, CancellationToken cancellationToken)
     {
         var request = BuildRequest(hoyo);
         var result = new HoyoResult { Size = (uint)Marshal.SizeOf<HoyoResult>() };
@@ -41,6 +58,13 @@ public sealed class HoyoGameController : IGameController
             }
 
             _session = session;
+
+            // Running 前失效保护：launch 前绑定 Job，bootstrap 创建进程后 Assign
+            if (jobHandle != IntPtr.Zero)
+            {
+                AttachPreRunningJob(jobHandle);
+            }
+
             result = new HoyoResult { Size = (uint)Marshal.SizeOf<HoyoResult>() };
             // bootstrap 自行创建游戏进程，gameProcess 仅占位（null）
             var launchRc = hoyo_launch(session, 0, ref result);
@@ -141,7 +165,11 @@ public sealed class HoyoGameController : IGameController
         {
             Size = (uint)Marshal.SizeOf<HoyoLaunchRequest>(),
             AbiVersion = ABI_VERSION,
-            GameType = 0, // genshin/starRail 统一走 Hoyo 上游流程，game_type 由 adapter 后续细分
+            GameType = _gameType switch
+            {
+                "starRail" => 1, // starRail
+                _ => 0, // genshin
+            },
             FpsUnlockEnabled = settings.FpsUnlockEnabled ? 1 : 0,
             TargetFps = settings.TargetFps,
             BackgroundFpsLimitEnabled = settings.BackgroundFpsLimitEnabled ? 1 : 0,
@@ -190,6 +218,9 @@ public sealed class HoyoGameController : IGameController
 
     [DllImport("HoyoTouchCore.dll", CallingConvention = CallingConvention.Cdecl)]
     private static extern int hoyo_create_session(ref HoyoLaunchRequest request, ref HoyoResult result, out IntPtr session);
+
+    [DllImport("HoyoTouchCore.dll", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int hoyo_attach_job(IntPtr session, IntPtr jobHandle, ref HoyoResult result);
 
     [DllImport("HoyoTouchCore.dll", CallingConvention = CallingConvention.Cdecl)]
     private static extern int hoyo_launch(IntPtr session, uint gamePid, ref HoyoResult result);

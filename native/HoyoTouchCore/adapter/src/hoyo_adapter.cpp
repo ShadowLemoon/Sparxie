@@ -21,6 +21,7 @@ struct HoyoSession
     HoyoLaunchRequest request{};
     volatile LONG fps_value = 120;
     uint32_t game_pid = 0;
+    void* job_handle = nullptr;   // Running 前失效保护 Job（由 SessionHost 提供）
     bool active = false;
     bool launched = false;
 };
@@ -56,6 +57,7 @@ extern "C" int __stdcall sparxie_hoyo_bootstrap(
     int32_t genshin_preset_60_fps,
     int32_t genshin_touch_ui_scale_override_enabled,
     int32_t genshin_touch_ui_scale_percent,
+    void* job_handle,
     uint32_t* out_pid,
     uint32_t* out_fps_value_addr);
 
@@ -146,6 +148,43 @@ HoyoTouchError hoyo_create_session(
     return HOYO_OK;
 }
 
+HoyoTouchError hoyo_attach_job(void* session_handle, void* job_handle, HoyoResult* result)
+{
+    if (session_handle == nullptr || result == nullptr)
+    {
+        return HOYO_ERR_INVALID_ARGUMENT;
+    }
+    result->size = sizeof(HoyoResult);
+
+    auto* session = static_cast<HoyoSession*>(session_handle);
+    {
+        CsLock _lock;
+        if (!session->active)
+        {
+            result->error_code = HOYO_ERR_SESSION_NOT_ACTIVE;
+            result->stage = HOYO_STAGE_VALIDATION;
+            result->message = L"会话未激活";
+            result->message_chars = 11;
+            return HOYO_ERR_SESSION_NOT_ACTIVE;
+        }
+        if (session->launched)
+        {
+            result->error_code = HOYO_ERR_SESSION_NOT_ACTIVE;
+            result->stage = HOYO_STAGE_VALIDATION;
+            result->message = L"会话已启动";
+            result->message_chars = 11;
+            return HOYO_ERR_SESSION_NOT_ACTIVE;
+        }
+        session->job_handle = job_handle;
+    }
+
+    result->error_code = HOYO_OK;
+    result->stage = HOYO_STAGE_VALIDATION;
+    result->message = nullptr;
+    result->message_chars = 0;
+    return HOYO_OK;
+}
+
 HoyoTouchError hoyo_launch(void* session_handle, uint32_t game_pid, HoyoResult* result)
 {
     if (session_handle == nullptr || result == nullptr)
@@ -192,6 +231,7 @@ HoyoTouchError hoyo_launch(void* session_handle, uint32_t game_pid, HoyoResult* 
         r.genshin_preset_60_fps,
         r.genshin_touch_ui_scale_override_enabled,
         r.genshin_touch_ui_scale_percent,
+        session->job_handle,
         &out_pid,
         &out_fps_addr);
 

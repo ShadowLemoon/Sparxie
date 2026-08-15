@@ -2553,6 +2553,7 @@ static int __stdcall sparxie_hoyo_bootstrap_impl(
     int32_t genshin_preset_60_fps,
     int32_t genshin_touch_ui_scale_override_enabled,
     int32_t genshin_touch_ui_scale_percent,
+    void* job_handle,              // Running 前失效保护 Job（可为 null）；创建进程后 Assign
     uint32_t* out_pid,
     uint32_t* out_fps_value_addr)  // 返回 FpsValue 地址（热调用）
 {
@@ -2617,11 +2618,18 @@ static int __stdcall sparxie_hoyo_bootstrap_impl(
         return 4; // HOYO_ERR_INTERNAL
     }
 
-    // ---- DIAG: CreateProcess 后立即返回，定位崩溃 ----
-    TerminateProcess_Internal(pi->hProcess, 0);
-    CloseHandle_Internal(pi->hProcess);
-    free(boot_info);
-    return 9; // DIAG
+    // ---- Game_Arg 已由 SessionHost 归一化：无命令行参数 ----
+    // ---- Running 前失效保护：把挂起游戏进程 Assign 到 SessionHost 提供的 Job ----
+    if (job_handle)
+    {
+        if (!AssignProcessToJobObject((HANDLE)job_handle, pi->hProcess))
+        {
+            TerminateProcess_Internal(pi->hProcess, 0);
+            CloseHandle_Internal(pi->hProcess);
+            free(boot_info);
+            return 6; // HOYO_ERR_INSTALL_CONFIRM_FAILED（Job 分配失败，Running 前必须失败）
+        }
+    }
 
     inject_arg injectarg = { 0 };
     Hook_func_list GI_Func = { 0 };
@@ -2852,6 +2860,7 @@ extern "C" __declspec(dllexport) int __stdcall sparxie_hoyo_bootstrap(
     int32_t genshin_preset_60_fps,
     int32_t genshin_touch_ui_scale_override_enabled,
     int32_t genshin_touch_ui_scale_percent,
+    void* job_handle,
     uint32_t* out_pid,
     uint32_t* out_fps_value_addr)
 {
@@ -2862,6 +2871,7 @@ extern "C" __declspec(dllexport) int __stdcall sparxie_hoyo_bootstrap(
             background_fps_limit_enabled, background_fps, priority_class,
             genshin_follow_in_game_preset, genshin_preset_30_fps, genshin_preset_60_fps,
             genshin_touch_ui_scale_override_enabled, genshin_touch_ui_scale_percent,
+            job_handle,
             out_pid, out_fps_value_addr);
     }
     __except (EXCEPTION_EXECUTE_HANDLER)
