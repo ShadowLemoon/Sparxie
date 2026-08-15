@@ -41,6 +41,6 @@ Sparxie/
 
 实施中（2026-08-15 快照）：
 
-- 已完成：仓库骨架、Contracts/配置（损坏备份恢复 + UI InfoBar 提醒）、完整 UI（NavigationView 主页/设置、Profile 增删、条件设置、FPS 热调、会话状态实时显示）、UI↔Broker gRPC 闭环、SessionHost 生命周期（互斥、Running 前失效保护、Running 后保留游戏）、ZZZ 配置恢复与共享恢复例程、滚动文件日志（logs/ 7 天）、脱敏诊断包、ZZZ Runtime 清单与 CI、Hoyo subtree 导入、Hoyo C ABI DLL 构建验证（6 导出齐全）、便携发布验证。
-- 待接入：Hoyo（原神/星铁）上游扫描/Patch 真实流程（当前 `hoyo_launch` 为 NOT_SUPPORTED 占位，路由保持 Null 占位，需实机验证）；ZZZ Runtime 的 `build/zzz-runtime.json` 版本/SHA-256 待填；六个正式服实机验收未执行。
-- 测试：61 个（Config 18、Zzz 14、Broker 26、HoyoAbi 3）全部通过；Release 构建 0 警告；便携发布产物可启动 Broker。
+- 已完成：仓库骨架、Contracts/配置（损坏备份恢复 + UI InfoBar 提醒）、完整 UI（NavigationView 主页/设置、Profile 增删、条件设置、FPS 热调、会话状态实时显示、Starward 式 hyp-connect 版本背景图）、UI↔Broker gRPC 闭环、SessionHost 生命周期（互斥、Running 前失效保护、Running 后保留游戏）、ZZZ 配置恢复与共享恢复例程、滚动文件日志（logs/ 7 天）、脱敏诊断包、ZZZ Runtime 清单与 CI、Hoyo subtree 导入、Hoyo 上游 bootstrap 入口补丁与 C ABI DLL 构建验证、发布许可证交付（inih LICENSE 补齐、RUNTIME-NOTICE、ARCHITECTURE）、便携发布验证。
+- 待接入：Hoyo（原神/星铁）bootstrap 在 SessionHost 进程内调用 init_API 崩溃（C0000409，TLS 回调加载崩溃已修复，bootstrap 路径待 native 调试；路由保持 Null 占位，需实机验证）；ZZZ Runtime 的 `build/zzz-runtime.json` 版本/SHA-256 待填；六个正式服实机验收未执行。
+- 测试：66 个（Config 20、Zzz 14、Broker 26、HoyoAbi 6）全部通过；HoyoAbi 已修复为始终使用最新构建 DLL；Release 构建 0 警告；便携发布产物可启动 Broker。
