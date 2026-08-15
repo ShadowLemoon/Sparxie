@@ -303,4 +303,42 @@ otepad.exe",
         var after = File.ReadAllBytes(ConfigPath);
         Assert.Equal(originalBytes, after);
     }
+
+    [Fact]
+    public void 完整EXE路径保存后与恢复值一致()
+    {
+        var store = new AppConfigStore(ConfigPath);
+        var config = new AppConfig
+        {
+            Profiles =
+            [
+                new GameProfile
+                {
+                    Id = "p1",
+                    DisplayName = "原神",
+                    Game = GameType.Genshin,
+                    Variant = "cn",
+                    ExecutablePath = @"D:\Games\Genshin Impact Game\YuanShen.exe",
+                },
+            ],
+        };
+
+        store.Save(config);
+        var reloaded = store.Load();
+
+        Assert.Equal(ConfigLoadState.Loaded, reloaded.State);
+        var profile = Assert.Single(reloaded.Config.Profiles);
+        Assert.Equal(@"D:\Games\Genshin Impact Game\YuanShen.exe", profile.ExecutablePath);
+        Assert.Equal(GameType.Genshin, profile.Game);
+    }
+
+    [Fact]
+    public void 配置路径固定为传入路径()
+    {
+        // 计划：config.json 与启动器 EXE 同目录，不回退 %AppData%。
+        // AppConfigStore 只使用构造传入的路径（由 UI 用 AppContext.BaseDirectory
+        // 构造），自身不做任何路径重定向——这是"不回退 AppData"的实现保证。
+        var store = new AppConfigStore(ConfigPath);
+        Assert.Equal(ConfigPath, store.ConfigPath);
+    }
 }
