@@ -35,8 +35,10 @@
 - 完整诊断包敏感项审计（config.invalid-*、凭据、路径组合）
 
 ### WPF UI（当前无 UI 测试项目）
-- 窗口/NavigationView/条件设置显示/异常提醒/Profile 操作/热调入口/诊断按钮
-- 125%-200% DPI 与触屏尺寸
+- ✅ 新增 Sparxie.App.Tests（提交 cde5b13）：AppState Profile 管理 6 单测 +
+  WPF STA 页面构造冒烟 3 个（MainWindow/HomePage/SettingsPage，含 Hoyo 配置与空配置态）
+- 窗口/NavigationView 交互/条件设置显示/异常提醒/热调入口/诊断按钮（需 UI 自动化，未覆盖）
+- 125%-200% DPI 与触屏尺寸（需 UI 自动化）
 
 ## 只能由真实 Runtime 或实机证明
 
