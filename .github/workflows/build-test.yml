@@ -22,6 +22,20 @@ jobs:
       - name: 还原并构建
         run: dotnet build Sparxie.sln -c Release --nologo
 
+      - name: 构建 native HoyoTouchCore
+        shell: pwsh
+        run: |
+          $cmake = Get-ChildItem "C:/Program Files/Microsoft Visual Studio" -Recurse -Filter cmake.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match 'CMake\\CMake\\bin' } | Select-Object -First 1
+          if (-not $cmake) { throw "未找到 VS 自带 cmake" }
+          & $cmake.FullName -G "Visual Studio 18 2026" -A x64 -S native/HoyoTouchCore -B native/HoyoTouchCore/build
+          & $cmake.FullName --build native/HoyoTouchCore/build --config Release
+
+      - name: 复制 native DLL 到测试输出（HoyoAbi.Tests 冒烟）
+        shell: pwsh
+        run: |
+          Copy-Item "native/HoyoTouchCore/build/Release/HoyoTouchCore.dll" "tests/HoyoAbi.Tests/bin/Release/net10.0/" -Force
+
       - name: 运行全部测试
         run: dotnet test Sparxie.sln -c Release --no-build --nologo -v q
 
