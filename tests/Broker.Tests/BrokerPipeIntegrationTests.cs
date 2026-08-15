@@ -1,4 +1,5 @@
 using Grpc.Core;
+using System.Diagnostics;
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -20,6 +21,10 @@ public sealed class BrokerPipeIntegrationTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
+        Environment.SetEnvironmentVariable(
+            Sparxie.Broker.Hosting.SessionLauncher.SessionHostExeEnv,
+            LocateSessionHostExe());
+
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.ConfigureKestrel(serverOptions =>
         {
@@ -29,6 +34,7 @@ public sealed class BrokerPipeIntegrationTests : IAsyncLifetime
             });
         });
         builder.Services.AddGrpc();
+        builder.Services.AddSingleton<Sparxie.Broker.Sessions.SessionRegistry>();
         builder.Logging.ClearProviders();
 
         _app = builder.Build();
@@ -43,6 +49,22 @@ public sealed class BrokerPipeIntegrationTests : IAsyncLifetime
             await _app.StopAsync();
             await _app.DisposeAsync();
         }
+    }
+
+    private static string LocateSessionHostExe()
+    {
+        var dir = AppContext.BaseDirectory;
+        var root = new DirectoryInfo(dir);
+        while (root is not null && root.Name != "Sparxie")
+        {
+            root = root.Parent;
+        }
+
+        Assert.NotNull(root);
+        var candidate = Path.Combine(root.FullName,
+            "src", "Sparxie.SessionHost", "bin", "Debug", "net10.0-windows", "Sparxie.SessionHost.exe");
+        Assert.True(File.Exists(candidate), $"未找到 {candidate}");
+        return candidate;
     }
 
     private SparxieBroker.SparxieBrokerClient CreateClient()
@@ -90,6 +112,25 @@ public sealed class BrokerPipeIntegrationTests : IAsyncLifetime
     public async Task StartSession合法快照被接受()
     {
         var client = CreateClient();
+        var events = new List<SessionEvent>();
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        var eventTask = Task.Run(async () =>
+        {
+            var stream = client.StreamEvents(new StreamEventsRequest
+            {
+                ProtocolVersion = RpcContract.ProtocolVersion,
+                RequestId = Guid.NewGuid().ToString("N"),
+            }, cancellationToken: cts.Token);
+            await foreach (var ev in stream.ResponseStream.ReadAllAsync(cts.Token))
+            {
+                lock (events)
+                {
+                    events.Add(ev);
+                }
+            }
+        });
+
         var response = await client.StartSessionAsync(new StartSessionRequest
         {
             ProtocolVersion = RpcContract.ProtocolVersion,
@@ -115,6 +156,52 @@ public sealed class BrokerPipeIntegrationTests : IAsyncLifetime
 
         Assert.True(response.Accepted);
         Assert.False(string.IsNullOrWhiteSpace(response.SessionId));
+
+        // 等待 Host 完成会话（EXE 不存在 → Failed 事件），保证后台连接完成且 Host 正常退出
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+        while (DateTime.UtcNow < deadline)
+        {
+            lock (events)
+            {
+                if (events.Any(e => e.State is "Exited" or "Failed"))
+                {
+                    break;
+                }
+            }
+
+            await Task.Delay(100);
+        }
+
+        List<SessionEvent> snapshot;
+        lock (events)
+        {
+            snapshot = [.. events];
+        }
+
+        Assert.Contains(snapshot, e => e.State == "Failed");
+        Assert.Contains(snapshot, e => e.ErrorCode == (int)ErrorCode.ExecutableNotFound);
+
+        // 会话结束事件到达后，Host 应自行退出（StopApplication）
+        var hostDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (DateTime.UtcNow < hostDeadline
+               && Process.GetProcessesByName("Sparxie.SessionHost").Length > 0)
+        {
+            await Task.Delay(200);
+        }
+
+        Assert.Empty(Process.GetProcessesByName("Sparxie.SessionHost"));
+
+        cts.Cancel();
+        try
+        {
+            await eventTask;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Grpc.Core.RpcException)
+        {
+        }
     }
 
     [Fact]

@@ -25,6 +25,7 @@ builder.WebHost.ConfigureKestrel(serverOptions =>
 });
 
 builder.Services.AddGrpc();
+builder.Services.AddSingleton<Sparxie.Broker.Sessions.SessionRegistry>();
 
 var app = builder.Build();
 app.MapGrpcService<BrokerService>();

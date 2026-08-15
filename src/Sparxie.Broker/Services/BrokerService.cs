@@ -1,5 +1,7 @@
 using Grpc.Core;
 using Microsoft.Extensions.Logging;
+using Sparxie.Broker.Hosting;
+using Sparxie.Broker.Sessions;
 using Sparxie.Broker.Validation;
 using Sparxie.Contracts.Errors;
 using Sparxie.Contracts.Rpc;
@@ -7,18 +9,20 @@ using Sparxie.Contracts.Rpc;
 namespace Sparxie.Broker.Services;
 
 /// <summary>
-/// UI 只连接 Broker。本服务负责协议/请求校验与转发；
-/// SessionHost 私有管道与转发链在 SessionHost 步骤接入。
+/// UI 只连接 Broker。本服务负责协议/请求校验、会话注册，
+/// 为每个 SessionHost 建立私有管道并转发状态、错误与热调请求。
 /// </summary>
 public sealed class BrokerService : SparxieBroker.SparxieBrokerBase
 {
-    public const string BrokerVersion = "0.1.0";
+    public const string BrokerVersion = "0.2.0";
 
     private readonly ILogger<BrokerService> _logger;
+    private readonly SessionRegistry _registry;
 
-    public BrokerService(ILogger<BrokerService> logger)
+    public BrokerService(ILogger<BrokerService> logger, SessionRegistry registry)
     {
         _logger = logger;
+        _registry = registry;
     }
 
     public override Task<PingResponse> Ping(PingRequest request, ServerCallContext context)
@@ -51,53 +55,105 @@ public sealed class BrokerService : SparxieBroker.SparxieBrokerBase
             return Task.FromResult(Reject(StageCode.Validation, profileError.Value));
         }
 
-        // 校验通过。SessionHost 进程创建与私有管道转发在 SessionHost 步骤接线。
+        if (_registry.HasActiveSessionForGame(request.Profile.Game))
+        {
+            return Task.FromResult(Reject(StageCode.Mutex, (ErrorCode.MutexConflict, "同款游戏已有活动会话")));
+        }
+
         var sessionId = Guid.NewGuid().ToString("N");
+        var pipeName = HostEnvironment.PipeNameFor(sessionId);
+
+        try
+        {
+            SessionLauncher.Launch(sessionId, request.Profile);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "启动 SessionHost 失败");
+            return Task.FromResult(Reject(StageCode.CreateProcess, (ErrorCode.ProcessCreateFailed, $"启动 SessionHost 失败: {ex.Message}")));
+        }
+
+        var hostSession = new HostSession(sessionId, pipeName, request.Profile.Game, HandleHostEvent);
+        _registry.TryAdd(hostSession);
+
         _logger.LogInformation("StartSession 已接受: profile={ProfileId} session={SessionId}",
             request.Profile.ProfileId, sessionId);
+
+        // 后台连接 Host 私有管道
+        _ = Task.Run(() => hostSession.ConnectAsync(CancellationToken.None));
 
         return Task.FromResult(new StartSessionResponse
         {
             Accepted = true,
             SessionId = sessionId,
-            Stage = (int)StageCode.Validation,
+            Stage = (int)StageCode.CreateProcess,
             ErrorCode = (int)ErrorCode.None,
-            Message = "已接受；SessionHost 接线尚未实现",
+            Message = "已接受，正在启动会话",
         });
     }
 
-    public override Task<SetTargetFpsResponse> SetTargetFps(SetTargetFpsRequest request, ServerCallContext context)
+    public override async Task<SetTargetFpsResponse> SetTargetFps(SetTargetFpsRequest request, ServerCallContext context)
     {
         if (string.IsNullOrWhiteSpace(request.RequestId))
         {
-            return Task.FromResult(new SetTargetFpsResponse
+            return new SetTargetFpsResponse
             {
                 Applied = false,
                 Stage = (int)StageCode.Validation,
                 ErrorCode = (int)ErrorCode.InvalidArgument,
                 Message = "requestId 不能为空",
-            });
+            };
         }
 
         if (request.TargetFps is < ProfileSnapshotValidator.MinFps or > ProfileSnapshotValidator.MaxFps)
         {
-            return Task.FromResult(new SetTargetFpsResponse
+            return new SetTargetFpsResponse
             {
                 Applied = false,
                 Stage = (int)StageCode.Validation,
                 ErrorCode = (int)ErrorCode.InvalidArgument,
                 Message = $"targetFps 超出 {ProfileSnapshotValidator.MinFps}–{ProfileSnapshotValidator.MaxFps}",
-            });
+            };
         }
 
-        // 会话注册表在 SessionHost 步骤接入，当前无会话可路由。
-        return Task.FromResult(new SetTargetFpsResponse
+        if (!_registry.TryGet(request.SessionId, out var session))
         {
-            Applied = false,
-            Stage = (int)StageCode.HostFault,
-            ErrorCode = (int)ErrorCode.SessionNotFound,
-            Message = "会话不存在",
-        });
+            return new SetTargetFpsResponse
+            {
+                Applied = false,
+                Stage = (int)StageCode.HostFault,
+                ErrorCode = (int)ErrorCode.SessionNotFound,
+                Message = "会话不存在",
+            };
+        }
+
+        try
+        {
+            await session.SendCommandAsync(new HostCommand
+            {
+                Command = "set_target_fps",
+                TargetFps = request.TargetFps,
+            }, context.CancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "转发热调失败: session={SessionId}", request.SessionId);
+            return new SetTargetFpsResponse
+            {
+                Applied = false,
+                Stage = (int)StageCode.HostFault,
+                ErrorCode = (int)ErrorCode.HostCrashedAfterRunning,
+                Message = "Host 不可达，热调失败",
+            };
+        }
+
+        return new SetTargetFpsResponse
+        {
+            Applied = true,
+            Stage = (int)StageCode.Running,
+            ErrorCode = (int)ErrorCode.None,
+            Message = "热调已下发",
+        };
     }
 
     public override async Task StreamEvents(StreamEventsRequest request, IServerStreamWriter<SessionEvent> responseStream, ServerCallContext context)
@@ -108,10 +164,30 @@ public sealed class BrokerService : SparxieBroker.SparxieBrokerBase
             throw new RpcException(new Status(StatusCode.InvalidArgument, error.Value.Message));
         }
 
-        // 事件源在 SessionHost 步骤接入；当前保持流打开直到客户端取消。
-        while (!context.CancellationToken.IsCancellationRequested)
+        await foreach (var ev in _registry.Events.ReadAllAsync(context.CancellationToken).ConfigureAwait(false))
         {
-            await Task.Delay(500, context.CancellationToken).ConfigureAwait(false);
+            await responseStream.WriteAsync(ev).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Host 事件处理：写入 UI 事件总线；会话结束或 Host 崩溃后移除会话。</summary>
+    private async void HandleHostEvent(HostEvent ev)
+    {
+        _registry.Publish(new SessionEvent
+        {
+            SessionId = ev.SessionId,
+            State = ev.State,
+            Stage = ev.Stage,
+            ErrorCode = ev.ErrorCode,
+            Message = ev.Message,
+        });
+
+        if (ev.State is "Exited" or "Failed" or "HostCrashedBeforeRunning" or "HostCrashedAfterRunning")
+        {
+            if (_registry.Remove(ev.SessionId) is { } session)
+            {
+                await session.DisposeAsync().ConfigureAwait(false);
+            }
         }
     }
 
