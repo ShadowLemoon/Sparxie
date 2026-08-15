@@ -88,6 +88,8 @@ public sealed class HostService : SparxieHost.SparxieHostBase
     private static IGameController CreateController(HostOptions options) => options.Profile.Game switch
     {
         "zenlessZoneZero" => new ZzzGameController(options.SessionId),
+        // Hoyo（原神/星铁）真实流程尚未接入上游扫描/Patch：
+        // 接入后改为 new HoyoGameController()，当前保持 Null 占位避免误报能力。
         _ => new NullGameController(),
     };
 }
