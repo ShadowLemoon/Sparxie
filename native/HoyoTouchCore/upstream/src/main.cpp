@@ -2525,3 +2525,312 @@ __Continue:
 
 
 
+
+// ============================================================================
+// Sparxie 最小入口补丁（记录于 UPSTREAM.md）
+//
+// 在不改动 main() 的前提下，为闭源启动器提供 DLL 可调用的注入入口。
+// 复用现有 static 函数与扫描/Patch 逻辑；不做控制台交互、不读 INI、
+// 不处理插件 DLL；FPS 与优先级由调用方通过参数直接设置全局变量。
+// 此补丁是"无法在 subtree 外实现的入口条件"，属于计划允许的最小上游差异。
+// ============================================================================
+
+extern "C" __declspec(dllexport) int __stdcall sparxie_hoyo_bootstrap(
+    const wchar_t* game_executable_path,
+    int32_t game_type,             // 0 = genshin, 1 = starRail
+    int32_t fps_unlock_enabled,    // 0/1
+    int32_t target_fps,            // 10-1000
+    int32_t background_fps_limit_enabled,
+    int32_t background_fps,
+    int32_t priority_class,        // 0=below,1=normal,2=above,3=high
+    int32_t genshin_follow_in_game_preset,
+    int32_t genshin_preset_30_fps,
+    int32_t genshin_preset_60_fps,
+    int32_t genshin_touch_ui_scale_override_enabled,
+    int32_t genshin_touch_ui_scale_percent,
+    uint32_t* out_pid,
+    uint32_t* out_fps_value_addr)  // 返回 FpsValue 地址（热调用）
+{
+    if (!game_executable_path || !out_pid || !out_fps_value_addr)
+    {
+        return 1; // HOYO_ERR_INVALID_ARGUMENT
+    }
+
+    // ---- 初始化（与 main() 相同，但无控制台）----
+    if (NTSTATUS r = init_API())
+    {
+        return 2; // HOYO_ERR_ABI_MISMATCH（API 初始化失败按契约失败处理）
+    }
+
+    // ---- 设置全局配置（绕开 INI）----
+    isGenshin = (game_type == 0);
+    FpsValue = (uint32_t)(target_fps >= 10 && target_fps <= 1000 ? target_fps : 120);
+    Target_set_60 = (uint32_t)(genshin_preset_60_fps >= 10 ? genshin_preset_60_fps : 1000);
+    Target_set_30 = (uint32_t)(genshin_preset_30_fps >= 10 ? genshin_preset_30_fps : 60);
+    Custom_DPI_Scale = genshin_touch_ui_scale_override_enabled
+        ? (float)(genshin_touch_ui_scale_percent >= 100 && genshin_touch_ui_scale_percent <= 500
+            ? genshin_touch_ui_scale_percent : 400) / 100.0f * 96.0f / 96.0f
+        : 0.0f;
+    Use_mobile_UI = isGenshin ? 1 : 0;
+    isHook = 1;
+    PowerSave_target = (uint32_t)(background_fps >= 10 && background_fps <= 1000 ? background_fps : 10);
+    is_old_version = 0;
+    AutoExit = 1; // 不进入控制台热键循环
+    _main_state = 1;
+
+    switch (priority_class)
+    {
+        case 0: GamePriorityClass = BELOW_NORMAL_PRIORITY_CLASS; break;
+        case 2: GamePriorityClass = ABOVE_NORMAL_PRIORITY_CLASS; break;
+        case 3: GamePriorityClass = HIGH_PRIORITY_CLASS; break;
+        default: GamePriorityClass = NORMAL_PRIORITY_CLASS; break;
+    }
+
+    // ---- 路径准备 ----
+    std::wstring gamePath(game_executable_path);
+    std::wstring processDir = gamePath.substr(0, gamePath.find_last_of(L"\\"));
+    std::wstring procName = gamePath.substr(gamePath.find_last_of(L"\\") + 1);
+
+    // ---- 拒绝接管已运行游戏（与 main() 一致）----
+    DWORD existingPid = GetPID(procName.c_str());
+    if (existingPid)
+    {
+        return 3; // HOYO_ERR_PROCESS_NOT_FOUND 语义复用：已运行拒绝
+    }
+
+    // ---- 创建挂起进程（与 main() 一致，使用 NtCreateProcess 路径）----
+    size_t bootsize = sizeof(STARTUPINFOW) + sizeof(PROCESS_INFORMATION) + 0x20;
+    LPVOID boot_info = malloc(bootsize);
+    if (!boot_info)
+    {
+        return 4; // HOYO_ERR_INTERNAL
+    }
+    STARTUPINFOW* si = (STARTUPINFOW*)((uint8_t*)boot_info + sizeof(PROCESS_INFORMATION) + 0x8);
+    PROCESS_INFORMATION* pi = (PROCESS_INFORMATION*)boot_info;
+    memset(boot_info, 0, bootsize);
+
+    // Game_Arg：透传调用方构造的启动参数；此处为空（SessionHost 负责游戏参数）
+    if (!((CreateProcessW_pWin64)~(DWORD64)CreateProcessW_p)(
+            gamePath.c_str(), NULL, NULL, NULL, FALSE,
+            CREATE_SUSPENDED | GamePriorityClass, NULL, processDir.c_str(), si, pi))
+    {
+        free(boot_info);
+        return 4; // HOYO_ERR_INTERNAL
+    }
+
+    // ---- 加载模块与扫描（复用 main() 流程，去掉控制台输出与插件）----
+    inject_arg injectarg = { 0 };
+    Hook_func_list GI_Func = { 0 };
+    LPVOID _imgbase_PE_buffer = 0;
+    LPVOID Text_Remote_RVA = 0;
+    LPVOID Unityplayer_baseAddr = 0;
+    uint32_t Text_Vsize = 0;
+
+    _imgbase_PE_buffer = VirtualAlloc_Internal(0, 0x1000, PAGE_READWRITE);
+    if (!_imgbase_PE_buffer)
+    {
+        TerminateProcess_Internal(pi->hProcess, 0);
+        CloseHandle_Internal(pi->hProcess);
+        free(boot_info);
+        return 5; // HOYO_ERR_SCAN_FAILED
+    }
+
+    if (isGenshin && is_old_version == 0)
+    {
+        Unityplayer_baseAddr = RemoteDll_Inject(pi->hProcess, 0);
+    }
+    else
+    {
+        std::wstring engPath = processDir + L"\\UnityPlayer.dll";
+        Unityplayer_baseAddr = RemoteDll_Inject(pi->hProcess, engPath.c_str());
+    }
+
+    if (!Unityplayer_baseAddr ||
+        !ReadProcessMemoryInternal(pi->hProcess, Unityplayer_baseAddr, _imgbase_PE_buffer, 0x1000, 0) ||
+        !Get_Section_info(_imgbase_PE_buffer, ".text", &Text_Vsize, &Text_Remote_RVA, Unityplayer_baseAddr))
+    {
+        TerminateProcess_Internal(pi->hProcess, 0);
+        CloseHandle_Internal(pi->hProcess);
+        VirtualFree_Internal(_imgbase_PE_buffer, 0, MEM_RELEASE);
+        free(boot_info);
+        return 5; // HOYO_ERR_SCAN_FAILED
+    }
+
+    LPVOID Copy_Text_VA = VirtualAlloc_Internal(0, Text_Vsize, PAGE_READWRITE);
+    if (!Copy_Text_VA ||
+        !ReadProcessMemoryInternal(pi->hProcess, (void*)Text_Remote_RVA, Copy_Text_VA, Text_Vsize, 0))
+    {
+        TerminateProcess_Internal(pi->hProcess, 0);
+        CloseHandle_Internal(pi->hProcess);
+        VirtualFree_Internal(_imgbase_PE_buffer, 0, MEM_RELEASE);
+        if (Copy_Text_VA) VirtualFree_Internal(Copy_Text_VA, 0, MEM_RELEASE);
+        free(boot_info);
+        return 5; // HOYO_ERR_SCAN_FAILED
+    }
+
+    LPVOID pfps = 0;
+    int64_t address = 0;
+
+    if (isGenshin)
+    {
+        // 原神 pfps 扫描（与 main() 相同分支）
+        address = (int64_t)PatternScan_Region(Copy_Text_VA, Text_Vsize, "66 0F 6E 0D ?? ?? ?? ?? 0F 57 C0 0F 5B C9");
+        if (address)
+        {
+            int64_t rip = address + 4;
+            pfps = (LPVOID)(rip - (int64_t)Copy_Text_VA + (int64_t)Text_Remote_RVA);
+        }
+        else
+        {
+            address = (int64_t)PatternScan_Region(Copy_Text_VA, Text_Vsize, "7E 0C E8 ?? ?? ?? ?? 66 0F 6E C8 0F 5B C9");
+            if (address)
+            {
+                int64_t rip = address + 3;
+                rip += *(int32_t*)rip + 6;
+                pfps = (LPVOID)(rip - (int64_t)Copy_Text_VA + (int64_t)Text_Remote_RVA);
+            }
+            else
+            {
+                address = (int64_t)PatternScan_Region(Copy_Text_VA, Text_Vsize, "7F 0E E8 ?? ?? ?? ?? 66 0F 6E C8");
+                if (address)
+                {
+                    int64_t rip = address + 3;
+                    rip += *(int32_t*)rip + 6;
+                    pfps = (LPVOID)(rip - (int64_t)Copy_Text_VA + (int64_t)Text_Remote_RVA);
+                }
+                else
+                {
+                    address = (int64_t)PatternScan_Region(Copy_Text_VA, Text_Vsize, "7F 0F 8B 05 ?? ?? ?? ?? 66 0F 6E C8");
+                    if (address)
+                    {
+                        int64_t rip = address + 4;
+                        pfps = (LPVOID)(rip - (int64_t)Copy_Text_VA + (int64_t)Text_Remote_RVA);
+                    }
+                }
+            }
+        }
+
+        if (!pfps)
+        {
+            TerminateProcess_Internal(pi->hProcess, 0);
+            CloseHandle_Internal(pi->hProcess);
+            VirtualFree_Internal(_imgbase_PE_buffer, 0, MEM_RELEASE);
+            VirtualFree_Internal(Copy_Text_VA, 0, MEM_RELEASE);
+            free(boot_info);
+            return 5; // HOYO_ERR_SCAN_FAILED（Genshin Pattern Outdated）
+        }
+    }
+    else
+    {
+        // 星铁 pfps 扫描 + Patch0（与 main() 相同分支）
+        address = (int64_t)PatternScan_Region(Copy_Text_VA, Text_Vsize, "66 0F 6E 05 ?? ?? ?? ?? F2 0F 10 3D ?? ?? ?? ?? 0F 5B C0");
+        if (address)
+        {
+            int64_t rip = address + 4;
+            rip += *(int32_t*)rip + 4;
+            pfps = (LPVOID)(rip - (int64_t)Copy_Text_VA + (int64_t)Text_Remote_RVA);
+
+            if ((address = (int64_t)PatternScan_Region(Copy_Text_VA, Text_Vsize, "CC 89 0D ?? ?? ?? ?? E9 ?? ?? ?? ?? CC CC CC CC CC")))
+            {
+                rip = address + 3;
+                rip += *(int32_t*)rip + 4;
+                if ((LPVOID)(rip - (int64_t)Copy_Text_VA + (int64_t)Text_Remote_RVA) == pfps)
+                {
+                    rip = address + 1;
+                    LPVOID Patch0_addr_hook = (LPVOID)(rip - (int64_t)Copy_Text_VA + (int64_t)Text_Remote_RVA);
+                    uint8_t patch = 0x8B;
+                    WriteProcessMemoryInternal(pi->hProcess, Patch0_addr_hook, (LPVOID)&patch, 0x1, 0);
+                }
+            }
+        }
+
+        if (!pfps)
+        {
+            TerminateProcess_Internal(pi->hProcess, 0);
+            CloseHandle_Internal(pi->hProcess);
+            VirtualFree_Internal(_imgbase_PE_buffer, 0, MEM_RELEASE);
+            VirtualFree_Internal(Copy_Text_VA, 0, MEM_RELEASE);
+            free(boot_info);
+            return 5; // HOYO_ERR_SCAN_FAILED（StarRail Pattern Outdated）
+        }
+    }
+
+    // ---- 原神 il2cpp 扫描（main() __genshin_il 分支的核心部分）----
+    if (isGenshin)
+    {
+        LPVOID UA_baseAddr = Unityplayer_baseAddr;
+        if (is_old_version)
+        {
+            std::wstring il2cppPath = processDir + L"\\YuanShen_Data\\Native\\UserAssembly.dll";
+            UA_baseAddr = RemoteDll_Inject(pi->hProcess, il2cppPath.c_str());
+            if (UA_baseAddr && !ReadProcessMemoryInternal(pi->hProcess, (void*)UA_baseAddr, _imgbase_PE_buffer, 0x1000, 0))
+            {
+                UA_baseAddr = 0;
+            }
+        }
+
+        if (Get_Section_info(_imgbase_PE_buffer, "il2cpp", &Text_Vsize, &Text_Remote_RVA, UA_baseAddr))
+        {
+            VirtualFree_Internal(Copy_Text_VA, 0, MEM_RELEASE);
+            Copy_Text_VA = VirtualAlloc_Internal(0, Text_Vsize, PAGE_READWRITE);
+            if (Copy_Text_VA && ReadProcessMemoryInternal(pi->hProcess, (void*)Text_Remote_RVA, Copy_Text_VA, Text_Vsize, 0))
+            {
+                if (isHook)
+                {
+                    address = (int64_t)PatternScan_Region(Copy_Text_VA, Text_Vsize, "48 89 F1 E8 ?? ?? ?? ?? 8B 3D ?? ?? ?? ?? 48 8B 0D");
+                    if (address)
+                    {
+                        int64_t rip = address + 10;
+                        rip += *(int32_t*)rip;
+                        rip += 4;
+                        injectarg.Pfps = rip - (int64_t)Copy_Text_VA + (int64_t)Text_Remote_RVA;
+                    }
+                }
+
+                address = (int64_t)PatternScan_Region(Copy_Text_VA, Text_Vsize, "E8 ?? ?? ?? ?? EB 0D 48 89 F1 BA 02 00 00 00 E8 ?? ?? ?? ?? 48 89 F1 31 D2");
+                if (address)
+                {
+                    int64_t rip = address + 1;
+                    rip += *(int32_t*)rip + 4;
+                    injectarg.verfiy = rip - (int64_t)Copy_Text_VA + (int64_t)Text_Remote_RVA;
+                }
+                else if ((address = (int64_t)PatternScan_Region(Copy_Text_VA, Text_Vsize, "E8 ?? ?? ?? ?? EB 0D 48 89 F1 BA 02 00 00 00 E8 ?? ?? ?? ?? 48 8B 0D")))
+                {
+                    int64_t rip = address + 1;
+                    rip += *(int32_t*)rip + 4;
+                    injectarg.verfiy = rip - (int64_t)Copy_Text_VA + (int64_t)Text_Remote_RVA;
+                }
+
+                if (injectarg.verfiy)
+                {
+                    injectarg.PfuncList = &GI_Func;
+                }
+            }
+        }
+    }
+
+    // ---- 注入（与 main() __Continue 一致）----
+    uintptr_t Patch_buffer = inject_patch(pi->hProcess, Unityplayer_baseAddr, pfps, &injectarg);
+    if (!Patch_buffer)
+    {
+        TerminateProcess_Internal(pi->hProcess, 0);
+        CloseHandle_Internal(pi->hProcess);
+        VirtualFree_Internal(_imgbase_PE_buffer, 0, MEM_RELEASE);
+        VirtualFree_Internal(Copy_Text_VA, 0, MEM_RELEASE);
+        free(boot_info);
+        return 6; // HOYO_ERR_INSTALL_CONFIRM_FAILED
+    }
+
+    VirtualFree_Internal(_imgbase_PE_buffer, 0, MEM_RELEASE);
+    VirtualFree_Internal(Copy_Text_VA, 0, MEM_RELEASE);
+
+    SetThreadPriority(pi->hThread, THREAD_PRIORITY_TIME_CRITICAL);
+    ResumeThread_Internal(pi->hThread);
+    CloseHandle_Internal(pi->hThread);
+
+    *out_pid = pi->dwProcessId;
+    *out_fps_value_addr = (uint32_t)(uintptr_t)&FpsValue;
+
+    free(boot_info);
+    return 0; // HOYO_OK
+}
