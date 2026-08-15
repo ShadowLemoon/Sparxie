@@ -39,7 +39,7 @@ public sealed class HostSession : IAsyncDisposable
     /// <summary>连接 Host 管道并启动双向流；Host 尚未就绪时轮询重试。</summary>
     public async Task ConnectAsync(CancellationToken cancellationToken)
     {
-        for (var attempt = 0; attempt < 60 && !cancellationToken.IsCancellationRequested; attempt++)
+        for (var attempt = 0; attempt < 120 && !cancellationToken.IsCancellationRequested; attempt++)
         {
             try
             {

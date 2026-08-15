@@ -144,10 +144,11 @@ public class HoyoAbiSmokeTests
             rc = hoyo_set_target_fps(session, 9999, ref fpsResult);
             Assert.Equal(HOYO_ERR_INVALID_ARGUMENT, rc);
 
-            // launch 尚未接入：明确返回 NOT_SUPPORTED，不误报成功
+            // launch 接入 bootstrap：假路径（不存在）应返回扫描/内部失败，而非误报成功
             var launchResult = new HoyoResult();
             rc = hoyo_launch(session, 12345, ref launchResult);
-            Assert.Equal(HOYO_ERR_NOT_SUPPORTED, rc);
+            Assert.NotEqual(HOYO_OK, rc);
+            Assert.NotEqual(HOYO_ERR_NOT_SUPPORTED, rc);
 
             rc = hoyo_release(session);
             Assert.Equal(HOYO_OK, rc);
@@ -178,6 +179,79 @@ public class HoyoAbiSmokeTests
         {
             var rc = hoyo_create_session(ref request, ref result, out _);
             Assert.Equal(HOYO_ERR_ABI_MISMATCH, rc);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(request.GameExecutablePath);
+        }
+    }
+
+    [Fact]
+    public void Launch未创建会话被拒绝()
+    {
+        EnsureDllAvailable();
+        var result = new HoyoResult();
+        var rc = hoyo_launch(IntPtr.Zero, 12345, ref result);
+        Assert.Equal(HOYO_ERR_INVALID_ARGUMENT, rc);
+    }
+
+    [Fact]
+    public void Launch未激活会话被拒绝()
+    {
+        EnsureDllAvailable();
+        var path = Path.Combine(Path.GetTempPath(), "sparxie-abi-test", "StarRail.exe");
+        var request = new HoyoLaunchRequest
+        {
+            Size = (uint)Marshal.SizeOf<HoyoLaunchRequest>(),
+            AbiVersion = ABI_VERSION,
+            GameType = 1,
+            FpsUnlockEnabled = 1,
+            TargetFps = 120,
+            GameExecutablePath = Marshal.StringToHGlobalUni(path),
+            GameExecutablePathChars = (uint)path.Length,
+        };
+        var result = new HoyoResult();
+        try
+        {
+            var rc = hoyo_create_session(ref request, ref result, out var session);
+            Assert.Equal(HOYO_OK, rc);
+            // 释放会话后再次 launch 同句柄：adapter 会话已失效，返回非 OK（不崩溃即可）
+            hoyo_release(session);
+            result = new HoyoResult();
+            rc = hoyo_launch(session, 0, ref result);
+            Assert.NotEqual(HOYO_OK, rc);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(request.GameExecutablePath);
+        }
+    }
+
+    [Fact]
+    public void Launch假路径启动失败不误报成功()
+    {
+        EnsureDllAvailable();
+        var path = Path.Combine(Path.GetTempPath(), "sparxie-abi-test", "StarRail.exe");
+        var request = new HoyoLaunchRequest
+        {
+            Size = (uint)Marshal.SizeOf<HoyoLaunchRequest>(),
+            AbiVersion = ABI_VERSION,
+            GameType = 1,
+            FpsUnlockEnabled = 1,
+            TargetFps = 120,
+            GameExecutablePath = Marshal.StringToHGlobalUni(path),
+            GameExecutablePathChars = (uint)path.Length,
+        };
+        var result = new HoyoResult();
+        try
+        {
+            hoyo_create_session(ref request, ref result, out var session);
+            result = new HoyoResult();
+            var rc = hoyo_launch(session, 0, ref result);
+            // 假路径（不存在）：bootstrap 创建进程失败或扫描失败，绝不误报成功
+            Assert.NotEqual(HOYO_OK, rc);
+            Assert.NotEqual(HOYO_ERR_NOT_SUPPORTED, rc);
+            hoyo_release(session);
         }
         finally
         {

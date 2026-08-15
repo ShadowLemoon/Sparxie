@@ -1,4 +1,5 @@
 using Sparxie.Contracts.Models;
+using Sparxie.Infrastructure.Processes;
 
 namespace Sparxie.Infrastructure.Configuration;
 
@@ -56,6 +57,10 @@ public static class AppConfigValidator
             if (string.IsNullOrWhiteSpace(profile.ExecutablePath))
             {
                 errors.Add($"profile {profile.Id} 的 executablePath 不能为空");
+            }
+            else if (!GameExecutables.IsAllowed(profile.Game, profile.ExecutablePath))
+            {
+                errors.Add($"profile {profile.Id} 的 EXE 名称不在白名单: {Path.GetFileName(profile.ExecutablePath)}");
             }
 
             if (profile.Game == GameType.ZenlessZoneZero)

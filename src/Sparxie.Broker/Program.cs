@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Transport.NamedPipes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sparxie.Broker.Services;
+using Sparxie.Infrastructure.Logging;
 using Sparxie.Infrastructure.Zzz;
 
 var pipeName = Environment.GetEnvironmentVariable("SPARXIE_PIPE_NAME");
@@ -15,6 +16,9 @@ if (string.IsNullOrWhiteSpace(pipeName))
 }
 
 var builder = WebApplication.CreateBuilder();
+
+// 结构化滚动日志：logs/broker-*.log，保留 7 天
+builder.Logging.AddRollingFile(AppContext.BaseDirectory, "broker");
 
 // Kestrel 命名管道默认带 PipeOptions.CurrentUserOnly：仅当前用户 SID 可连接，
 // 满足“仅允许当前用户”的 ACL 要求，无需额外 PipeSecurity。

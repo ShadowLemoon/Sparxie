@@ -211,4 +211,53 @@ public class AppConfigStoreTests : IDisposable
 
         Assert.Throws<InvalidOperationException>(() => store.Save(config));
     }
+
+    [Fact]
+    public void 非白名单EXE被拒绝保存()
+    {
+        var store = new AppConfigStore(ConfigPath);
+        var config = new AppConfig
+        {
+            Profiles =
+            [
+                new GameProfile
+                {
+                    Id = "p1",
+                    DisplayName = "x",
+                    Game = GameType.Genshin,
+                    Variant = "cn",
+                    ExecutablePath = @"C:\Games
+otepad.exe",
+                    Hoyo = new HoyoProfileSettings { TargetFps = 120 },
+                },
+            ],
+        };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => store.Save(config));
+        Assert.Contains("白名单", ex.Message);
+    }
+
+    [Fact]
+    public void 白名单EXE可通过保存()
+    {
+        var store = new AppConfigStore(ConfigPath);
+        var config = new AppConfig
+        {
+            Profiles =
+            [
+                new GameProfile
+                {
+                    Id = "p1",
+                    DisplayName = "x",
+                    Game = GameType.ZenlessZoneZero,
+                    Variant = "cn",
+                    ExecutablePath = @"C:\Games\ZenlessZoneZeroBeta.exe",
+                },
+            ],
+        };
+
+        store.Save(config);
+        var reloaded = store.Load();
+        Assert.Equal(ConfigLoadState.Loaded, reloaded.State);
+    }
 }

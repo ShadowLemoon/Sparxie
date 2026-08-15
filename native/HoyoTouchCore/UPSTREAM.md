@@ -29,15 +29,30 @@ git subtree add --squash --prefix=native/HoyoTouchCore/upstream \
 - subtree 更新后校验 `git diff` 无整文件编码差异；
 - 每次更新后重放并审核本地补丁。
 
-## 本地补丁（首版无）
+## 本地补丁（首版）
 
-首版不在 upstream 内打补丁。以下差异全部放在 subtree 外的 adapter/：
+### sparxie_hoyo_bootstrap（追加于 upstream/src/main.cpp 末尾）
+
+- 位置：`upstream/src/main.cpp` 文件末尾追加（保持 UTF-16 BE + CRLF）。
+- 内容：`extern "C" __declspec(dllexport) int __stdcall sparxie_hoyo_bootstrap(...)`，
+  复用 main() 的注入流程（创建挂起进程 → UnityPlayer/il2cpp 扫描 → inject_patch →
+  ResumeThread），不做控制台交互、不读 INI、不处理插件 DLL。
+- 全局配置（isGenshin/FpsValue/Target_set_30/60/Custom_DPI_Scale/PowerSave_target/
+  GamePriorityClass 等）由参数直接设置，绕开 INI。
+- 纯触屏条件：`fps_unlock_enabled=0` 时跳过 FPS Patch 安装路径。
+- Sync failed 弹窗与 AutoExit 解耦：bootstrap 内 `AutoExit=1` 仅跳过控制台热键循环，
+  不改变上游错误弹窗语义。
+- 返回码：0=成功，1=参数错误，2=API 初始化失败，3=已运行拒绝，4=创建失败，
+  5=扫描失败，6=注入失败。
+- 同步风险：上游 main() 扫描特征或注入时序变化时需同步更新本函数对应段落；
+  上游主流程重构时需重新评估。
+
+以下差异全部放在 subtree 外的 adapter/：
 
 - C ABI 导出入口（`adapter/include/hoyo_touch_core_abi.h`、`adapter/src/hoyo_adapter.cpp`）；
-- `EnableFps` 条件与纯触屏分支（不扫描/不安装 FPS Patch）；
+- `EnableFps` 条件与纯触屏分支；
 - 触屏失败硬检查（移除上游静默降级）；
-- 主目标 FPS 热调仅更新 adapter 内稳定 `FpsValue`（对齐 32 位原子写），不暴露 `&FpsValue`；
-- `Sync failed!` 弹窗独立屏蔽，与 `AutoExit` 解耦，保留最后值保底逻辑；
+- 主目标 FPS 热调（对齐 32 位原子写）；
 - 隔离控制台、INI、热键与插件入口（adapter/SessionHost 绕开，不删除上游代码）。
 
 ## 后续同步风险
