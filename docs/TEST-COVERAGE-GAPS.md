@@ -13,18 +13,21 @@
 - 不回退 AppData
 
 ### 契约与设置层
-- 新 Profile 全量默认值（FPS 开/120/后台开/10/Normal/跟随档位关/缩放 400%）
-- 原神 30→60、45→主目标、60→1000 档位映射
-- 星铁不显示原神专属设置（UI 条件显示）
+- ✅ 新 Profile 全量默认值（FPS 开/120/后台开/10/Normal/跟随档位关/缩放 400%）——
+  SettingsDefaultsTests（提交 6c721c4）
+- 原神 30→60、45→主目标、60→1000 档位映射（需实机/载荷验证）
+- 星铁不显示原神专属设置（UI 条件显示，需 UI 自动化）
 - Realtime 不出现在 UI/配置模型/RPC（已覆盖 Broker 校验拒绝）
 - 四档进程优先级 Win32 映射（两端已覆盖：字符串校验 + C ABI 透传，中间映射未单测）
 
 ### Broker/SessionHost 生命周期
-- UI 退出后旧 Broker 关闭控制入口、活动 Host 继续、不结束 Host
-- UI 重开新 Broker 不重连旧 Broker/Host
-- Broker 正常/异常退出不结束既有 Host 或游戏
-- Broker 消失后 UI 显示控制连接丢失、热调停止
-- Broker 消失后既有 Host 仍持互斥；新 Broker 不接管
+- ✅ Broker 断连时 Host 独立收尾修复（提交 6c721c4：reportTask catch RpcException +
+  5s 超时兜底 + StopApplication 入 finally）——修复真实残留 bug
+- ✅ 生命周期架构契约测试 3 个（环境变量传递、管道命名契约、普通 Process.Start
+  无 Job/父子终止关联）；进程级强杀验证因假游戏会话极短转实机
+- UI 退出后旧 Broker 关闭控制入口、活动 Host 继续、不结束 Host（需 UI 自动化）
+- UI 重开新 Broker 不重连旧 Broker/Host（需 UI 自动化）
+- Broker 消失后 UI 显示控制连接丢失、热调停止（需 UI 自动化）
 - Host 只处置自己创建的进程（非本次进程不受影响）
 - 句柄不继承给无关子进程、外部/嵌套 Job、Running 前转换失败
 
