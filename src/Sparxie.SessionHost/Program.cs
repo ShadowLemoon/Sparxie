@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.Server.Kestrel.Transport.NamedPipes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Sparxie.Infrastructure.Logging;
 using Sparxie.SessionHost.Hosting;
 using Sparxie.SessionHost.Services;
 using HostOptions = Sparxie.SessionHost.Hosting.HostOptions;
@@ -11,6 +13,9 @@ using HostOptions = Sparxie.SessionHost.Hosting.HostOptions;
 var options = HostOptions.FromEnvironment();
 
 var builder = WebApplication.CreateBuilder();
+
+// 结构化滚动日志：logs/host-*.log，保留 7 天
+builder.Logging.AddRollingFile(AppContext.BaseDirectory, "host");
 
 // Host 是单会话进程：会话结束（Exited/Failed）后立即退出，
 // 不等待 gRPC 连接优雅关闭的默认 30 秒超时。
