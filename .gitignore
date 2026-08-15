@@ -481,3 +481,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# PAI 资产目录（计划/报告/临时产物，不进版本库）
+.pai/
