@@ -93,4 +93,32 @@ public class ProfileSnapshotValidatorTests
         profile.Hoyo!.ProcessPriority = "realtime";
         Assert.NotNull(ProfileSnapshotValidator.Validate(profile));
     }
+
+    [Theory]
+    [InlineData("genshin", @"D:\Games\YuanShen.exe")]
+    [InlineData("genshin", @"D:\Games\GenshinImpact.exe")]
+    [InlineData("starRail", @"D:\Games\StarRail.exe")]
+    [InlineData("zenlessZoneZero", @"D:\Games\ZenlessZoneZero.exe")]
+    [InlineData("zenlessZoneZero", @"D:\Games\ZenlessZoneZeroBeta.exe")]
+    public void 白名单EXE通过(string game, string path)
+    {
+        var profile = Valid();
+        profile.Game = game;
+        profile.ExecutablePath = path;
+        Assert.Null(ProfileSnapshotValidator.Validate(profile));
+    }
+
+    [Theory]
+    [InlineData("genshin", @"D:\Games\StarRail.exe", "跨游戏 EXE 名")]
+    [InlineData("starRail", @"D:\Games\YuanShen.exe", "跨游戏 EXE 名")]
+    [InlineData("zenlessZoneZero", @"D:\Games\StarRail.exe", "跨游戏 EXE 名")]
+    [InlineData("genshin", @"D:\Games\launcher.exe", "任意 exe")]
+    [InlineData("starRail", @"C:\x.exe", "任意 exe")]
+    public void 白名单外EXE被拒绝(string game, string path, string reason)
+    {
+        var profile = Valid();
+        profile.Game = game;
+        profile.ExecutablePath = path;
+        Assert.NotNull(ProfileSnapshotValidator.Validate(profile));
+    }
 }
