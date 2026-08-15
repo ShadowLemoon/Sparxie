@@ -16,8 +16,12 @@ public interface IGameController : IDisposable
     /// <summary>启动游戏进程前调用：ZZZ 备份 PC 配置、写入触屏配置并建立恢复记录；Hoyo 无操作。</summary>
     Task PrepareLaunchAsync(ProfileSnapshot profile, CancellationToken cancellationToken);
 
-    /// <summary>注入并安装 Runtime，全部成功后才返回；失败抛异常。返回后可调用 SetTargetFps。</summary>
-    Task InstallAsync(Process? gameProcess, HoyoProfileSettings? hoyo, CancellationToken cancellationToken);
+    /// <summary>
+    /// 注入并安装 Runtime，全部成功后才返回；失败抛异常。返回后可调用 SetTargetFps。
+    /// jobHandle：Running 前失效保护 Job（仅 CreatesProcess=true 时非零；bootstrap
+    /// 创建游戏进程后 Assign，Running 前由 GameSession 撤销 kill-on-close）。
+    /// </summary>
+    Task InstallAsync(Process? gameProcess, IntPtr jobHandle, HoyoProfileSettings? hoyo, CancellationToken cancellationToken);
 
     /// <summary>注入成功后、宣布 Running 前调用：ZZZ 按已验证时序恢复 PC 文件配置并删除恢复记录；Hoyo 无操作。</summary>
     Task PostInstallAsync(CancellationToken cancellationToken);

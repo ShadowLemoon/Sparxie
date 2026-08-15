@@ -42,8 +42,12 @@ git subtree add --squash --prefix=native/HoyoTouchCore/upstream \
 - 纯触屏条件：`fps_unlock_enabled=0` 时跳过 FPS Patch 安装路径。
 - Sync failed 弹窗与 AutoExit 解耦：bootstrap 内 `AutoExit=1` 仅跳过控制台热键循环，
   不改变上游错误弹窗语义。
+- Job 失效保护：新增 `job_handle` 参数（可空）；CreateProcess 成功后立即
+  AssignProcessToJobObject，Job 分配失败时终止进程并整次失败（返回 6）。
+  进入 Running 前由 SessionHost 撤销 KILL_ON_JOB_CLOSE，保证 Running 前 Host
+  异常退出时游戏进程被终止、Running 后保留。
 - 返回码：0=成功，1=参数错误，2=API 初始化失败，3=已运行拒绝，4=创建失败，
-  5=扫描失败，6=注入失败。
+  5=扫描失败，6=注入失败（含 Job 分配失败），7=SEH 异常。
 - 同步风险：上游 main() 扫描特征或注入时序变化时需同步更新本函数对应段落；
   上游主流程重构时需重新评估。
 

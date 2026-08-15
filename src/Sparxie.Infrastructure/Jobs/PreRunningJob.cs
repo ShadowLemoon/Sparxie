@@ -15,6 +15,9 @@ public sealed class PreRunningJob : IDisposable
     private SafeJobHandle? _handle;
     private bool _killOnCloseActive = true;
 
+    /// <summary>底层 Job 句柄（供 Hoyo bootstrap Assign 游戏进程）。</summary>
+    public IntPtr JobHandle => _handle?.DangerousGetHandle() ?? IntPtr.Zero;
+
     private PreRunningJob(SafeJobHandle handle)
     {
         _handle = handle;

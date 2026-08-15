@@ -115,6 +115,13 @@ HOYO_API HoyoTouchError hoyo_launch(
     uint32_t game_pid,
     HoyoResult* result);
 
+// 绑定 Running 前失效保护 Job：bootstrap 创建游戏进程后立即 Assign。
+// 必须在 hoyo_launch 之前调用；job_handle 为 null 表示无 Job（不保护）。
+HOYO_API HoyoTouchError hoyo_attach_job(
+    void* session,
+    void* job_handle,
+    HoyoResult* result);
+
 // 更新主目标 FPS（运行中热调）。仅更新 Host 内稳定 FpsValue（对齐 32 位原子写）。
 HOYO_API HoyoTouchError hoyo_set_target_fps(
     void* session,
