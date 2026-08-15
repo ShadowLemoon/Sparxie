@@ -31,31 +31,3 @@ public interface IGameController : IDisposable
     /// <summary>热调主目标 FPS；纯触屏或未启用 FPS 时抛 NotSupportedException。</summary>
     Task SetTargetFpsAsync(int targetFps, CancellationToken cancellationToken);
 }
-
-/// <summary>占位控制器：立即成功，用于 Running 前失效保护与生命周期验证。</summary>
-public sealed class NullGameController : IGameController
-{
-    public bool CreatesProcess => false;
-
-    public Task PrepareLaunchAsync(ProfileSnapshot profile, CancellationToken cancellationToken)
-        => Task.CompletedTask;
-
-    public Task InstallAsync(Process? gameProcess, HoyoProfileSettings? hoyo, CancellationToken cancellationToken)
-        => Task.CompletedTask;
-
-    public Task PostInstallAsync(CancellationToken cancellationToken)
-        => Task.CompletedTask;
-
-    public Task AbortAsync(CancellationToken cancellationToken)
-        => Task.CompletedTask;
-
-    public Task WaitExitAsync(CancellationToken cancellationToken)
-        => Task.CompletedTask;
-
-    public Task SetTargetFpsAsync(int targetFps, CancellationToken cancellationToken)
-        => Task.CompletedTask;
-
-    public void Dispose()
-    {
-    }
-}

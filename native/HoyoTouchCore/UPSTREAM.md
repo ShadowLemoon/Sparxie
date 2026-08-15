@@ -47,6 +47,21 @@ git subtree add --squash --prefix=native/HoyoTouchCore/upstream \
 - 同步风险：上游 main() 扫描特征或注入时序变化时需同步更新本函数对应段落；
   上游主流程重构时需重新评估。
 
+### CET 兼容性约束（SessionHost 构建配置，非上游补丁）
+
+- 现象：HoyoTouchCore.dll 在 SessionHost（ASP.NET Core/gRPC 进程）加载后调用
+  bootstrap 即崩 C0000409（STATUS_STACK_BUFFER_OVERRUN）；在 testhost 探针进程
+  正常。
+- 根因：.NET 9+ 的 apphost 默认标记 CET（硬件强制 shadow stack）兼容；上游
+  `syscall.asm` 的 `asm_syscall` 手写汇编用 `jmp rcx` 跳转 syscall stub 后
+  `ret` 返回，CET 下 shadow stack 校验失败触发 #CP → C0000409。
+- 修复：`Sparxie.SessionHost.csproj` 设 `<CETCompat>false</CETCompat>` 禁用 CET，
+  加载与 bootstrap 恢复正常（假游戏路径返回扫描失败而非崩溃）。上游代码未改动。
+- 验证：HoyoAbi 测试（testhost 无 CET）与 HostPipeline 集成测试（真实 SessionHost
+  禁用 CET 后走 HoyoGameController → bootstrap → Failed）均通过。
+- 同步风险：上游若重写 syscall 汇编使其兼容 CET，可移除该禁用；届时需回归
+  SessionHost 加载与 bootstrap 全流程。
+
 ### TLS 回调条件编译（NTSYSAPI.h，Sparxie 构建启用）
 
 - 位置：`upstream/src/NTSYSAPI.h` 的 `TLS_CALLBACK`。
