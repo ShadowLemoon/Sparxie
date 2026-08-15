@@ -322,4 +322,85 @@ public class HoyoAbiSmokeTests
             Marshal.FreeHGlobal(request.GameExecutablePath);
         }
     }
+
+    [Fact]
+    public void 热调FPS边界值10与1000通过()
+    {
+        EnsureDllAvailable();
+        var path = Path.Combine(Path.GetTempPath(), "sparxie-abi-test", "StarRail.exe");
+        var request = new HoyoLaunchRequest
+        {
+            Size = (uint)Marshal.SizeOf<HoyoLaunchRequest>(),
+            AbiVersion = ABI_VERSION,
+            GameType = 1,
+            FpsUnlockEnabled = 1,
+            TargetFps = 120,
+            GameExecutablePath = Marshal.StringToHGlobalUni(path),
+            GameExecutablePathChars = (uint)path.Length,
+        };
+        var result = new HoyoResult();
+        try
+        {
+            var rc = hoyo_create_session(ref request, ref result, out var session);
+            Assert.Equal(HOYO_OK, rc);
+
+            foreach (var fps in new[] { 10, 1000 })
+            {
+                var fpsResult = new HoyoResult();
+                rc = hoyo_set_target_fps(session, fps, ref fpsResult);
+                Assert.Equal(HOYO_OK, rc);
+            }
+
+            // 越界 9 / 1001 被拒绝
+            foreach (var fps in new[] { 9, 1001 })
+            {
+                var fpsResult = new HoyoResult();
+                rc = hoyo_set_target_fps(session, fps, ref fpsResult);
+                Assert.Equal(HOYO_ERR_INVALID_ARGUMENT, rc);
+            }
+
+            hoyo_release(session);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(request.GameExecutablePath);
+        }
+    }
+
+    [Fact]
+    public void 纯触屏会话创建成功()
+    {
+        EnsureDllAvailable();
+        var path = Path.Combine(Path.GetTempPath(), "sparxie-abi-test", "StarRail.exe");
+        var request = new HoyoLaunchRequest
+        {
+            Size = (uint)Marshal.SizeOf<HoyoLaunchRequest>(),
+            AbiVersion = ABI_VERSION,
+            GameType = 1,
+            FpsUnlockEnabled = 0, // 纯触屏：FPS 解锁关闭
+            TargetFps = 120,
+            BackgroundFpsLimitEnabled = 0,
+            BackgroundFps = 10,
+            GameExecutablePath = Marshal.StringToHGlobalUni(path),
+            GameExecutablePathChars = (uint)path.Length,
+        };
+        var result = new HoyoResult();
+        try
+        {
+            var rc = hoyo_create_session(ref request, ref result, out var session);
+            Assert.Equal(HOYO_OK, rc);
+            Assert.NotEqual(IntPtr.Zero, session);
+
+            // 纯触屏下热调仍可设值（仅记录目标；bootstrap 不安装 FPS Patch）
+            var fpsResult = new HoyoResult();
+            rc = hoyo_set_target_fps(session, 60, ref fpsResult);
+            Assert.Equal(HOYO_OK, rc);
+
+            hoyo_release(session);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(request.GameExecutablePath);
+        }
+    }
 }

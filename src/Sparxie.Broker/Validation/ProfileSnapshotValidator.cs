@@ -1,5 +1,7 @@
 using Sparxie.Contracts.Errors;
+using Sparxie.Contracts.Models;
 using Sparxie.Contracts.Rpc;
+using Sparxie.Infrastructure.Processes;
 
 namespace Sparxie.Broker.Validation;
 
@@ -57,6 +59,18 @@ public static class ProfileSnapshotValidator
         if (string.IsNullOrWhiteSpace(profile.ExecutablePath))
         {
             return (ErrorCode.InvalidArgument, "profile.executablePath 不能为空");
+        }
+
+        // EXE 白名单：原神仅 YuanShen.exe/GenshinImpact.exe，星铁仅 StarRail.exe，
+        // 绝区零仅 ZenlessZoneZero.exe/ZenlessZoneZeroBeta.exe
+        if (!GameExecutables.IsAllowed(profile.Game switch
+            {
+                "genshin" => GameType.Genshin,
+                "starRail" => GameType.StarRail,
+                _ => GameType.ZenlessZoneZero,
+            }, profile.ExecutablePath))
+        {
+            return (ErrorCode.InvalidArgument, $"executablePath 不在 {profile.Game} 白名单: {Path.GetFileName(profile.ExecutablePath)}");
         }
 
         if (profile.Hoyo is { } hoyo)
