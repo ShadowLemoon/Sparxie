@@ -1,0 +1,13 @@
+{
+  "runtimeVersion": "",
+  "releaseAsset": "",
+  "sha256": "",
+  "files": [
+    "ZZZTouchCore.dll",
+    "ZZZTouchFilterHook.dll"
+  ],
+  "exeWhiteList": [
+    "ZenlessZoneZero.exe",
+    "ZenlessZoneZeroBeta.exe"
+  ]
+}
