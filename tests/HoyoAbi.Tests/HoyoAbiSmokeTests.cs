@@ -69,11 +69,12 @@ public class HoyoAbiSmokeTests
 
     private static string LocateDll()
     {
-        // 测试输出目录或 native 构建输出目录
+        // 优先 native 构建输出目录（新产物），测试输出目录仅作兜底，
+        // 避免"源=目标"导致永远复制不到新构建的 DLL。
         var candidates = new[]
         {
-            Path.Combine(AppContext.BaseDirectory, "HoyoTouchCore.dll"),
             Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "native", "HoyoTouchCore", "build", "Release", "HoyoTouchCore.dll"),
+            Path.Combine(AppContext.BaseDirectory, "HoyoTouchCore.dll"),
         };
         foreach (var candidate in candidates)
         {
@@ -86,14 +87,29 @@ public class HoyoAbiSmokeTests
         throw new FileNotFoundException("未找到 HoyoTouchCore.dll，请先构建 native/HoyoTouchCore");
     }
 
+    private static string? _preparedSourceHash;
+
     private static void EnsureDllAvailable()
     {
         var dll = LocateDll();
+        var sourceHash = HashFile(dll);
         var dest = Path.Combine(AppContext.BaseDirectory, "HoyoTouchCore.dll");
-        if (!File.Exists(dest) || !string.Equals(Path.GetFullPath(dll), Path.GetFullPath(dest), StringComparison.OrdinalIgnoreCase))
+
+        // 已就绪（同源且存在）则跳过；避免 DLL 被 testhost 加载锁定后重复复制失败
+        if (_preparedSourceHash == sourceHash && File.Exists(dest))
         {
-            File.Copy(dll, dest, overwrite: true);
+            return;
         }
+
+        File.Copy(dll, dest, overwrite: true);
+        _preparedSourceHash = sourceHash;
+    }
+
+    private static string HashFile(string path)
+    {
+        using var stream = File.OpenRead(path);
+        var hash = System.Security.Cryptography.SHA256.HashData(stream);
+        return Convert.ToHexString(hash);
     }
 
     [Fact]
