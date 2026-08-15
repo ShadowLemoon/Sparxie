@@ -64,7 +64,11 @@ jobs:
           if (-not (Test-Path "$staging/Sparxie.Broker.exe")) { throw "staging 缺少 Sparxie.Broker.exe" }
           if (-not (Test-Path "$staging/Sparxie.SessionHost.exe")) { throw "staging 缺少 Sparxie.SessionHost.exe" }
           if (-not (Test-Path "$staging/HoyoTouchCore.dll")) { throw "staging 缺少 HoyoTouchCore.dll" }
+          # 用户 ZIP 不含 PDB/调试符号（PDB 仅作受控 CI 产物私下保留）
+          Remove-Item "$staging/*.pdb" -Force -ErrorAction SilentlyContinue
+          if (Get-ChildItem $staging -Filter *.pdb -Recurse) { throw "staging 仍含 PDB" }
           Copy-Item LICENSE, THIRD-PARTY-NOTICES.md $staging -Force
+          Copy-Item "native/HoyoTouchCore/upstream/LICENSE" "$staging/UPSTREAM-LICENSE-MIT.txt" -Force
           Copy-Item "native/HoyoTouchCore/adapter/licenses/inih-LICENSE.txt" $staging -Force
           Copy-Item "docs/RUNTIME-NOTICE.md" $staging -Force
           Compress-Archive -Path "$staging/*" -DestinationPath "artifacts/Sparxie-portable.zip" -Force
