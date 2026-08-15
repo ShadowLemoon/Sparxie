@@ -39,7 +39,11 @@ git subtree add --squash --prefix=native/HoyoTouchCore/upstream \
   ResumeThread），不做控制台交互、不读 INI、不处理插件 DLL。
 - 全局配置（isGenshin/FpsValue/Target_set_30/60/Custom_DPI_Scale/PowerSave_target/
   GamePriorityClass 等）由参数直接设置，绕开 INI。
-- 纯触屏条件：`fps_unlock_enabled=0` 时跳过 FPS Patch 安装路径。
+- 纯触屏条件：`fps_unlock_enabled=0` 时跳过 FPS Patch 扫描/安装（pfps 扫描、
+  星铁 Patch0、原神 il2cpp Pfps 同步地址均跳过），`inject_patch` 以 pfps=0
+  仅注入触屏载荷（FPS 槽位写 0，游戏内 FPS 同步不启用）。
+  `inject_patch` 入口校验同步放宽为 `!_ptr_fps && !arg->PfuncList` 才失败，
+  保证纯触屏（无 FPS 指针、有触屏 Hook 列表）仍能完成注入。
 - Sync failed 弹窗与 AutoExit 解耦：bootstrap 内 `AutoExit=1` 仅跳过控制台热键循环，
   不改变上游错误弹窗语义。
 - 错误弹窗静默：bootstrap 内 `ErrorMsg_EN=0`（默认 1）。上游 RemoteDll_Inject 等

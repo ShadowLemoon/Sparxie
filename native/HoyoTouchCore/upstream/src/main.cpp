@@ -1418,7 +1418,9 @@ typedef struct inject_arg
 //Code inject
 static uint64_t inject_patch(HANDLE Tar_handle, LPVOID Tar_ModBase, LPVOID _ptr_fps, inject_arg* arg)
 {
-    if (!_ptr_fps)
+    // Sparxie 纯触屏：_ptr_fps 为 0 时仍注入触屏载荷（FPS 槽位写 0，游戏内 FPS
+    // 同步载荷不启用）；仅当既无 FPS 指针又无触屏 Hook 列表时视为无效调用。
+    if (!_ptr_fps && !arg->PfuncList)
         return 0;
 
     BYTE* _sc_buffer = (BYTE*)VirtualAlloc_Internal(0, 0x4000, PAGE_READWRITE);
@@ -2684,6 +2686,10 @@ static int __stdcall sparxie_hoyo_bootstrap_impl(
     LPVOID pfps = 0;
     int64_t address = 0;
 
+    // Sparxie 纯触屏：fps_unlock_enabled=0 时跳过 FPS Patch 扫描/安装，
+    // inject_patch 以 pfps=0 仅注入触屏载荷（计划：FPS 关闭时不扫描、不安装 FPS Patch）。
+    if (fps_unlock_enabled)
+    {
     if (isGenshin)
     {
         // 原神 pfps 扫描（与 main() 相同分支）
@@ -2767,6 +2773,7 @@ static int __stdcall sparxie_hoyo_bootstrap_impl(
             return 5; // HOYO_ERR_SCAN_FAILED（StarRail Pattern Outdated）
         }
     }
+    } // fps_unlock_enabled（纯触屏跳过 FPS Patch 扫描/安装）
 
     // ---- 原神 il2cpp 扫描（main() __genshin_il 分支的核心部分）----
     if (isGenshin)
@@ -2788,7 +2795,7 @@ static int __stdcall sparxie_hoyo_bootstrap_impl(
             Copy_Text_VA = VirtualAlloc_Internal(0, Text_Vsize, PAGE_READWRITE);
             if (Copy_Text_VA && ReadProcessMemoryInternal(pi->hProcess, (void*)Text_Remote_RVA, Copy_Text_VA, Text_Vsize, 0))
             {
-                if (isHook)
+                if (isHook && fps_unlock_enabled)
                 {
                     address = (int64_t)PatternScan_Region(Copy_Text_VA, Text_Vsize, "48 89 F1 E8 ?? ?? ?? ?? 8B 3D ?? ?? ?? ?? 48 8B 0D");
                     if (address)
