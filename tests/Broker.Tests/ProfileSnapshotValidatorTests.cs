@@ -109,12 +109,12 @@ public class ProfileSnapshotValidatorTests
     }
 
     [Theory]
-    [InlineData("genshin", @"D:\Games\StarRail.exe", "跨游戏 EXE 名")]
-    [InlineData("starRail", @"D:\Games\YuanShen.exe", "跨游戏 EXE 名")]
-    [InlineData("zenlessZoneZero", @"D:\Games\StarRail.exe", "跨游戏 EXE 名")]
-    [InlineData("genshin", @"D:\Games\launcher.exe", "任意 exe")]
-    [InlineData("starRail", @"C:\x.exe", "任意 exe")]
-    public void 白名单外EXE被拒绝(string game, string path, string reason)
+    [InlineData("genshin", @"D:\Games\StarRail.exe")]
+    [InlineData("starRail", @"D:\Games\YuanShen.exe")]
+    [InlineData("zenlessZoneZero", @"D:\Games\StarRail.exe")]
+    [InlineData("genshin", @"D:\Games\launcher.exe")]
+    [InlineData("starRail", @"C:\x.exe")]
+    public void 白名单外EXE被拒绝(string game, string path)
     {
         var profile = Valid();
         profile.Game = game;
