@@ -42,6 +42,9 @@ git subtree add --squash --prefix=native/HoyoTouchCore/upstream \
 - 纯触屏条件：`fps_unlock_enabled=0` 时跳过 FPS Patch 安装路径。
 - Sync failed 弹窗与 AutoExit 解耦：bootstrap 内 `AutoExit=1` 仅跳过控制台热键循环，
   不改变上游错误弹窗语义。
+- 错误弹窗静默：bootstrap 内 `ErrorMsg_EN=0`（默认 1）。上游 RemoteDll_Inject 等
+  失败路径会调 Show_Error_Msg 弹系统窗并阻塞等待点击（WaitForSingleObject 60s），
+  Sparxie 错误经 C ABI 返回码上报，禁止弹窗阻塞 SessionHost。
 - Job 失效保护：新增 `job_handle` 参数（可空）；CreateProcess 成功后立即
   AssignProcessToJobObject，Job 分配失败时终止进程并整次失败（返回 6）。
   进入 Running 前由 SessionHost 撤销 KILL_ON_JOB_CLOSE，保证 Running 前 Host

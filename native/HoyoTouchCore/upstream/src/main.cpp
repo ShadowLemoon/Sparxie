@@ -2583,6 +2583,7 @@ static int __stdcall sparxie_hoyo_bootstrap_impl(
     is_old_version = 0;
     AutoExit = 1; // 不进入控制台热键循环
     _main_state = 1;
+    ErrorMsg_EN = 0; // Sparxie：错误经 C ABI 返回码上报，不弹系统错误窗
 
     switch (priority_class)
     {
