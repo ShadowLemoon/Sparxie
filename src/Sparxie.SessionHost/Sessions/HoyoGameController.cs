@@ -15,7 +15,6 @@ public sealed class HoyoGameController : IGameController
     private const int HOYO_OK = 0;
 
     private IntPtr _session;
-    private bool _launched;
     private bool _disposed;
 
     public async Task PrepareLaunchAsync(ProfileSnapshot profile, CancellationToken cancellationToken)
@@ -47,7 +46,6 @@ public sealed class HoyoGameController : IGameController
                 throw new InvalidOperationException($"Hoyo 启动注入失败: {launchRc} {Marshal.PtrToStringUni(result.Message)}");
             }
 
-            _launched = true;
         }
         finally
         {
