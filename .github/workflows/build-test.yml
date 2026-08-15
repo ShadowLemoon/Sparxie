@@ -22,6 +22,17 @@ jobs:
       - name: 还原并构建
         run: dotnet build Sparxie.sln -c Release --nologo
 
+      - name: 发布三个进程（自包含 win-x64）
+        shell: pwsh
+        run: |
+          foreach ($proj in @(
+            'src/Sparxie.App/Sparxie.App.csproj',
+            'src/Sparxie.Broker/Sparxie.Broker.csproj',
+            'src/Sparxie.SessionHost/Sparxie.SessionHost.csproj')) {
+            dotnet publish $proj -c Release -r win-x64 --self-contained -o (Join-Path (Split-Path $proj) 'bin/Release/net10.0-windows/win-x64/publish') --nologo
+            if ($LASTEXITCODE -ne 0) { throw "publish 失败: $proj" }
+          }
+
       - name: 构建 native HoyoTouchCore
         shell: pwsh
         run: |
@@ -44,10 +55,18 @@ jobs:
         run: |
           $staging = "artifacts/Sparxie"
           New-Item -ItemType Directory -Force -Path $staging | Out-Null
-          Copy-Item "src/Sparxie.App/bin/Release/net10.0-windows/win-x64/publish/*" $staging -Recurse -Force -ErrorAction SilentlyContinue
-          Copy-Item "src/Sparxie.Broker/bin/Release/net10.0-windows/win-x64/publish/*" $staging -Recurse -Force -ErrorAction SilentlyContinue
-          Copy-Item "src/Sparxie.SessionHost/bin/Release/net10.0-windows/win-x64/publish/*" $staging -Recurse -Force -ErrorAction SilentlyContinue
+          foreach ($name in @('Sparxie.App', 'Sparxie.Broker', 'Sparxie.SessionHost')) {
+            $pub = "src/$name/bin/Release/net10.0-windows/win-x64/publish"
+            if (-not (Test-Path $pub)) { throw "publish 目录缺失: $pub" }
+            Copy-Item "$pub/*" $staging -Recurse -Force
+          }
+          if (-not (Test-Path "$staging/Sparxie.App.exe")) { throw "staging 缺少 Sparxie.App.exe" }
+          if (-not (Test-Path "$staging/Sparxie.Broker.exe")) { throw "staging 缺少 Sparxie.Broker.exe" }
+          if (-not (Test-Path "$staging/Sparxie.SessionHost.exe")) { throw "staging 缺少 Sparxie.SessionHost.exe" }
+          if (-not (Test-Path "$staging/HoyoTouchCore.dll")) { throw "staging 缺少 HoyoTouchCore.dll" }
           Copy-Item LICENSE, THIRD-PARTY-NOTICES.md $staging -Force
+          Copy-Item "native/HoyoTouchCore/adapter/licenses/inih-LICENSE.txt" $staging -Force
+          Copy-Item "docs/RUNTIME-NOTICE.md" $staging -Force
           Compress-Archive -Path "$staging/*" -DestinationPath "artifacts/Sparxie-portable.zip" -Force
 
       - name: 上传 ZIP
