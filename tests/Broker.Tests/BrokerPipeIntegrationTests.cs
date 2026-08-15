@@ -464,4 +464,117 @@ public sealed class BrokerPipeIntegrationTests : IAsyncLifetime
         {
         }
     }
+
+    [Fact]
+    public async Task 不同游戏并行会话互不冲突()
+    {
+        var client = CreateClient();
+        var events = new List<SessionEvent>();
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+        var eventTask = Task.Run(async () =>
+        {
+            var stream = client.StreamEvents(new StreamEventsRequest
+            {
+                ProtocolVersion = RpcContract.ProtocolVersion,
+                RequestId = Guid.NewGuid().ToString("N"),
+            }, cancellationToken: cts.Token);
+            await foreach (var ev in stream.ResponseStream.ReadAllAsync(cts.Token))
+            {
+                lock (events)
+                {
+                    events.Add(ev);
+                }
+            }
+        });
+
+        // 三款游戏同时启动：游戏级互斥域相互独立，均被接受
+        var profiles = new[]
+        {
+            new ProfileSnapshot
+            {
+                ProfileId = "p-genshin",
+                DisplayName = "原神",
+                Game = "genshin",
+                Variant = "cn",
+                ExecutablePath = @"D:\Games\YuanShen.exe",
+                Hoyo = new HoyoSettings
+                {
+                    TargetFps = 120, BackgroundFps = 10, ProcessPriority = "normal",
+                    GenshinPreset30Fps = 60, GenshinPreset60Fps = 1000, GenshinTouchUiScalePercent = 400,
+                },
+            },
+            new ProfileSnapshot
+            {
+                ProfileId = "p-sr",
+                DisplayName = "星铁",
+                Game = "starRail",
+                Variant = "cn",
+                ExecutablePath = @"D:\Games\StarRail.exe",
+                Hoyo = new HoyoSettings
+                {
+                    TargetFps = 120, BackgroundFps = 10, ProcessPriority = "normal",
+                    GenshinPreset30Fps = 60, GenshinPreset60Fps = 1000, GenshinTouchUiScalePercent = 400,
+                },
+            },
+            new ProfileSnapshot
+            {
+                ProfileId = "p-zzz",
+                DisplayName = "绝区零",
+                Game = "zenlessZoneZero",
+                Variant = "cn",
+                ExecutablePath = @"D:\Games\ZenlessZoneZero.exe",
+            },
+        };
+
+        foreach (var profile in profiles)
+        {
+            var response = await client.StartSessionAsync(new StartSessionRequest
+            {
+                ProtocolVersion = RpcContract.ProtocolVersion,
+                RequestId = Guid.NewGuid().ToString("N"),
+                Profile = profile,
+            });
+            Assert.True(response.Accepted, $"{profile.Game} 应被接受: {response.Message}");
+        }
+
+        // 等待三个会话都结束（EXE 不存在 → 各自 Failed），验证互不干扰且各自独立收尾
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+        while (DateTime.UtcNow < deadline)
+        {
+            lock (events)
+            {
+                var failedIds = events.Where(e => e.State == "Failed")
+                    .Select(e => e.SessionId).ToHashSet();
+                if (failedIds.Count >= 3)
+                {
+                    break;
+                }
+            }
+
+            await Task.Delay(100);
+        }
+
+        List<SessionEvent> snapshot;
+        lock (events)
+        {
+            snapshot = [.. events];
+        }
+
+        var failedGames = snapshot.Where(e => e.State == "Failed")
+            .Select(e => e.SessionId).Distinct().Count();
+        Assert.True(failedGames >= 3, $"三个会话都应结束，实际 {failedGames}: {string.Join(" → ", snapshot.Select(e => e.State))}");
+
+        cts.Cancel();
+        try
+        {
+            await eventTask;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Grpc.Core.RpcException)
+        {
+        }
+    }
 }
