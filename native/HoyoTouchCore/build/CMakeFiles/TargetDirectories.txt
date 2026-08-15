@@ -1,4 +1,0 @@
-D:/Code/Sparxie/native/HoyoTouchCore/build/CMakeFiles/HoyoTouchCore.dir
-D:/Code/Sparxie/native/HoyoTouchCore/build/CMakeFiles/INSTALL.dir
-D:/Code/Sparxie/native/HoyoTouchCore/build/CMakeFiles/ALL_BUILD.dir
-D:/Code/Sparxie/native/HoyoTouchCore/build/CMakeFiles/ZERO_CHECK.dir
