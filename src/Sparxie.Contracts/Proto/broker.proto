@@ -78,9 +78,29 @@ message SessionEvent {
   string message = 5;
 }
 
+// ---- Host 私有管道契约：Broker 为每个 SessionHost 建立 ----
+
+message HostEvent {
+  string session_id = 1;
+  string state = 2;      // Starting / Running / Exited / Failed
+  int32 stage = 3;
+  int32 error_code = 4;
+  string message = 5;
+}
+
+message HostCommand {
+  string command = 1;    // set_target_fps / shutdown
+  int32 target_fps = 2;
+}
+
 service SparxieBroker {
   rpc Ping(PingRequest) returns (PingResponse);
   rpc StartSession(StartSessionRequest) returns (StartSessionResponse);
   rpc SetTargetFps(SetTargetFpsRequest) returns (SetTargetFpsResponse);
   rpc StreamEvents(StreamEventsRequest) returns (stream SessionEvent);
+}
+
+// Host 监听私有管道，Broker 作为客户端连接；命令由 Broker 下发，事件由 Host 上报。
+service SparxieHost {
+  rpc Connect(stream HostCommand) returns (stream HostEvent);
 }
