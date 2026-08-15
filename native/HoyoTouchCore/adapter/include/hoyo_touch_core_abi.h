@@ -19,6 +19,15 @@
 extern "C" {
 #endif
 
+// 导出宏：构建 DLL 时导出；被 include 时（测试/校验）不导出。
+#if defined(_WIN32) && defined(HOYO_BUILDING_DLL)
+#define HOYO_API __declspec(dllexport)
+#elif defined(_WIN32)
+#define HOYO_API __declspec(dllimport)
+#else
+#define HOYO_API
+#endif
+
 #define HOYO_ABI_VERSION 1u
 #define HOYO_ABI_NAME "SparxieHoyoTouchCore"
 
@@ -89,37 +98,37 @@ typedef struct HoyoResult
 // ---- 导出函数（首版最小集合）----
 
 // 查询 ABI 版本与能力。
-HoyoTouchError hoyo_get_abi_version(uint32_t* version, uint32_t* size);
+HOYO_API HoyoTouchError hoyo_get_abi_version(uint32_t* version, uint32_t* size);
 
 // 创建会话：校验请求、执行扫描与 Patch，全部成功才返回；失败时整次失败。
 // 返回不透明会话句柄（非 NULL 表示成功）。
 // session_out 由调用方持有，必须用 hoyo_release 释放。
-HoyoTouchError hoyo_create_session(
+HOYO_API HoyoTouchError hoyo_create_session(
     const HoyoLaunchRequest* request,
     HoyoResult* result,
     void** session_out);
 
 // 启动游戏进程并执行注入（挂起创建 → 扫描 → Patch → 恢复主线程）。
 // 调用方传入 game_pid；SessionHost 已创建进程。
-HoyoTouchError hoyo_launch(
+HOYO_API HoyoTouchError hoyo_launch(
     void* session,
     uint32_t game_pid,
     HoyoResult* result);
 
 // 更新主目标 FPS（运行中热调）。仅更新 Host 内稳定 FpsValue（对齐 32 位原子写）。
-HoyoTouchError hoyo_set_target_fps(
+HOYO_API HoyoTouchError hoyo_set_target_fps(
     void* session,
     int32_t target_fps,
     HoyoResult* result);
 
 // 等待游戏退出。timeout_ms 0 表示无限。
-HoyoTouchError hoyo_wait_game_exit(
+HOYO_API HoyoTouchError hoyo_wait_game_exit(
     void* session,
     uint32_t timeout_ms,
     HoyoResult* result);
 
 // 释放会话（卸载注入句柄、释放资源）。幂等。
-HoyoTouchError hoyo_release(void* session);
+HOYO_API HoyoTouchError hoyo_release(void* session);
 
 #ifdef __cplusplus
 } // extern "C"

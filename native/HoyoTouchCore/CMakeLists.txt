@@ -25,7 +25,8 @@ add_library(HoyoTouchCore SHARED
 )
 
 set_property(TARGET HoyoTouchCore PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
-target_compile_options(HoyoTouchCore PRIVATE /d2vzeroupper-)
+target_compile_options(HoyoTouchCore PRIVATE /d2vzeroupper- /utf-8)
+target_compile_definitions(HoyoTouchCore PRIVATE HOYO_BUILDING_DLL=1)
 target_include_directories(HoyoTouchCore PRIVATE
     ${ADAPTER_DIR}/include
     ${UPSTREAM_DIR}/src
