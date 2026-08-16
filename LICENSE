@@ -2,12 +2,13 @@ Sparxie 专有软件许可（占位草案，发布前由版权持有人最终确
 
 版权所有（c）2026 Sparxie 版权持有人。保留所有权利。
 
-本许可仅覆盖由版权持有人创作并控制的 Sparxie 自有代码（包括 UI、Broker、
-SessionHost、Contracts、配置、RPC 与 Hoyo subtree 之外的适配代码）。
+本许可仅覆盖由版权持有人创作并控制的 Sparxie 自有代码（包括 Launcher、
+LauncherCore、Broker、SessionHost、Contracts、配置、RPC 与 Hoyo subtree
+之外的适配代码）。
 
 未经版权持有人事先书面许可，任何人不得复制、修改、分发、再许可或出售本
 软件的源代码、二进制成品或其中的任何部分。
 
-第三方组件不受本许可约束：WPF-UI、WPF-UI.Violeta、.NET/gRPC 运行时组件、
-Hoyo 上游（MIT）、inih（BSD-3-Clause）以及绝区零私有 Runtime 各自适用其
-原始许可证与版权声明，详见 THIRD-PARTY-NOTICES.md。
+第三方组件不受本许可约束：.NET/gRPC 运行时组件、Hoyo 上游（MIT）、inih
+（BSD-3-Clause）以及绝区零私有 Runtime 各自适用其原始许可证与版权声明，
+详见 THIRD-PARTY-NOTICES.md。

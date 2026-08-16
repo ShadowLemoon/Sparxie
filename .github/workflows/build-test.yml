@@ -19,20 +19,6 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: 还原并构建
-        run: dotnet build Sparxie.sln -c Release --nologo
-
-      - name: 发布三个进程（自包含 win-x64）
-        shell: pwsh
-        run: |
-          foreach ($proj in @(
-            'src/Sparxie.App/Sparxie.App.csproj',
-            'src/Sparxie.Broker/Sparxie.Broker.csproj',
-            'src/Sparxie.SessionHost/Sparxie.SessionHost.csproj')) {
-            dotnet publish $proj -c Release -r win-x64 --self-contained -o (Join-Path (Split-Path $proj) 'bin/Release/net10.0-windows/win-x64/publish') --nologo
-            if ($LASTEXITCODE -ne 0) { throw "publish 失败: $proj" }
-          }
-
       - name: 构建 native HoyoTouchCore
         shell: pwsh
         run: |
@@ -40,38 +26,75 @@ jobs:
             Where-Object { $_.FullName -match 'CMake\\CMake\\bin' } | Select-Object -First 1
           if (-not $cmake) { throw "未找到 VS 自带 cmake" }
           & $cmake.FullName -G "Visual Studio 18 2026" -A x64 -S native/HoyoTouchCore -B native/HoyoTouchCore/build
+          if ($LASTEXITCODE -ne 0) { throw "native CMake 配置失败" }
           & $cmake.FullName --build native/HoyoTouchCore/build --config Release
+          if ($LASTEXITCODE -ne 0) { throw "native 构建失败" }
+          if (-not (Test-Path "native/HoyoTouchCore/build/Release/HoyoTouchCore.dll")) {
+            throw "native 构建缺少 HoyoTouchCore.dll"
+          }
+
+      - name: 还原并构建
+        run: dotnet build Sparxie.sln -c Release --nologo
 
       - name: 复制 native DLL 到测试输出（HoyoAbi.Tests 冒烟）
         shell: pwsh
         run: |
           Copy-Item "native/HoyoTouchCore/build/Release/HoyoTouchCore.dll" "tests/HoyoAbi.Tests/bin/Release/net10.0/" -Force
 
-      - name: 运行全部测试
-        run: dotnet test Sparxie.sln -c Release --no-build --nologo -v q
+      - name: 发布三个进程（自包含 win-x64）
+        shell: pwsh
+        run: |
+          foreach ($proj in @(
+            'src/Sparxie.Launcher/Sparxie.Launcher.csproj',
+            'src/Sparxie.Broker/Sparxie.Broker.csproj',
+            'src/Sparxie.SessionHost/Sparxie.SessionHost.csproj')) {
+            dotnet publish $proj -c Release -r win-x64 --self-contained -o (Join-Path (Split-Path $proj) 'bin/Release/net10.0-windows/win-x64/publish') --nologo
+            if ($LASTEXITCODE -ne 0) { throw "publish 失败: $proj" }
+          }
 
       - name: 打包便携 ZIP（不含 ZZZ Runtime，由 zzz-runtime-fetch 工作流合并）
         shell: pwsh
         run: |
           $staging = "artifacts/Sparxie"
+          if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
           New-Item -ItemType Directory -Force -Path $staging | Out-Null
-          foreach ($name in @('Sparxie.App', 'Sparxie.Broker', 'Sparxie.SessionHost')) {
+          foreach ($name in @('Sparxie.Launcher', 'Sparxie.Broker', 'Sparxie.SessionHost')) {
             $pub = "src/$name/bin/Release/net10.0-windows/win-x64/publish"
             if (-not (Test-Path $pub)) { throw "publish 目录缺失: $pub" }
             Copy-Item "$pub/*" $staging -Recurse -Force
           }
-          if (-not (Test-Path "$staging/Sparxie.App.exe")) { throw "staging 缺少 Sparxie.App.exe" }
-          if (-not (Test-Path "$staging/Sparxie.Broker.exe")) { throw "staging 缺少 Sparxie.Broker.exe" }
-          if (-not (Test-Path "$staging/Sparxie.SessionHost.exe")) { throw "staging 缺少 Sparxie.SessionHost.exe" }
-          if (-not (Test-Path "$staging/HoyoTouchCore.dll")) { throw "staging 缺少 HoyoTouchCore.dll" }
-          # 用户 ZIP 不含 PDB/调试符号（PDB 仅作受控 CI 产物私下保留）
-          Remove-Item "$staging/*.pdb" -Force -ErrorAction SilentlyContinue
-          if (Get-ChildItem $staging -Filter *.pdb -Recurse) { throw "staging 仍含 PDB" }
           Copy-Item LICENSE, THIRD-PARTY-NOTICES.md $staging -Force
           Copy-Item "native/HoyoTouchCore/upstream/LICENSE" "$staging/UPSTREAM-LICENSE-MIT.txt" -Force
           Copy-Item "native/HoyoTouchCore/adapter/licenses/inih-LICENSE.txt" $staging -Force
           Copy-Item "docs/RUNTIME-NOTICE.md" $staging -Force
+          foreach ($required in @(
+            'Sparxie.Launcher.exe',
+            'Sparxie.Broker.exe',
+            'Sparxie.SessionHost.exe',
+            'HoyoTouchCore.dll',
+            'LICENSE',
+            'THIRD-PARTY-NOTICES.md',
+            'UPSTREAM-LICENSE-MIT.txt',
+            'inih-LICENSE.txt',
+            'RUNTIME-NOTICE.md')) {
+            if (-not (Test-Path (Join-Path $staging $required))) { throw "staging 缺少 $required" }
+          }
+          foreach ($forbidden in @(
+            'Sparxie.App.exe',
+            'Sparxie.App.dll',
+            'Wpf.Ui.dll',
+            'Wpf.Ui.Violeta.dll',
+            'PresentationFramework.dll',
+            'PresentationCore.dll')) {
+            if (Test-Path (Join-Path $staging $forbidden)) { throw "staging 禁止包含 $forbidden" }
+          }
+          # 用户 ZIP 不含 PDB/调试符号（PDB 仅作受控 CI 产物私下保留）
+          Remove-Item "$staging/*.pdb" -Force -ErrorAction SilentlyContinue
+          if (Get-ChildItem $staging -Filter *.pdb -Recurse) { throw "staging 仍含 PDB" }
           Compress-Archive -Path "$staging/*" -DestinationPath "artifacts/Sparxie-portable.zip" -Force
+
+      - name: 运行全部测试（含发布 ZIP 审计）
+        run: dotnet test Sparxie.sln -c Release --no-build --nologo -v q
 
       - name: 上传 ZIP
         uses: actions/upload-artifact@v4

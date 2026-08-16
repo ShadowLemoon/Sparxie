@@ -1,18 +1,32 @@
-﻿using Microsoft.AspNetCore.Builder;
+﻿﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.Server.Kestrel.Transport.NamedPipes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Sparxie.Broker.Hosting;
 using Sparxie.Broker.Services;
+using Sparxie.Broker.Sessions;
+using Sparxie.Contracts.Rpc;
 using Sparxie.Infrastructure.Logging;
 using Sparxie.Infrastructure.Zzz;
 
-var pipeName = Environment.GetEnvironmentVariable("SPARXIE_PIPE_NAME");
+string? pipeName;
+if (args.Length == 0)
+{
+    // 仅供非提权测试/调试进程使用；生产 Launcher 通过受控命令行参数传递。
+    pipeName = Environment.GetEnvironmentVariable("SPARXIE_PIPE_NAME");
+}
+else if (!BrokerProcessArguments.TryParse(args, out pipeName, out var argumentError))
+{
+    Console.Error.WriteLine(argumentError);
+    return 2;
+}
+
 if (string.IsNullOrWhiteSpace(pipeName))
 {
-    Console.Error.WriteLine("SPARXIE_PIPE_NAME 未设置，Broker 拒绝启动");
-    return 1;
+    Console.Error.WriteLine("未提供 Broker 管道名");
+    return 2;
 }
 
 var builder = WebApplication.CreateBuilder();
@@ -20,8 +34,7 @@ var builder = WebApplication.CreateBuilder();
 // 结构化滚动日志：logs/broker-*.log，保留 7 天
 builder.Logging.AddRollingFile(AppContext.BaseDirectory, "broker");
 
-// Kestrel 命名管道默认带 PipeOptions.CurrentUserOnly：仅当前用户 SID 可连接，
-// 满足“仅允许当前用户”的 ACL 要求，无需额外 PipeSecurity。
+// Kestrel 命名管道默认带 PipeOptions.CurrentUserOnly：仅当前用户 SID 可连接。
 builder.WebHost.ConfigureKestrel(serverOptions =>
 {
     serverOptions.ListenNamedPipe(pipeName, listenOptions =>
@@ -31,10 +44,32 @@ builder.WebHost.ConfigureKestrel(serverOptions =>
 });
 
 builder.Services.AddGrpc();
-builder.Services.AddSingleton<Sparxie.Broker.Sessions.SessionRegistry>();
+builder.Services.AddSingleton<SessionRegistry>();
+builder.Services.AddSingleton(new BrokerLifecycleOptions { Enabled = true });
 
 var app = builder.Build();
 app.MapGrpcService<BrokerService>();
+var registry = app.Services.GetRequiredService<SessionRegistry>();
+var lifecycle = app.Services.GetRequiredService<BrokerLifecycleOptions>();
+
+// 未建立控制流的孤立 Broker 不长期驻留；控制流建立后由 BrokerService 按活动 Host 管理收尾。
+app.Lifetime.ApplicationStarted.Register(() =>
+{
+    _ = Task.Run(async () =>
+    {
+        try
+        {
+            await Task.Delay(lifecycle.IdleBeforeControl, app.Lifetime.ApplicationStopping).ConfigureAwait(false);
+            if (!registry.HasControlStream && !registry.HasActiveSessions)
+            {
+                app.Lifetime.StopApplication();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    });
+});
 
 // 双重故障兜底：上次 Broker 与 Host 同时不可用时遗留的 ZZZ 恢复记录，
 // 在本次 Broker 启动时先恢复 PC 配置。恢复失败时保留资产并阻止后续 ZZZ 会话。

@@ -36,6 +36,7 @@ public sealed class BrokerPipeIntegrationTests : IAsyncLifetime
         });
         builder.Services.AddGrpc();
         builder.Services.AddSingleton<Sparxie.Broker.Sessions.SessionRegistry>();
+        builder.Services.AddSingleton(new Sparxie.Broker.Hosting.BrokerLifecycleOptions { Enabled = false });
         builder.Logging.ClearProviders();
 
         _app = builder.Build();

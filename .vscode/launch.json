@@ -1,0 +1,50 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "启动 Sparxie.Launcher",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-launcher",
+      "program": "${workspaceFolder}/src/Sparxie.Launcher/bin/Debug/net10.0-windows/Sparxie.Launcher.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/Sparxie.Launcher/bin/Debug/net10.0-windows",
+      "console": "internalConsole",
+      "stopAtEntry": false,
+      "justMyCode": true
+    },
+    {
+      "name": "列出 Launcher Profiles",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-launcher",
+      "program": "${workspaceFolder}/src/Sparxie.Launcher/bin/Debug/net10.0-windows/Sparxie.Launcher.dll",
+      "args": ["list"],
+      "cwd": "${workspaceFolder}/src/Sparxie.Launcher/bin/Debug/net10.0-windows",
+      "console": "internalConsole",
+      "stopAtEntry": false,
+      "justMyCode": true
+    },
+    {
+      "name": "附加到 SessionHost（调试注入链路）",
+      "type": "coreclr",
+      "request": "attach",
+      "processId": "${command:pickProcess}",
+      "justMyCode": false,
+      "symbolOptions": {
+        "searchPaths": [
+          "${workspaceFolder}/src/Sparxie.SessionHost/bin/Debug/net10.0-windows"
+        ]
+      }
+    },
+    {
+      "name": "附加到 SessionHost（Native，调试 HoyoTouchCore）",
+      "type": "cppvsdbg",
+      "request": "attach",
+      "processId": "${command:pickProcess}",
+      "sourceFileMap": {
+        "D:/Code/Sparxie/native/HoyoTouchCore/upstream/src": "${workspaceFolder}/native/HoyoTouchCore/upstream/src"
+      }
+    }
+  ]
+}

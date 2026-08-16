@@ -5,53 +5,14 @@
 发布前必须复核本文件、`docs/RUNTIME-NOTICE.md` 与 `native/HoyoTouchCore/adapter/licenses/`
 均与发布目录实际内容一致。
 
-## .NET 10 / WPF
+## .NET 10 Runtime
 
-- 平台：.NET 10，SDK-style WPF
+- 平台：.NET 10，自包含 `win-x64` Runtime
 - 许可：MIT（.NET Foundation）
 - 来源：https://dotnet.microsoft.com/
 - 许可证原文：随 .NET Runtime 分发（dotnet 安装目录 LICENSE.txt）
 
-## WPF-UI
-
-- 版本：4.3.0
-- 许可：MIT
-- 版权：Copyright (c) 2021-2025 Leszek Pomianowski and WPF UI Contributors
-- 来源：https://github.com/lepoco/wpfui
-- 许可证原文：
-  ```
-  MIT License
-
-  Copyright (c) 2021-2025 Leszek Pomianowski and WPF UI Contributors. https://lepo.co/
-
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
-
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-  SOFTWARE.
-  ```
-
-## WPF-UI.Violeta
-
-- 版本：4.3.0.7
-- 许可：MIT
-- 版权：Copyright (c) 2021-2025 Leszek Pomianowski and WPF UI Contributors
-- 来源：https://github.com/lepoco/wpfui
-- 许可证原文：与 WPF-UI 相同（MIT，同上）。
-
-## gRPC / HTTP2 (本地命名管道承载)
+## gRPC / HTTP2（本地命名管道承载）
 
 - 组件：Grpc.AspNetCore / Grpc.Net.Client 等
 - 许可：Apache-2.0
@@ -90,4 +51,4 @@
 - [ ] `native/HoyoTouchCore/adapter/licenses/inih-LICENSE.txt` 与发布目录一致；
 - [ ] `docs/RUNTIME-NOTICE.md` 版本/哈希与 `build/zzz-runtime.json` 一致；
 - [ ] 发布目录不含 PDB、调试符号、CI 凭据或私有 Release URL 临时签名；
-- [ ] WPF-UI / WPF-UI.Violeta / gRPC / .NET 包内要求的许可证与 Notices 完整保留。
+- [ ] gRPC / .NET 包内要求的许可证与 Notices 完整保留。
