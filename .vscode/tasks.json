@@ -23,7 +23,7 @@
       "command": "dotnet",
       "args": [
         "build",
-        "${workspaceFolder}/Sparxie.sln",
+        "${workspaceFolder}/Sparxie.slnx",
         "-c",
         "Debug"
       ],

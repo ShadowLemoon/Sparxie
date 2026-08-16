@@ -25,7 +25,7 @@ Sparxie.Launcher.exe launch [profile-id-or-name]
 
 ```text
 Sparxie/
-├─ Sparxie.sln
+├─ Sparxie.slnx
 ├─ src/
 │  ├─ Sparxie.Launcher/      # 控制台参考宿主
 │  ├─ Sparxie.LauncherCore/  # 无界面启动器核心

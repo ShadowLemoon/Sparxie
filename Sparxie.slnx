@@ -1,0 +1,22 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/src/">
+    <Project Path="src/Sparxie.Broker/Sparxie.Broker.csproj" />
+    <Project Path="src/Sparxie.Contracts/Sparxie.Contracts.csproj" />
+    <Project Path="src/Sparxie.Infrastructure/Sparxie.Infrastructure.csproj" />
+    <Project Path="src/Sparxie.Launcher/Sparxie.Launcher.csproj" />
+    <Project Path="src/Sparxie.LauncherCore/Sparxie.LauncherCore.csproj" />
+    <Project Path="src/Sparxie.SessionHost/Sparxie.SessionHost.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Broker.Tests/Broker.Tests.csproj" />
+    <Project Path="tests/Config.Tests/Config.Tests.csproj" />
+    <Project Path="tests/HoyoAbi.Tests/HoyoAbi.Tests.csproj" />
+    <Project Path="tests/LauncherCore.Tests/LauncherCore.Tests.csproj" />
+    <Project Path="tests/Zzz.Tests/Zzz.Tests.csproj" />
+  </Folder>
+</Solution>

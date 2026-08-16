@@ -34,7 +34,7 @@ jobs:
           }
 
       - name: 还原并构建
-        run: dotnet build Sparxie.sln -c Release --nologo
+        run: dotnet build Sparxie.slnx -c Release --nologo
 
       - name: 复制 native DLL 到测试输出（HoyoAbi.Tests 冒烟）
         shell: pwsh
@@ -94,7 +94,7 @@ jobs:
           Compress-Archive -Path "$staging/*" -DestinationPath "artifacts/Sparxie-portable.zip" -Force
 
       - name: 运行全部测试（含发布 ZIP 审计）
-        run: dotnet test Sparxie.sln -c Release --no-build --nologo -v q
+        run: dotnet test Sparxie.slnx -c Release --no-build --nologo -v q
 
       - name: 上传 ZIP
         uses: actions/upload-artifact@v4
