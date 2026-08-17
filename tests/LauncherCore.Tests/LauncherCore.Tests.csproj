@@ -2,6 +2,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Sparxie.Contracts\Sparxie.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Sparxie.Infrastructure\Sparxie.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Sparxie.Launcher\Sparxie.Launcher.csproj" />
     <ProjectReference Include="..\..\src\Sparxie.LauncherCore\Sparxie.LauncherCore.csproj" />
   </ItemGroup>
 

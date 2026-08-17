@@ -14,10 +14,19 @@
 
 ## 控制台用法
 
+从空白配置开始先创建 Profile；`--exe` 必须是完整路径，且 EXE 文件名必须属于对应游戏白名单。创建时不强制该文件已经存在，实际启动仍会在 SessionHost 边界验证。
+
 ```text
-Sparxie.Launcher.exe list
+Sparxie.Launcher.exe profile add --id genshin-cn --name "原神 国服" --game genshin --variant cn --exe "D:\Games\Genshin Impact Game\YuanShen.exe"
+Sparxie.Launcher.exe profile list
+Sparxie.Launcher.exe profile show genshin-cn
+Sparxie.Launcher.exe profile set genshin-cn --target-fps 144 --priority high
+Sparxie.Launcher.exe profile select genshin-cn
+Sparxie.Launcher.exe profile remove genshin-cn
 Sparxie.Launcher.exe launch [profile-id-or-name]
 ```
+
+`list` 是 `profile list` 的兼容别名。`profile set` 可修改名称、Variant、EXE 路径和适用设置；Hoyo 通用设置为 `--fps`、`--target-fps`、`--background-fps-limit`、`--background-fps`、`--priority`，原神还支持档位和触控 UI 缩放设置。运行 `Sparxie.Launcher.exe help` 可查看完整参数与范围。
 
 `launch` 进入会话后可在同一进程输入 `fps <10-1000>` 热调目标帧率，输入 `quit` 关闭控制端。配置文件继续放在 Launcher 同目录的 `config.json`。
 
@@ -50,8 +59,8 @@ Sparxie/
 
 ## 状态
 
-实施中（2026-08-16 快照）：
+实施中（2026-08-17 快照）：
 
-- 已完成：Contracts/配置、LauncherCore、Launcher CLI、Broker/SessionHost 闭环、Profile 快照映射、Broker 受控管道握手、私有 Broker 单控制流与收尾、ZZZ 配置恢复与共享恢复例程、滚动文件日志、脱敏诊断包、ZZZ Runtime 清单与 CI、Hoyo subtree 与 C ABI DLL、发布许可证交付和无 GUI 发布审计。
+- 已完成：Contracts/配置、LauncherCore、CLI Profile 创建/查看/修改/选择/删除、Broker/SessionHost 闭环、Profile 快照映射、Broker 受控管道握手、私有 Broker 单控制流与收尾、ZZZ 配置恢复与共享恢复例程、滚动文件日志、脱敏诊断包、ZZZ Runtime 清单与 CI、Hoyo subtree 与 C ABI DLL、发布许可证交付和无 GUI 发布审计。
 - 待验证：生产 UAC `runas` 人工确认；Hoyo（原神/星铁）真实游戏实机；ZZZ Runtime 的 `build/zzz-runtime.json` 版本/SHA-256；六个正式服实机验收。
-- 测试：105 个（LauncherCore 12、Config 26、Zzz 14、Broker 43、HoyoAbi 10）Debug/Release 回归；发布包要求包含 Launcher、Broker、SessionHost 与 HoyoTouchCore，且不含旧图形入口、PDB 或凭据痕迹。
+- 测试：122 个（LauncherCore 29、Config 26、Zzz 14、Broker 43、HoyoAbi 10）Release 回归；发布包要求包含 Launcher、Broker、SessionHost 与 HoyoTouchCore，且不含旧图形入口、PDB 或凭据痕迹。

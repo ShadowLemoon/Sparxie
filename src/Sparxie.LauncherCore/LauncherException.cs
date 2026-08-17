@@ -5,6 +5,7 @@ public enum LauncherFailureKind
     InvalidArguments,
     Configuration,
     ProfileSelection,
+    ProfileManagement,
     BrokerConnection,
     BrokerRejected,
     SessionFault,
