@@ -4,7 +4,7 @@ using Xunit;
 namespace Config.Tests;
 
 /// <summary>
-/// 发布产物审计：staging 目录或便携 ZIP 存在时验证发布门禁。
+/// 发布产物审计：便携 ZIP 存在时验证发布门禁。
 /// 本地未构建 Release 产物时跳过（不阻塞单元测试）。
 /// </summary>
 public class ReleaseArtifactAuditTests
@@ -28,14 +28,8 @@ public class ReleaseArtifactAuditTests
         return File.Exists(zip) ? zip : null;
     }
 
-    private static string? FindStaging()
-    {
-        var staging = Path.Combine(RepoRoot(), "artifacts", "Sparxie");
-        return Directory.Exists(staging) ? staging : null;
-    }
-
     [Fact]
-    public void 发布ZIP关键文件齐全且无PDB()
+    public void 发布ZIP关键文件齐全且无旧入口或WPF残留()
     {
         var zip = FindZip();
         if (zip is null)
@@ -48,7 +42,7 @@ public class ReleaseArtifactAuditTests
 
         foreach (var required in new[]
         {
-            "Sparxie.App.exe",
+            "Sparxie.Launcher.exe",
             "Sparxie.Broker.exe",
             "Sparxie.SessionHost.exe",
             "HoyoTouchCore.dll",
@@ -60,6 +54,19 @@ public class ReleaseArtifactAuditTests
         })
         {
             Assert.True(names.Contains(required), $"ZIP 缺少 {required}");
+        }
+
+        foreach (var forbidden in new[]
+        {
+            "Sparxie.App.exe",
+            "Sparxie.App.dll",
+            "Wpf.Ui.dll",
+            "Wpf.Ui.Violeta.dll",
+            "PresentationFramework.dll",
+            "PresentationCore.dll",
+        })
+        {
+            Assert.DoesNotContain(forbidden, names);
         }
 
         Assert.DoesNotContain(names, n => n.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase));

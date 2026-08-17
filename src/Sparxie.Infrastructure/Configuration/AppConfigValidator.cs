@@ -56,7 +56,9 @@ public static class AppConfigValidator
 
             if (string.IsNullOrWhiteSpace(profile.ExecutablePath))
             {
-                errors.Add($"profile {profile.Id} 的 executablePath 不能为空");
+                // 空路径 = 未完成配置（UI 允许先建 Profile 占位后填路径）；
+                // 启动时由 SessionHost 边界拒绝（ExecutableNotFound）。
+                // 非空时必须通过游戏类型 EXE 白名单。
             }
             else if (!GameExecutables.IsAllowed(profile.Game, profile.ExecutablePath))
             {

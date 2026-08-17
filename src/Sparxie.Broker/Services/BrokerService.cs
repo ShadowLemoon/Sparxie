@@ -1,4 +1,5 @@
 using Grpc.Core;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Sparxie.Broker.Hosting;
 using Sparxie.Broker.Sessions;
@@ -10,7 +11,7 @@ using Sparxie.Infrastructure.Zzz;
 namespace Sparxie.Broker.Services;
 
 /// <summary>
-/// UI 只连接 Broker。本服务负责协议/请求校验、会话注册，
+/// UI/Launcher 只连接 Broker。本服务负责协议/请求校验、会话注册，
 /// 为每个 SessionHost 建立私有管道并转发状态、错误与热调请求。
 /// </summary>
 public sealed class BrokerService : SparxieBroker.SparxieBrokerBase
@@ -19,11 +20,19 @@ public sealed class BrokerService : SparxieBroker.SparxieBrokerBase
 
     private readonly ILogger<BrokerService> _logger;
     private readonly SessionRegistry _registry;
+    private readonly IHostApplicationLifetime _lifetime;
+    private readonly BrokerLifecycleOptions _lifecycle;
 
-    public BrokerService(ILogger<BrokerService> logger, SessionRegistry registry)
+    public BrokerService(
+        ILogger<BrokerService> logger,
+        SessionRegistry registry,
+        IHostApplicationLifetime lifetime,
+        BrokerLifecycleOptions lifecycle)
     {
         _logger = logger;
         _registry = registry;
+        _lifetime = lifetime;
+        _lifecycle = lifecycle;
     }
 
     public override Task<PingResponse> Ping(PingRequest request, ServerCallContext context)
@@ -157,7 +166,10 @@ public sealed class BrokerService : SparxieBroker.SparxieBrokerBase
         };
     }
 
-    public override async Task StreamEvents(StreamEventsRequest request, IServerStreamWriter<SessionEvent> responseStream, ServerCallContext context)
+    public override async Task StreamEvents(
+        StreamEventsRequest request,
+        IServerStreamWriter<SessionEvent> responseStream,
+        ServerCallContext context)
     {
         var error = ValidateRequest(request.ProtocolVersion, request.RequestId);
         if (error is not null)
@@ -165,13 +177,30 @@ public sealed class BrokerService : SparxieBroker.SparxieBrokerBase
             throw new RpcException(new Status(StatusCode.InvalidArgument, error.Value.Message));
         }
 
-        await foreach (var ev in _registry.Events.ReadAllAsync(context.CancellationToken).ConfigureAwait(false))
+        var acquired = !_lifecycle.Enabled || _registry.TryAcquireControlStream();
+        if (!acquired)
         {
-            await responseStream.WriteAsync(ev).ConfigureAwait(false);
+            throw new RpcException(new Status(StatusCode.AlreadyExists, "控制事件流已存在"));
+        }
+
+        try
+        {
+            await foreach (var ev in _registry.Events.ReadAllAsync(context.CancellationToken).ConfigureAwait(false))
+            {
+                await responseStream.WriteAsync(ev).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            if (_lifecycle.Enabled)
+            {
+                _registry.ReleaseControlStream();
+                RequestStopIfIdle();
+            }
         }
     }
 
-    /// <summary>Host 事件处理：写入 UI 事件总线；会话结束或 Host 崩溃后移除会话。</summary>
+    /// <summary>Host 事件处理：写入控制端事件总线；会话结束或 Host 崩溃后移除会话。</summary>
     private async void HandleHostEvent(HostEvent ev)
     {
         _registry.Publish(new SessionEvent
@@ -183,23 +212,34 @@ public sealed class BrokerService : SparxieBroker.SparxieBrokerBase
             Message = ev.Message,
         });
 
-        var removedSession = _registry.Remove(ev.SessionId);
-        var isZzz = removedSession is not null
-            && string.Equals(removedSession.Game, "zenlessZoneZero", StringComparison.Ordinal);
-
+        HostSession? removedSession = null;
         if (ev.State is "Exited" or "Failed" or "HostCrashedBeforeRunning" or "HostCrashedAfterRunning")
         {
+            removedSession = _registry.Remove(ev.SessionId);
             if (removedSession is not null)
             {
                 await removedSession.DisposeAsync().ConfigureAwait(false);
             }
         }
 
+        var isZzz = removedSession is not null
+            && string.Equals(removedSession.Game, "zenlessZoneZero", StringComparison.Ordinal);
+
         // ZZZ Host 在 Running 前异常死亡：本次会话立即走共享恢复例程恢复 PC 配置。
         // 只处理 Running 前崩溃；Running 后恢复记录应已删除，不重建。
         if (ev.State == "HostCrashedBeforeRunning" && isZzz)
         {
             await TryRecoverZzzConfigAsync(ev.SessionId).ConfigureAwait(false);
+        }
+
+        RequestStopIfIdle();
+    }
+
+    private void RequestStopIfIdle()
+    {
+        if (_lifecycle.Enabled && !_registry.HasControlStream && !_registry.HasActiveSessions)
+        {
+            _lifetime.StopApplication();
         }
     }
 

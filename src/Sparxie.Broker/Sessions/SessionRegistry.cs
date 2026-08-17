@@ -5,15 +5,20 @@ using Sparxie.Contracts.Rpc;
 namespace Sparxie.Broker.Sessions;
 
 /// <summary>
-/// 会话注册表：Broker 维护的活动会话集合与 UI 事件广播。
+/// 会话注册表：Broker 维护的活动会话集合与单一控制事件流。
 /// 游戏级互斥的权威所有者是 SessionHost，注册表只用于先发拒绝与转发。
 /// </summary>
 public sealed class SessionRegistry
 {
     private readonly ConcurrentDictionary<string, HostSession> _sessions = new(StringComparer.Ordinal);
     private readonly Channel<SessionEvent> _eventChannel = Channel.CreateUnbounded<SessionEvent>();
+    private int _controlStreamOpen;
 
     public ChannelReader<SessionEvent> Events => _eventChannel.Reader;
+
+    public bool HasActiveSessions => !_sessions.IsEmpty;
+
+    public bool HasControlStream => Volatile.Read(ref _controlStreamOpen) == 1;
 
     public void Publish(SessionEvent ev) => _eventChannel.Writer.TryWrite(ev);
 
@@ -31,4 +36,9 @@ public sealed class SessionRegistry
 
     public bool HasActiveSessionForGame(string game) =>
         _sessions.Values.Any(s => string.Equals(s.Game, game, StringComparison.Ordinal));
+
+    public bool TryAcquireControlStream() =>
+        Interlocked.CompareExchange(ref _controlStreamOpen, 1, 0) == 0;
+
+    public void ReleaseControlStream() => Interlocked.Exchange(ref _controlStreamOpen, 0);
 }
