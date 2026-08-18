@@ -14,6 +14,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
       - name: 安装 .NET SDK
         uses: actions/setup-dotnet@v4
         with:
@@ -36,6 +41,11 @@ jobs:
       - name: 还原并构建
         run: dotnet build Sparxie.slnx -c Release --nologo
 
+      - name: 下载并校验固定 ZZZ Runtime
+        run: |
+          python build/package_runtime.py download-runtime --destination zzz-runtime.zip
+          python build/package_runtime.py prepare-runtime --archive zzz-runtime.zip --destination runtime/zzz
+
       - name: 复制 native DLL 到测试输出（HoyoAbi.Tests 冒烟）
         shell: pwsh
         run: |
@@ -52,46 +62,8 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "publish 失败: $proj" }
           }
 
-      - name: 打包便携 ZIP（不含 ZZZ Runtime，由 zzz-runtime-fetch 工作流合并）
-        shell: pwsh
-        run: |
-          $staging = "artifacts/Sparxie"
-          if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
-          New-Item -ItemType Directory -Force -Path $staging | Out-Null
-          foreach ($name in @('Sparxie.Launcher', 'Sparxie.Broker', 'Sparxie.SessionHost')) {
-            $pub = "src/$name/bin/Release/net10.0-windows/win-x64/publish"
-            if (-not (Test-Path $pub)) { throw "publish 目录缺失: $pub" }
-            Copy-Item "$pub/*" $staging -Recurse -Force
-          }
-          Copy-Item LICENSE, THIRD-PARTY-NOTICES.md $staging -Force
-          Copy-Item "native/HoyoTouchCore/upstream/LICENSE" "$staging/UPSTREAM-LICENSE-MIT.txt" -Force
-          Copy-Item "native/HoyoTouchCore/adapter/licenses/inih-LICENSE.txt" $staging -Force
-          Copy-Item "docs/RUNTIME-NOTICE.md" $staging -Force
-          foreach ($required in @(
-            'Sparxie.Launcher.exe',
-            'Sparxie.Broker.exe',
-            'Sparxie.SessionHost.exe',
-            'HoyoTouchCore.dll',
-            'LICENSE',
-            'THIRD-PARTY-NOTICES.md',
-            'UPSTREAM-LICENSE-MIT.txt',
-            'inih-LICENSE.txt',
-            'RUNTIME-NOTICE.md')) {
-            if (-not (Test-Path (Join-Path $staging $required))) { throw "staging 缺少 $required" }
-          }
-          foreach ($forbidden in @(
-            'Sparxie.App.exe',
-            'Sparxie.App.dll',
-            'Wpf.Ui.dll',
-            'Wpf.Ui.Violeta.dll',
-            'PresentationFramework.dll',
-            'PresentationCore.dll')) {
-            if (Test-Path (Join-Path $staging $forbidden)) { throw "staging 禁止包含 $forbidden" }
-          }
-          # 用户 ZIP 不含 PDB/调试符号（PDB 仅作受控 CI 产物私下保留）
-          Remove-Item "$staging/*.pdb" -Force -ErrorAction SilentlyContinue
-          if (Get-ChildItem $staging -Filter *.pdb -Recurse) { throw "staging 仍含 PDB" }
-          Compress-Archive -Path "$staging/*" -DestinationPath "artifacts/Sparxie-portable.zip" -Force
+      - name: 打包完整便携 ZIP（含已校验 ZZZ Runtime）
+        run: python build/package_runtime.py package --runtime-directory runtime/zzz --hoyo-touch-core native/HoyoTouchCore/build/Release/HoyoTouchCore.dll
 
       - name: 运行全部测试（含发布 ZIP 审计）
         run: dotnet test Sparxie.slnx -c Release --no-build --nologo -v q

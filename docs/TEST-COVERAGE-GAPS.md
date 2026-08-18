@@ -1,13 +1,14 @@
-# Sparxie 测试覆盖缺口清单（2026-08-16 审计）
+# Sparxie 测试覆盖缺口清单（2026-08-17 审计）
 
 依据启动器核心提取计划逐项审计。
-当前测试基线：105 通过（LauncherCore 12 / Config 26 / Zzz 14 / Broker 43 / HoyoAbi 10）。
+当前测试基线：124 通过（LauncherCore 29 / Config 26 / Zzz 16 / Broker 43 / HoyoAbi 10）。
 旧图形入口及其专属测试项目已从解决方案移除，后续新界面另行建立测试边界。
 
 ## 已由离线测试覆盖
 
 ### LauncherCore 与控制台宿主
 
+- CLI Profile 创建、查看、修改、选择、删除、原子保存与重载；
 - Profile ID、显示名、默认选中、回退首项、重名歧义、空配置和不存在项；
 - Profile 快照全字段与游戏/优先级枚举映射；
 - Broker 受控 `--pipe-name` 参数生成、严格解析和拒绝未知参数；
@@ -19,6 +20,7 @@
 
 - Broker 单控制流、控制端断连、空闲退出和活动 Host 收尾契约；
 - 配置损坏备份恢复、原子保存、目录错误、路径往返和发布凭据审计；
+- 固定 ZZZ Runtime 清单的版本、资产名、SHA-256、DLL 清单与 ZIP 发布审计；
 - ZZZ 恢复记录、配置读写和 Runtime 清单；
 - HoyoTouchCore C ABI 导出与 .NET P/Invoke 冒烟。
 

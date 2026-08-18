@@ -11,7 +11,7 @@
         ▼
 管理员 Sparxie.Broker（一次 UAC 启动）
         │
-        ├─ 绝区零 SessionHost ──▶ ZZZTouchCore.dll / ZZZTouchFilterHook.dll（私有 Runtime）
+        ├─ 绝区零 SessionHost ──▶ ZZZTouchCore.dll / ZZZTouchRuntime.dll（固定 Runtime）
         ├─ 原神   SessionHost ──▶ HoyoTouchCore.dll（上游 subtree + adapter 构建）
         └─ 星铁   SessionHost ──▶ HoyoTouchCore.dll
 ```
@@ -37,7 +37,7 @@
 
 ```text
 src/
-├─ Sparxie.Launcher/      # 控制台参考宿主（list、launch、fps、quit）
+├─ Sparxie.Launcher/      # 控制台宿主（Profile CRUD、launch、fps、quit）
 ├─ Sparxie.LauncherCore/  # 无界面启动器核心（选择、快照、RPC、事件、会话句柄）
 ├─ Sparxie.Broker/        # 管理员 Broker（RPC 入口、Host 启动、异常监控）
 ├─ Sparxie.SessionHost/   # 按游戏运行会话（互斥、Job、Runtime 调用、清理）
@@ -49,7 +49,8 @@ native/
    ├─ adapter/             # C ABI、配置转换、bootstrap 对接（subtree 外）
    └─ UPSTREAM.md          # 上游补丁记录
 runtime/zzz/               # ZZZ Runtime 构建 staging（不提交私有源码）
-build/zzz-runtime.json     # 固定 Runtime 版本、资产名与 SHA-256
+build/zzz-runtime.json     # 固定 Runtime 版本、资产名、DLL 清单与 SHA-256
+build/package_runtime.py   # 下载/校验 Runtime、准备 staging、生成便携 ZIP
 docs/                      # 架构、第三方许可证
 ```
 
@@ -70,18 +71,16 @@ docs/                      # 架构、第三方许可证
 
 ## 当前状态与阻塞点
 
-- 已完成：Contracts/配置、LauncherCore、Launcher CLI、Broker/SessionHost 闭环、ZZZ 配置恢复与
-  Running 前失效保护、Hoyo subtree 与 C ABI、Broker 单控制流和断连收尾、发布许可证交付、无 GUI 发布链；
-  105 项离线测试目标覆盖核心、配置、Broker、ZZZ 和 native ABI。
-- 阻塞项：
-  1. `build/zzz-runtime.json` 的 runtimeVersion/releaseAsset/sha256 待用户提供私有 Release 信息；
-  2. 生产 UAC 确认以及原神/星铁/绝区零真实游戏环境的注入、Running 前后强杀 Host 等实机验证。
+- 已完成：Contracts/配置、LauncherCore 与 CLI Profile CRUD、Broker/SessionHost 闭环、ZZZ 配置恢复与
+  Running 前失效保护、Hoyo subtree 与 C ABI、Broker 单控制流和断连收尾、发布许可证交付；
+  ZZZ Runtime 已固定为 `v1.0.0`，从指定 Release 下载后经 SHA-256 校验合入无 GUI 便携 ZIP。
+- 阻塞项：生产 UAC 确认以及原神/星铁/绝区零真实游戏环境的注入、Running 前后强杀 Host 等实机验证。
 
 ## 发布
 
 - 自包含 `win-x64` 便携 ZIP；`config.json` 跟随 Launcher；
-- CI 先构建 `HoyoTouchCore.dll`，再构建和发布 Launcher、Broker、SessionHost；
-- 发布 staging 从干净目录产生，不含旧 App、调试符号、CI 凭据或私库痕迹；
+- CI 先构建 `HoyoTouchCore.dll`，下载固定 `v1.0.0` ZZZ Runtime 并校验 SHA-256，再发布 Launcher、Broker、SessionHost；
+- 发布 staging 只复制 manifest 声明的 ZZZ DLL，不含调试符号、CI 凭据或私库痕迹；
 - 许可证：根 LICENSE 覆盖自有代码（闭源专有）；THIRD-PARTY-NOTICES.md 与
   `adapter/licenses/` 覆盖 Hoyo(MIT)、inih(BSD-3-Clause)、gRPC(Apache-2.0)、.NET(MIT)；
   ZZZ Runtime 独立 RUNTIME-NOTICE。

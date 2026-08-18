@@ -21,6 +21,9 @@ mono_crash.*
 
 # Build results
 [Bb]uild/
+# 本仓库固定 Runtime 的可审查构建脚本；仅放行根目录 build/ 下的版本化脚本。
+!/build/
+!/build/package_runtime.py
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
