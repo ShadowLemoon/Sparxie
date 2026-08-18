@@ -53,6 +53,10 @@ public sealed class BrokerPipeIntegrationTests : IAsyncLifetime
         }
     }
 
+    private static string TestConfiguration =>
+        Directory.GetParent(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))?.Name
+        ?? throw new InvalidOperationException("Test output does not have a configuration directory.");
+
     private static string LocateSessionHostExe()
     {
         var dir = AppContext.BaseDirectory;
@@ -64,7 +68,7 @@ public sealed class BrokerPipeIntegrationTests : IAsyncLifetime
 
         Assert.NotNull(root);
         var candidate = Path.Combine(root.FullName,
-            "src", "Sparxie.SessionHost", "bin", "Debug", "net10.0-windows", "Sparxie.SessionHost.exe");
+            "src", "Sparxie.SessionHost", "bin", TestConfiguration, "net10.0-windows", "Sparxie.SessionHost.exe");
         Assert.True(File.Exists(candidate), $"未找到 {candidate}");
         return candidate;
     }
