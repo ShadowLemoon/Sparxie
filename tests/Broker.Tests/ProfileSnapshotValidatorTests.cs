@@ -10,7 +10,6 @@ public class ProfileSnapshotValidatorTests
         ProfileId = "p1",
         DisplayName = "原神",
         Game = "genshin",
-        Variant = "cn",
         ExecutablePath = @"D:\Games\YuanShen.exe",
         Hoyo = new HoyoSettings
         {
