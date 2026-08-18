@@ -51,11 +51,6 @@ public static class ProfileSnapshotValidator
             return (ErrorCode.InvalidArgument, $"profile.game 非法: {profile.Game}");
         }
 
-        if (string.IsNullOrWhiteSpace(profile.Variant))
-        {
-            return (ErrorCode.InvalidArgument, "profile.variant 不能为空");
-        }
-
         if (string.IsNullOrWhiteSpace(profile.ExecutablePath))
         {
             return (ErrorCode.InvalidArgument, "profile.executablePath 不能为空");
