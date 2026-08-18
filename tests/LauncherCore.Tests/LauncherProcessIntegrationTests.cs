@@ -73,6 +73,10 @@ public sealed class LauncherProcessIntegrationTests
         }
     }
 
+    private static string TestConfiguration =>
+        Directory.GetParent(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))?.Name
+        ?? throw new InvalidOperationException("Test output does not have a configuration directory.");
+
     private static string LocateProjectExe(string project, string executable)
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);
@@ -82,7 +86,7 @@ public sealed class LauncherProcessIntegrationTests
         }
 
         Assert.NotNull(root);
-        var path = Path.Combine(root.FullName, "src", project, "bin", "Debug", "net10.0-windows", executable);
+        var path = Path.Combine(root.FullName, "src", project, "bin", TestConfiguration, "net10.0-windows", executable);
         Assert.True(File.Exists(path), $"未找到 {path}");
         return path;
     }

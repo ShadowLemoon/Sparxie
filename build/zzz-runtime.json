@@ -1,10 +1,10 @@
 {
-  "runtimeVersion": "",
-  "releaseAsset": "",
-  "sha256": "",
+  "runtimeVersion": "v1.0.0",
+  "releaseAsset": "ZZZTouchRuntime-v1.0.0-win-x64.zip",
+  "sha256": "e8fba7e8b237ecd9806a225bdaced97cc0f1eb8ae22b344ae0d3f47439e4f1c2",
   "files": [
     "ZZZTouchCore.dll",
-    "ZZZTouchFilterHook.dll"
+    "ZZZTouchRuntime.dll"
   ],
   "exeWhiteList": [
     "ZenlessZoneZero.exe",

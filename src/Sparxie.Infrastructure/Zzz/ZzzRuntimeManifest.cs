@@ -41,12 +41,19 @@ public sealed class ZzzRuntimeManifest
             throw new InvalidDataException("zzz-runtime.json: files 不能为空");
         }
 
+        var fileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var file in Files)
         {
-            if (string.IsNullOrWhiteSpace(file) || Path.GetFileName(file) != file)
+            if (string.IsNullOrWhiteSpace(file) || Path.GetFileName(file) != file || !fileNames.Add(file))
             {
-                throw new InvalidDataException($"zzz-runtime.json: 非法文件名 {file}");
+                throw new InvalidDataException($"zzz-runtime.json: 非法或重复文件名 {file}");
             }
+        }
+
+        // SessionHost 的 P/Invoke 固定加载该入口；缺失时发布包无法启动 ZZZ 会话。
+        if (!fileNames.Contains("ZZZTouchCore.dll"))
+        {
+            throw new InvalidDataException("zzz-runtime.json: files 必须包含 ZZZTouchCore.dll");
         }
 
         if (ExeWhiteList is null || ExeWhiteList.Count == 0)

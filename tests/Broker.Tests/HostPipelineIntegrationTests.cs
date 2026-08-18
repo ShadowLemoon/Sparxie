@@ -188,11 +188,15 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
         return new SparxieBroker.SparxieBrokerClient(channel);
     }
 
+    private static string TestConfiguration =>
+        Directory.GetParent(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))?.Name
+        ?? throw new InvalidOperationException("Test output does not have a configuration directory.");
+
     private static string LocateBrokerExe()
     {
         var root = LocateRepoRoot();
         var candidate = Path.Combine(root.FullName,
-            "src", "Sparxie.Broker", "bin", "Debug", "net10.0-windows", "Sparxie.Broker.exe");
+            "src", "Sparxie.Broker", "bin", TestConfiguration, "net10.0-windows", "Sparxie.Broker.exe");
         Assert.True(File.Exists(candidate), $"未找到 {candidate}");
         return candidate;
     }
@@ -201,7 +205,7 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
     {
         var root = LocateRepoRoot();
         var candidate = Path.Combine(root.FullName,
-            "src", "Sparxie.SessionHost", "bin", "Debug", "net10.0-windows", "Sparxie.SessionHost.exe");
+            "src", "Sparxie.SessionHost", "bin", TestConfiguration, "net10.0-windows", "Sparxie.SessionHost.exe");
         Assert.True(File.Exists(candidate), $"未找到 {candidate}");
         return candidate;
     }

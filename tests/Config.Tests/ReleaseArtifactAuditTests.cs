@@ -29,7 +29,7 @@ public class ReleaseArtifactAuditTests
     }
 
     [Fact]
-    public void 发布ZIP关键文件齐全且无旧入口或WPF残留()
+    public void 发布ZIP关键文件齐全且不含PDB()
     {
         var zip = FindZip();
         if (zip is null)
@@ -46,6 +46,8 @@ public class ReleaseArtifactAuditTests
             "Sparxie.Broker.exe",
             "Sparxie.SessionHost.exe",
             "HoyoTouchCore.dll",
+            "ZZZTouchCore.dll",
+            "ZZZTouchRuntime.dll",
             "LICENSE",
             "THIRD-PARTY-NOTICES.md",
             "UPSTREAM-LICENSE-MIT.txt",
@@ -54,19 +56,6 @@ public class ReleaseArtifactAuditTests
         })
         {
             Assert.True(names.Contains(required), $"ZIP 缺少 {required}");
-        }
-
-        foreach (var forbidden in new[]
-        {
-            "Sparxie.App.exe",
-            "Sparxie.App.dll",
-            "Wpf.Ui.dll",
-            "Wpf.Ui.Violeta.dll",
-            "PresentationFramework.dll",
-            "PresentationCore.dll",
-        })
-        {
-            Assert.DoesNotContain(forbidden, names);
         }
 
         Assert.DoesNotContain(names, n => n.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase));

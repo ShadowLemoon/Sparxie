@@ -30,6 +30,30 @@ Sparxie.Launcher.exe launch [profile-id-or-name]
 
 `launch` 进入会话后可在同一进程输入 `fps <10-1000>` 热调目标帧率，输入 `quit` 关闭控制端。配置文件继续放在 Launcher 同目录的 `config.json`。
 
+## 生成便携包
+
+GitHub Actions 的 `build-test` 会下载固定的 `ZZZ-TouchRuntime v1.0.0` Runtime 资产、校验 SHA-256、构建三进程并生成完整 `sparxie-portable` 工件。
+
+本地先下载并准备 Runtime staging：
+
+```powershell
+python build/package_runtime.py download-runtime `
+  --destination zzz-runtime.zip
+python build/package_runtime.py prepare-runtime `
+  --archive zzz-runtime.zip `
+  --destination runtime/zzz
+```
+
+完成三个项目的 `dotnet publish` 后，再运行：
+
+```powershell
+python build/package_runtime.py package `
+  --runtime-directory runtime/zzz `
+  --hoyo-touch-core native/HoyoTouchCore/build/Release/HoyoTouchCore.dll
+```
+
+成品路径为 `artifacts/Sparxie-portable.zip`。`package` 只覆盖 `artifacts/Sparxie/` 与该 ZIP，并会拒绝哈希不符、缺少清单 DLL 或 PDB 的 staging。
+
 ## 仓库结构
 
 ```text
@@ -45,10 +69,11 @@ Sparxie/
 ├─ native/
 │  └─ HoyoTouchCore/         # Hoyo 上游 subtree + 适配区
 ├─ runtime/
-│  └─ zzz/                   # 构建 staging，不提交私有源码
+│  └─ zzz/                   # Runtime 构建 staging，不提交 Runtime 源码
 ├─ tests/
 ├─ build/
-│  └─ zzz-runtime.json       # 固定 Runtime 版本、资产名与 SHA-256
+│  ├─ zzz-runtime.json       # 固定 Runtime 版本、资产清单与 SHA-256
+│  └─ package_runtime.py      # 下载/校验 Runtime、准备 staging、生成便携 ZIP
 ├─ docs/
 └─ .github/workflows/
 ```
@@ -61,6 +86,6 @@ Sparxie/
 
 实施中（2026-08-17 快照）：
 
-- 已完成：Contracts/配置、LauncherCore、CLI Profile 创建/查看/修改/选择/删除、Broker/SessionHost 闭环、Profile 快照映射、Broker 受控管道握手、私有 Broker 单控制流与收尾、ZZZ 配置恢复与共享恢复例程、滚动文件日志、脱敏诊断包、ZZZ Runtime 清单与 CI、Hoyo subtree 与 C ABI DLL、发布许可证交付和无 GUI 发布审计。
-- 待验证：生产 UAC `runas` 人工确认；Hoyo（原神/星铁）真实游戏实机；ZZZ Runtime 的 `build/zzz-runtime.json` 版本/SHA-256；六个正式服实机验收。
-- 测试：122 个（LauncherCore 29、Config 26、Zzz 14、Broker 43、HoyoAbi 10）Release 回归；发布包要求包含 Launcher、Broker、SessionHost 与 HoyoTouchCore，且不含旧图形入口、PDB 或凭据痕迹。
+- 已完成：Contracts/配置、LauncherCore、CLI Profile 创建/查看/修改/选择/删除、Broker/SessionHost 闭环、Profile 快照映射、Broker 受控管道握手、私有 Broker 单控制流与收尾、ZZZ 配置恢复与共享恢复例程、滚动文件日志、脱敏诊断包、固定 `v1.0.0` ZZZ Runtime 的 SHA-256 校验与 ZIP 合包、Hoyo subtree 与 C ABI DLL、发布许可证交付和无 GUI 发布审计。
+- 待验证：生产 UAC `runas` 人工确认；Hoyo（原神/星铁）与 ZZZ Runtime 的真实游戏实机；六个正式服实机验收。
+- 测试：124 个（LauncherCore 29、Config 26、Zzz 16、Broker 43、HoyoAbi 10）Release 回归；发布包要求包含 Launcher、Broker、SessionHost、HoyoTouchCore 与固定 ZZZ Runtime，且不含 PDB 或凭据痕迹。
