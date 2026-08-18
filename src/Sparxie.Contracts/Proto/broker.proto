@@ -33,9 +33,8 @@ message ProfileSnapshot {
   string profile_id = 1;
   string display_name = 2;
   string game = 3;
-  reserved 4;
-  string executable_path = 5;
-  HoyoSettings hoyo = 6;
+  string executable_path = 4;
+  HoyoSettings hoyo = 5;
 }
 
 message StartSessionRequest {
