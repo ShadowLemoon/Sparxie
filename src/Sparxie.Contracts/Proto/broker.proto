@@ -33,7 +33,7 @@ message ProfileSnapshot {
   string profile_id = 1;
   string display_name = 2;
   string game = 3;
-  string variant = 4;
+  reserved 4;
   string executable_path = 5;
   HoyoSettings hoyo = 6;
 }
