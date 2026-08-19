@@ -9,9 +9,6 @@ public sealed class GameProfile
 
     public required GameType Game { get; set; }
 
-    /// <summary>地区/正式/Beta 等变体标识，如 "cn"、"intl"、"beta"。不改变同款游戏互斥规则。</summary>
-    public required string Variant { get; set; }
-
     public required string ExecutablePath { get; set; }
 
     /// <summary>仅原神/星铁适用；绝区零为 null。</summary>

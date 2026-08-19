@@ -17,7 +17,7 @@
 从空白配置开始先创建 Profile；`--exe` 必须是完整路径，且 EXE 文件名必须属于对应游戏白名单。创建时不强制该文件已经存在，实际启动仍会在 SessionHost 边界验证。
 
 ```text
-Sparxie.Launcher.exe profile add --id genshin-cn --name "原神 国服" --game genshin --variant cn --exe "D:\Games\Genshin Impact Game\YuanShen.exe"
+Sparxie.Launcher.exe profile add --id genshin-cn --name "原神 国服" --game genshin --exe "D:\Games\Genshin Impact Game\YuanShen.exe"
 Sparxie.Launcher.exe profile list
 Sparxie.Launcher.exe profile show genshin-cn
 Sparxie.Launcher.exe profile set genshin-cn --target-fps 144 --priority high
@@ -26,7 +26,7 @@ Sparxie.Launcher.exe profile remove genshin-cn
 Sparxie.Launcher.exe launch [profile-id-or-name]
 ```
 
-`list` 是 `profile list` 的兼容别名。`profile set` 可修改名称、Variant、EXE 路径和适用设置；Hoyo 通用设置为 `--fps`、`--target-fps`、`--background-fps-limit`、`--background-fps`、`--priority`，原神还支持档位和触控 UI 缩放设置。运行 `Sparxie.Launcher.exe help` 可查看完整参数与范围。
+`list` 是 `profile list` 的兼容别名。`profile set` 可修改名称、EXE 路径和适用设置；Hoyo 通用设置为 `--fps`、`--target-fps`、`--background-fps-limit`、`--background-fps`、`--priority`，原神还支持档位和触控 UI 缩放设置。运行 `Sparxie.Launcher.exe help` 可查看完整参数与范围。
 
 `launch` 进入会话后可在同一进程输入 `fps <10-1000>` 热调目标帧率，输入 `quit` 关闭控制端。配置文件继续放在 Launcher 同目录的 `config.json`。
 

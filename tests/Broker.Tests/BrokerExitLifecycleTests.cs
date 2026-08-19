@@ -62,7 +62,6 @@ public sealed class BrokerExitLifecycleTests
         ProfileId = "p1",
         DisplayName = "星铁",
         Game = "starRail",
-        Variant = "cn",
         ExecutablePath = @"D:\Games\StarRail.exe",
         Hoyo = new HoyoSettings
         {
