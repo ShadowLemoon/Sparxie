@@ -75,29 +75,36 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
     {
         var client = CreateBrokerClient();
         var events = new List<SessionEvent>();
+        var failedEvent = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        // 先订阅事件流
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        // 事件流使用独立的总体兜底超时，不能与 Broker 冷启动重试共享 20 秒预算。
+        using var eventCts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var eventTask = Task.Run(async () =>
         {
             var stream = client.StreamEvents(new StreamEventsRequest
             {
                 ProtocolVersion = RpcContract.ProtocolVersion,
                 RequestId = Guid.NewGuid().ToString("N"),
-            }, cancellationToken: cts.Token);
-            await foreach (var ev in stream.ResponseStream.ReadAllAsync(cts.Token))
+            }, cancellationToken: eventCts.Token);
+            await foreach (var ev in stream.ResponseStream.ReadAllAsync(eventCts.Token))
             {
                 lock (events)
                 {
                     events.Add(ev);
                 }
+
+                if (ev.State == "Failed")
+                {
+                    failedEvent.TrySetResult(true);
+                }
             }
         });
 
-        // 启动会话（Broker 冷启动 JIT 可能较慢，放宽轮询窗口）
+        // 启动会话（Broker 冷启动 JIT 可能较慢，单独给足 30 秒轮询窗口）。
+        using var startCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         StartSessionResponse startResponse = null!;
         Exception? lastError = null;
-        for (var i = 0; i < 120 && startResponse is null; i++)
+        for (var i = 0; i < 120 && startResponse is null && !startCts.IsCancellationRequested; i++)
         {
             try
             {
@@ -122,12 +129,15 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
                             GenshinTouchUiScalePercent = 400,
                         },
                     },
-                }, cancellationToken: cts.Token);
+                }, cancellationToken: startCts.Token);
             }
             catch (Exception ex)
             {
                 lastError = ex;
-                await Task.Delay(250);
+                if (!startCts.IsCancellationRequested)
+                {
+                    await Task.Delay(250);
+                }
             }
         }
 
@@ -135,20 +145,9 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
         Assert.True(startResponse.Accepted, lastError?.Message);
         _hostProcess = Process.GetProcessesByName("Sparxie.SessionHost").FirstOrDefault();
 
-        // 等待事件流出现 Failed（Hoyo 假游戏：bootstrap 真实执行 → 扫描失败 → 整次失败，不误报成功）
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
-        while (DateTime.UtcNow < deadline)
-        {
-            lock (events)
-            {
-                if (events.Any(e => e.State == "Failed"))
-                {
-                    break;
-                }
-            }
-
-            await Task.Delay(100);
-        }
+        // 等待真正的 Failed 事件，而不是反复轮询共享列表；超时只限制失败路径本身。
+        var completed = await Task.WhenAny(failedEvent.Task, Task.Delay(TimeSpan.FromSeconds(30)));
+        var failedObserved = completed == failedEvent.Task;
 
         List<SessionEvent> snapshot;
         lock (events)
@@ -156,12 +155,7 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
             snapshot = [.. events];
         }
 
-        var states = string.Join(" → ", snapshot.Select(e => e.State));
-        Assert.Contains(snapshot, e => e.State == "Starting");
-        Assert.Contains(snapshot, e => e.State == "Failed");
-        Assert.DoesNotContain(snapshot, e => e.State is "Running" or "Exited");
-
-        cts.Cancel();
+        eventCts.Cancel();
         try
         {
             await eventTask;
@@ -169,9 +163,15 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
         catch (OperationCanceledException)
         {
         }
-        catch (Grpc.Core.RpcException)
+        catch (RpcException)
         {
         }
+
+        var states = string.Join(" → ", snapshot.Select(e => e.State));
+        Assert.True(failedObserved, $"30 秒内未收到 Failed，实际事件: {states}");
+        Assert.Contains(snapshot, e => e.State == "Starting");
+        Assert.Contains(snapshot, e => e.State == "Failed");
+        Assert.DoesNotContain(snapshot, e => e.State is "Running" or "Exited");
     }
 
     private SparxieBroker.SparxieBrokerClient CreateBrokerClient()
