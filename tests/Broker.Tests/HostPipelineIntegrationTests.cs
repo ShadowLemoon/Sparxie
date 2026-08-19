@@ -1,31 +1,28 @@
 using System.Diagnostics;
 using Grpc.Core;
 using Grpc.Net.Client;
+using Sparxie.Contracts.Errors;
 using Sparxie.Contracts.Rpc;
 using Sparxie.Infrastructure.Rpc;
 
 namespace Broker.Tests;
 
 /// <summary>
-/// 全链路集成：真实 Broker + 真实 SessionHost + 假游戏进程，
-/// 验证 StartSession → Host 私有管道 → 事件转发 → Failed（Hoyo 假游戏
-/// bootstrap 真实执行失败，不误报成功）的完整闭环。
+/// 全链路集成：真实 Broker + 真实 SessionHost + 缺失的白名单游戏路径，
+/// 验证 StartSession → Host 私有管道 → SessionHost Validation Failed → Broker 事件转发。
+/// Hoyo native launch 失败路径由 HoyoAbi.Tests 单独覆盖，避免把上游扫描耗时耦合进管道测试。
 /// </summary>
 [Collection("SessionHostProcess")]
 public sealed class HostPipelineIntegrationTests : IAsyncLifetime
 {
     private Process? _brokerProcess;
-    private Process? _hostProcess;
     private readonly string _brokerPipe = $"sparxie-pipe-{Guid.NewGuid():N}";
-    private readonly string _fakeGameDir = Path.Combine(Path.GetTempPath(), "sparxie-fakegame", Guid.NewGuid().ToString("N"));
+    private readonly string _missingGamePath = Path.Combine(
+        Path.GetTempPath(), "sparxie-missinggame", Guid.NewGuid().ToString("N"), "StarRail.exe");
 
     public Task InitializeAsync()
     {
-        // 假游戏：复制 ping.exe 并命名为白名单内的 StarRail.exe（无参数运行立即退出）
-        Directory.CreateDirectory(_fakeGameDir);
-        File.Copy(Path.Combine(Environment.SystemDirectory, "ping.exe"), FakeGamePath);
-
-        // SessionHost.exe 不在测试输出目录：显式指向其构建输出
+        // SessionHost.exe 不在测试输出目录：显式指向其构建输出。
         Environment.SetEnvironmentVariable(
             Sparxie.Broker.Hosting.SessionLauncher.SessionHostExeEnv,
             LocateSessionHostExe());
@@ -46,38 +43,27 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
         return Task.CompletedTask;
     }
 
-    private string FakeGamePath => Path.Combine(_fakeGameDir, "StarRail.exe");
-
     public async Task DisposeAsync()
     {
-        foreach (var process in new[] { _brokerProcess, _hostProcess })
+        // 只清理由本测试直接启动的 Broker 进程树。不要按进程名全局查找 SessionHost，
+        // 否则并行运行的其他测试程序集也可能有同名 Host，被误杀后形成跨测试竞态。
+        if (_brokerProcess is { HasExited: false })
         {
-            if (process is { HasExited: false })
-            {
-                process.Kill(entireProcessTree: true);
-                await process.WaitForExitAsync();
-            }
-
-            process?.Dispose();
+            _brokerProcess.Kill(entireProcessTree: true);
+            await _brokerProcess.WaitForExitAsync();
         }
 
-        try
-        {
-            Directory.Delete(_fakeGameDir, recursive: true);
-        }
-        catch
-        {
-        }
+        _brokerProcess?.Dispose();
     }
 
     [Fact]
-    public async Task Hoyo假游戏失败路径事件流到达Failed()
+    public async Task Hoyo不存在游戏失败路径事件流到达Failed()
     {
         var client = CreateBrokerClient();
         var events = new List<SessionEvent>();
-        var failedEvent = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var failedEvent = new TaskCompletionSource<SessionEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        // 事件流使用独立的总体兜底超时，不能与 Broker 冷启动重试共享 20 秒预算。
+        // 事件流使用独立总体兜底超时，不能与 Broker 冷启动重试共享预算。
         using var eventCts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var eventTask = Task.Run(async () =>
         {
@@ -95,12 +81,12 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
 
                 if (ev.State == "Failed")
                 {
-                    failedEvent.TrySetResult(true);
+                    failedEvent.TrySetResult(ev);
                 }
             }
         });
 
-        // 启动会话（Broker 冷启动 JIT 可能较慢，单独给足 30 秒轮询窗口）。
+        // Broker 冷启动单独给足 30 秒轮询窗口。
         using var startCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         StartSessionResponse startResponse = null!;
         Exception? lastError = null;
@@ -115,9 +101,12 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
                     Profile = new ProfileSnapshot
                     {
                         ProfileId = "p1",
-                        DisplayName = "假星铁",
+                        DisplayName = "不存在的星铁",
                         Game = "starRail",
-                        ExecutablePath = FakeGamePath,
+                        // Broker 只校验白名单文件名；文件存在性由真实 SessionHost 校验，
+                        // 因此这里可以稳定覆盖 Broker → Host → Failed 的完整转发链路，
+                        // 而不进入耗时不确定的 native bootstrap 扫描。
+                        ExecutablePath = _missingGamePath,
                         Hoyo = new HoyoSettings
                         {
                             FpsUnlockEnabled = true,
@@ -143,11 +132,9 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
 
         Assert.NotNull(startResponse);
         Assert.True(startResponse.Accepted, lastError?.Message);
-        _hostProcess = Process.GetProcessesByName("Sparxie.SessionHost").FirstOrDefault();
 
-        // 等待真正的 Failed 事件，而不是反复轮询共享列表；超时只限制失败路径本身。
+        // 缺失 EXE 应在 SessionHost Validation 阶段确定性地产生 Failed。
         var completed = await Task.WhenAny(failedEvent.Task, Task.Delay(TimeSpan.FromSeconds(30)));
-        var failedObserved = completed == failedEvent.Task;
 
         List<SessionEvent> snapshot;
         lock (events)
@@ -168,10 +155,13 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
         }
 
         var states = string.Join(" → ", snapshot.Select(e => e.State));
-        Assert.True(failedObserved, $"30 秒内未收到 Failed，实际事件: {states}");
-        Assert.Contains(snapshot, e => e.State == "Starting");
+        Assert.True(completed == failedEvent.Task, $"30 秒内未收到 Failed，实际事件: {states}");
+
+        var failed = await failedEvent.Task;
+        Assert.Equal((int)StageCode.Validation, failed.Stage);
+        Assert.Equal((int)ErrorCode.ExecutableNotFound, failed.ErrorCode);
         Assert.Contains(snapshot, e => e.State == "Failed");
-        Assert.DoesNotContain(snapshot, e => e.State is "Running" or "Exited");
+        Assert.DoesNotContain(snapshot, e => e.State is "Starting" or "Running" or "Exited");
     }
 
     private SparxieBroker.SparxieBrokerClient CreateBrokerClient()
