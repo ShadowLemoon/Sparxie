@@ -39,6 +39,7 @@ public sealed class HostSession : IAsyncDisposable
     /// <summary>连接 Host 管道并启动双向流；Host 尚未就绪时轮询重试。</summary>
     public async Task ConnectAsync(CancellationToken cancellationToken)
     {
+        Exception? lastError = null;
         for (var attempt = 0; attempt < 120 && !cancellationToken.IsCancellationRequested; attempt++)
         {
             try
@@ -64,13 +65,22 @@ public sealed class HostSession : IAsyncDisposable
                 _receiveTask = ReceiveLoopAsync(cancellationToken);
                 return;
             }
-            catch (Exception) when (attempt < 59)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                await Task.Delay(250, cancellationToken).ConfigureAwait(false);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                lastError = ex;
+                if (attempt < 119)
+                {
+                    await Task.Delay(250, cancellationToken).ConfigureAwait(false);
+                }
             }
         }
 
-        throw new TimeoutException("连接 SessionHost 超时");
+        cancellationToken.ThrowIfCancellationRequested();
+        throw new TimeoutException("连接 SessionHost 超时", lastError);
     }
 
     public async Task SendCommandAsync(HostCommand command, CancellationToken cancellationToken)

@@ -1,31 +1,28 @@
 using System.Diagnostics;
 using Grpc.Core;
 using Grpc.Net.Client;
+using Sparxie.Contracts.Errors;
 using Sparxie.Contracts.Rpc;
 using Sparxie.Infrastructure.Rpc;
 
 namespace Broker.Tests;
 
 /// <summary>
-/// 全链路集成：真实 Broker + 真实 SessionHost + 假游戏进程，
-/// 验证 StartSession → Host 私有管道 → 事件转发 → Failed（Hoyo 假游戏
-/// bootstrap 真实执行失败，不误报成功）的完整闭环。
+/// 全链路集成：真实 Broker + 真实 SessionHost + 缺失的白名单游戏路径，
+/// 验证 StartSession → Host 私有管道 → SessionHost Validation Failed → Broker 事件转发。
+/// Hoyo native launch 失败路径由 HoyoAbi.Tests 单独覆盖，避免把上游扫描耗时耦合进管道测试。
 /// </summary>
 [Collection("SessionHostProcess")]
 public sealed class HostPipelineIntegrationTests : IAsyncLifetime
 {
     private Process? _brokerProcess;
-    private Process? _hostProcess;
     private readonly string _brokerPipe = $"sparxie-pipe-{Guid.NewGuid():N}";
-    private readonly string _fakeGameDir = Path.Combine(Path.GetTempPath(), "sparxie-fakegame", Guid.NewGuid().ToString("N"));
+    private readonly string _missingGamePath = Path.Combine(
+        Path.GetTempPath(), "sparxie-missinggame", Guid.NewGuid().ToString("N"), "StarRail.exe");
 
     public Task InitializeAsync()
     {
-        // 假游戏：复制 ping.exe 并命名为白名单内的 StarRail.exe（无参数运行立即退出）
-        Directory.CreateDirectory(_fakeGameDir);
-        File.Copy(Path.Combine(Environment.SystemDirectory, "ping.exe"), FakeGamePath);
-
-        // SessionHost.exe 不在测试输出目录：显式指向其构建输出
+        // SessionHost.exe 不在测试输出目录：显式指向其构建输出。
         Environment.SetEnvironmentVariable(
             Sparxie.Broker.Hosting.SessionLauncher.SessionHostExeEnv,
             LocateSessionHostExe());
@@ -46,58 +43,54 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
         return Task.CompletedTask;
     }
 
-    private string FakeGamePath => Path.Combine(_fakeGameDir, "StarRail.exe");
-
     public async Task DisposeAsync()
     {
-        foreach (var process in new[] { _brokerProcess, _hostProcess })
+        // 只清理由本测试直接启动的 Broker 进程树。不要按进程名全局查找 SessionHost，
+        // 否则并行运行的其他测试程序集也可能有同名 Host，被误杀后形成跨测试竞态。
+        if (_brokerProcess is { HasExited: false })
         {
-            if (process is { HasExited: false })
-            {
-                process.Kill(entireProcessTree: true);
-                await process.WaitForExitAsync();
-            }
-
-            process?.Dispose();
+            _brokerProcess.Kill(entireProcessTree: true);
+            await _brokerProcess.WaitForExitAsync();
         }
 
-        try
-        {
-            Directory.Delete(_fakeGameDir, recursive: true);
-        }
-        catch
-        {
-        }
+        _brokerProcess?.Dispose();
     }
 
     [Fact]
-    public async Task Hoyo假游戏失败路径事件流到达Failed()
+    public async Task Hoyo不存在游戏失败路径事件流到达Failed()
     {
         var client = CreateBrokerClient();
         var events = new List<SessionEvent>();
+        var failedEvent = new TaskCompletionSource<SessionEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        // 先订阅事件流
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        // 事件流使用独立总体兜底超时，不能与 Broker 冷启动重试共享预算。
+        using var eventCts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var eventTask = Task.Run(async () =>
         {
             var stream = client.StreamEvents(new StreamEventsRequest
             {
                 ProtocolVersion = RpcContract.ProtocolVersion,
                 RequestId = Guid.NewGuid().ToString("N"),
-            }, cancellationToken: cts.Token);
-            await foreach (var ev in stream.ResponseStream.ReadAllAsync(cts.Token))
+            }, cancellationToken: eventCts.Token);
+            await foreach (var ev in stream.ResponseStream.ReadAllAsync(eventCts.Token))
             {
                 lock (events)
                 {
                     events.Add(ev);
                 }
+
+                if (ev.State == "Failed")
+                {
+                    failedEvent.TrySetResult(ev);
+                }
             }
         });
 
-        // 启动会话（Broker 冷启动 JIT 可能较慢，放宽轮询窗口）
+        // Broker 冷启动单独给足 30 秒轮询窗口。
+        using var startCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         StartSessionResponse startResponse = null!;
         Exception? lastError = null;
-        for (var i = 0; i < 120 && startResponse is null; i++)
+        for (var i = 0; i < 120 && startResponse is null && !startCts.IsCancellationRequested; i++)
         {
             try
             {
@@ -108,9 +101,12 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
                     Profile = new ProfileSnapshot
                     {
                         ProfileId = "p1",
-                        DisplayName = "假星铁",
+                        DisplayName = "不存在的星铁",
                         Game = "starRail",
-                        ExecutablePath = FakeGamePath,
+                        // Broker 只校验白名单文件名；文件存在性由真实 SessionHost 校验，
+                        // 因此这里可以稳定覆盖 Broker → Host → Failed 的完整转发链路，
+                        // 而不进入耗时不确定的 native bootstrap 扫描。
+                        ExecutablePath = _missingGamePath,
                         Hoyo = new HoyoSettings
                         {
                             FpsUnlockEnabled = true,
@@ -122,33 +118,23 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
                             GenshinTouchUiScalePercent = 400,
                         },
                     },
-                }, cancellationToken: cts.Token);
+                }, cancellationToken: startCts.Token);
             }
             catch (Exception ex)
             {
                 lastError = ex;
-                await Task.Delay(250);
+                if (!startCts.IsCancellationRequested)
+                {
+                    await Task.Delay(250);
+                }
             }
         }
 
         Assert.NotNull(startResponse);
         Assert.True(startResponse.Accepted, lastError?.Message);
-        _hostProcess = Process.GetProcessesByName("Sparxie.SessionHost").FirstOrDefault();
 
-        // 等待事件流出现 Failed（Hoyo 假游戏：bootstrap 真实执行 → 扫描失败 → 整次失败，不误报成功）
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
-        while (DateTime.UtcNow < deadline)
-        {
-            lock (events)
-            {
-                if (events.Any(e => e.State == "Failed"))
-                {
-                    break;
-                }
-            }
-
-            await Task.Delay(100);
-        }
+        // 缺失 EXE 应在 SessionHost Validation 阶段确定性地产生 Failed。
+        var completed = await Task.WhenAny(failedEvent.Task, Task.Delay(TimeSpan.FromSeconds(30)));
 
         List<SessionEvent> snapshot;
         lock (events)
@@ -156,12 +142,7 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
             snapshot = [.. events];
         }
 
-        var states = string.Join(" → ", snapshot.Select(e => e.State));
-        Assert.Contains(snapshot, e => e.State == "Starting");
-        Assert.Contains(snapshot, e => e.State == "Failed");
-        Assert.DoesNotContain(snapshot, e => e.State is "Running" or "Exited");
-
-        cts.Cancel();
+        eventCts.Cancel();
         try
         {
             await eventTask;
@@ -169,9 +150,18 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
         catch (OperationCanceledException)
         {
         }
-        catch (Grpc.Core.RpcException)
+        catch (RpcException)
         {
         }
+
+        var states = string.Join(" → ", snapshot.Select(e => e.State));
+        Assert.True(completed == failedEvent.Task, $"30 秒内未收到 Failed，实际事件: {states}");
+
+        var failed = await failedEvent.Task;
+        Assert.Equal((int)StageCode.Validation, failed.Stage);
+        Assert.Equal((int)ErrorCode.ExecutableNotFound, failed.ErrorCode);
+        Assert.Contains(snapshot, e => e.State == "Failed");
+        Assert.DoesNotContain(snapshot, e => e.State is "Starting" or "Running" or "Exited");
     }
 
     private SparxieBroker.SparxieBrokerClient CreateBrokerClient()
