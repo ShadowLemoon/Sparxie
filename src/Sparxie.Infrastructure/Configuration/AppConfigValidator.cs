@@ -49,11 +49,6 @@ public static class AppConfigValidator
                 errors.Add($"profile {profile.Id} 的 game 非法: {profile.Game}");
             }
 
-            if (string.IsNullOrWhiteSpace(profile.Variant))
-            {
-                errors.Add($"profile {profile.Id} 的 variant 不能为空");
-            }
-
             if (string.IsNullOrWhiteSpace(profile.ExecutablePath))
             {
                 // 空路径 = 未完成配置（UI 允许先建 Profile 占位后填路径）；

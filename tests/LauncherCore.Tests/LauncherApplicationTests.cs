@@ -34,7 +34,6 @@ public sealed class LauncherApplicationTests : IDisposable
             "--id", "genshin-cn",
             "--name", "原神 国服",
             "--game", "genshin",
-            "--variant", "cn",
             "--exe", @"D:\Games\YuanShen.exe");
 
         Assert.Equal(0, add.ExitCode);
@@ -67,7 +66,6 @@ public sealed class LauncherApplicationTests : IDisposable
             "--id", "zzz-cn",
             "--name", "绝区零 国服",
             "--game", "zenlessZoneZero",
-            "--variant", "cn",
             "--exe", @"D:\Games\ZenlessZoneZero.exe");
         Assert.Equal(0, addZzz.ExitCode);
 

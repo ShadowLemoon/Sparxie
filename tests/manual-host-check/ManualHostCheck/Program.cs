@@ -26,7 +26,6 @@ internal static class Program
             ProfileId = "p1",
             DisplayName = "x",
             Game = "starRail",
-            Variant = "intl",
             ExecutablePath = @"D:\Code\Sparxie\.pai-temp-hoyofake\StarRail.exe",
             Hoyo = new HoyoSettings
             {

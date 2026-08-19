@@ -3,7 +3,7 @@ using Sparxie.Contracts.Models;
 
 namespace Sparxie.Infrastructure.Processes;
 
-/// <summary>按进程名检测对应游戏是否已运行。同款游戏共享一个游戏级互斥域，不区分 Variant。</summary>
+/// <summary>按进程名检测对应游戏是否已运行。同款游戏共享一个游戏级互斥域。</summary>
 public static class GameProcessDetector
 {
     public static bool IsGameRunning(GameType game)

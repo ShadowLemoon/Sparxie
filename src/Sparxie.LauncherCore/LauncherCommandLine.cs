@@ -20,7 +20,6 @@ public sealed record ProfileMutation(
     string? Id = null,
     string? DisplayName = null,
     GameType? Game = null,
-    string? Variant = null,
     string? ExecutablePath = null,
     bool? FpsUnlockEnabled = null,
     int? TargetFps = null,
@@ -49,7 +48,6 @@ public sealed record ProfileMutation(
 
     public bool HasAnySettableField =>
         !string.IsNullOrWhiteSpace(DisplayName)
-        || !string.IsNullOrWhiteSpace(Variant)
         || !string.IsNullOrWhiteSpace(ExecutablePath)
         || HasHoyoSettings
         || HasGenshinSettings;
@@ -77,7 +75,6 @@ public static class LauncherCommandParser
         "id",
         "name",
         "game",
-        "variant",
         "exe",
         "fps",
         "target-fps",
@@ -94,7 +91,6 @@ public static class LauncherCommandParser
     private static readonly HashSet<string> SetOptions = new(StringComparer.OrdinalIgnoreCase)
     {
         "name",
-        "variant",
         "exe",
         "fps",
         "target-fps",
@@ -196,10 +192,10 @@ public static class LauncherCommandParser
             }
 
             if (mutation.Id is null || mutation.DisplayName is null || mutation.Game is null
-                || mutation.Variant is null || mutation.ExecutablePath is null)
+                || mutation.ExecutablePath is null)
             {
                 return LauncherCommandParseResult.Fail(
-                    "profile add 必须提供 --id、--name、--game、--variant 和 --exe");
+                    "profile add 必须提供 --id、--name、--game 和 --exe");
             }
 
             return LauncherCommandParseResult.Ok(new LauncherCommand(LauncherCommandKind.ProfileAdd, ProfileMutation: mutation));
@@ -300,7 +296,6 @@ public static class LauncherCommandParser
             Id: Value("id"),
             DisplayName: Value("name"),
             Game: ParseGame(Value("game"), "--game", commandName, ref error),
-            Variant: Value("variant"),
             ExecutablePath: Value("exe"),
             FpsUnlockEnabled: ParseOnOff(Value("fps"), "--fps", commandName, ref error),
             TargetFps: ParseInt(Value("target-fps"), "--target-fps", AppConfigValidator.MinFps, AppConfigValidator.MaxFps, commandName, ref error),

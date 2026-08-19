@@ -110,7 +110,6 @@ public sealed class HostPipelineIntegrationTests : IAsyncLifetime
                         ProfileId = "p1",
                         DisplayName = "假星铁",
                         Game = "starRail",
-                        Variant = "intl",
                         ExecutablePath = FakeGamePath,
                         Hoyo = new HoyoSettings
                         {

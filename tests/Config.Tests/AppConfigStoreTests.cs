@@ -54,7 +54,6 @@ public class AppConfigStoreTests : IDisposable
                     Id = "p1",
                     DisplayName = "原神 · 国服",
                     Game = GameType.Genshin,
-                    Variant = "cn",
                     ExecutablePath = @"D:\Games\Genshin Impact Game\YuanShen.exe",
                     Hoyo = new HoyoProfileSettings { TargetFps = 120 },
                 },
@@ -67,7 +66,6 @@ public class AppConfigStoreTests : IDisposable
         var profile = Assert.Single(result.Config.Profiles);
         Assert.Equal("p1", profile.Id);
         Assert.Equal(GameType.Genshin, profile.Game);
-        Assert.Equal("cn", profile.Variant);
         Assert.Equal(120, profile.Hoyo!.TargetFps);
     }
 
@@ -107,7 +105,7 @@ public class AppConfigStoreTests : IDisposable
             {
               "schemaVersion": 1,
               "selectedProfileId": null,
-              "profiles": [{ "id": "p1", "displayName": "x", "game": "wow", "variant": "cn", "executablePath": "C:\\x.exe" }]
+              "profiles": [{ "id": "p1", "displayName": "x", "game": "wow", "executablePath": "C:\\x.exe" }]
             }
             """);
 
@@ -127,8 +125,8 @@ public class AppConfigStoreTests : IDisposable
               "schemaVersion": 1,
               "selectedProfileId": null,
               "profiles": [
-                { "id": "p1", "displayName": "a", "game": "genshin", "variant": "cn", "executablePath": "C:\\a.exe" },
-                { "id": "p1", "displayName": "b", "game": "genshin", "variant": "cn", "executablePath": "C:\\b.exe" }
+                { "id": "p1", "displayName": "a", "game": "genshin", "executablePath": "C:\\a.exe" },
+                { "id": "p1", "displayName": "b", "game": "genshin", "executablePath": "C:\\b.exe" }
               ]
             }
             """);
@@ -172,7 +170,6 @@ public class AppConfigStoreTests : IDisposable
                     Id = "p1",
                     DisplayName = "星铁",
                     Game = GameType.StarRail,
-                    Variant = "intl",
                     ExecutablePath = @"D:\Games\StarRail\StarRail.exe",
                     Hoyo = new HoyoProfileSettings { FpsUnlockEnabled = false, TargetFps = 120 },
                 },
@@ -184,6 +181,7 @@ public class AppConfigStoreTests : IDisposable
         Assert.Contains("\"schemaVersion\": 1", text);
         Assert.Contains("\"game\": \"starRail\"", text);
         Assert.Contains("\"processPriority\": \"normal\"", text);
+        Assert.DoesNotContain("\"variant\"", text);
 
         var reloaded = new AppConfigStore(ConfigPath).Load();
         Assert.Equal(ConfigLoadState.Loaded, reloaded.State);
@@ -203,7 +201,6 @@ public class AppConfigStoreTests : IDisposable
                     Id = "p1",
                     DisplayName = "x",
                     Game = GameType.Genshin,
-                    Variant = "cn",
                     ExecutablePath = @"C:\x.exe",
                     Hoyo = new HoyoProfileSettings { TargetFps = 9999 },
                 },
@@ -226,9 +223,7 @@ public class AppConfigStoreTests : IDisposable
                     Id = "p1",
                     DisplayName = "x",
                     Game = GameType.Genshin,
-                    Variant = "cn",
-                    ExecutablePath = @"C:\Games
-otepad.exe",
+                    ExecutablePath = @"C:\Games\notepad.exe",
                     Hoyo = new HoyoProfileSettings { TargetFps = 120 },
                 },
             ],
@@ -251,7 +246,6 @@ otepad.exe",
                     Id = "p1",
                     DisplayName = "x",
                     Game = GameType.ZenlessZoneZero,
-                    Variant = "cn",
                     ExecutablePath = @"C:\Games\ZenlessZoneZeroBeta.exe",
                 },
             ],
@@ -317,7 +311,6 @@ otepad.exe",
                     Id = "p1",
                     DisplayName = "原神",
                     Game = GameType.Genshin,
-                    Variant = "cn",
                     ExecutablePath = @"D:\Games\Genshin Impact Game\YuanShen.exe",
                 },
             ],

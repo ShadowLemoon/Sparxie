@@ -23,7 +23,6 @@ public static class ProfileSnapshotMapper
                     LauncherFailureKind.ProfileSelection,
                     $"不支持的游戏类型: {profile.Game}"),
             },
-            Variant = profile.Variant,
             ExecutablePath = profile.ExecutablePath,
             Hoyo = profile.Hoyo is null
                 ? null

@@ -146,7 +146,6 @@ public sealed class BrokerPipeIntegrationTests : IAsyncLifetime
                 ProfileId = "p1",
                 DisplayName = "星铁",
                 Game = "starRail",
-                Variant = "intl",
                 ExecutablePath = @"D:\Games\StarRail.exe",
                 Hoyo = new HoyoSettings
                 {
@@ -223,7 +222,6 @@ public sealed class BrokerPipeIntegrationTests : IAsyncLifetime
                 ProfileId = "p1",
                 DisplayName = "坏配置",
                 Game = "genshin",
-                Variant = "cn",
                 ExecutablePath = @"D:\Games\YuanShen.exe",
                 Hoyo = new HoyoSettings { TargetFps = 9999 },
             },
@@ -299,7 +297,6 @@ public sealed class BrokerPipeIntegrationTests : IAsyncLifetime
                     ProfileId = "p1",
                     DisplayName = "星铁",
                     Game = "starRail",
-                    Variant = "cn",
                     ExecutablePath = fakeExe,
                     Hoyo = new HoyoSettings
                     {
@@ -401,7 +398,6 @@ public sealed class BrokerPipeIntegrationTests : IAsyncLifetime
                 ProfileId = "p1",
                 DisplayName = "星铁",
                 Game = "starRail",
-                Variant = "cn",
                 ExecutablePath = @"D:\Games\StarRail.exe",
                 Hoyo = new HoyoSettings
                 {
@@ -426,7 +422,6 @@ public sealed class BrokerPipeIntegrationTests : IAsyncLifetime
                 ProfileId = "p2",
                 DisplayName = "星铁2",
                 Game = "starRail",
-                Variant = "intl",
                 ExecutablePath = @"D:\Games\StarRail.exe",
                 Hoyo = new HoyoSettings
                 {
@@ -501,7 +496,6 @@ public sealed class BrokerPipeIntegrationTests : IAsyncLifetime
                 ProfileId = "p-genshin",
                 DisplayName = "原神",
                 Game = "genshin",
-                Variant = "cn",
                 ExecutablePath = @"D:\Games\YuanShen.exe",
                 Hoyo = new HoyoSettings
                 {
@@ -514,7 +508,6 @@ public sealed class BrokerPipeIntegrationTests : IAsyncLifetime
                 ProfileId = "p-sr",
                 DisplayName = "星铁",
                 Game = "starRail",
-                Variant = "cn",
                 ExecutablePath = @"D:\Games\StarRail.exe",
                 Hoyo = new HoyoSettings
                 {
@@ -527,7 +520,6 @@ public sealed class BrokerPipeIntegrationTests : IAsyncLifetime
                 ProfileId = "p-zzz",
                 DisplayName = "绝区零",
                 Game = "zenlessZoneZero",
-                Variant = "cn",
                 ExecutablePath = @"D:\Games\ZenlessZoneZero.exe",
             },
         };

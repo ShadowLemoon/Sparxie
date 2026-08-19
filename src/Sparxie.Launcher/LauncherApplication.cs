@@ -290,7 +290,7 @@ public static class LauncherApplication
         foreach (var profile in config.Profiles)
         {
             var marker = string.Equals(profile.Id, config.SelectedProfileId, StringComparison.Ordinal) ? "*" : " ";
-            output.WriteLine($"{marker}\t{profile.Id}\t{profile.DisplayName}\t{FormatGame(profile.Game)}\t{profile.Variant}\t{profile.ExecutablePath}");
+            output.WriteLine($"{marker}\t{profile.Id}\t{profile.DisplayName}\t{FormatGame(profile.Game)}\t{profile.ExecutablePath}");
         }
     }
 
@@ -299,7 +299,6 @@ public static class LauncherApplication
         output.WriteLine($"id: {profile.Id}");
         output.WriteLine($"name: {profile.DisplayName}");
         output.WriteLine($"game: {FormatGame(profile.Game)}");
-        output.WriteLine($"variant: {profile.Variant}");
         output.WriteLine($"exe: {profile.ExecutablePath}");
 
         if (profile.Hoyo is not { } hoyo)
@@ -350,8 +349,8 @@ public static class LauncherApplication
         writer.WriteLine("  list");
         writer.WriteLine("  profile list");
         writer.WriteLine("  profile show <profile-id-or-name>");
-        writer.WriteLine("  profile add --id <id> --name <名称> --game <genshin|starRail|zenlessZoneZero> --variant <variant> --exe <完整EXE路径> [设置选项]");
-        writer.WriteLine("  profile set <profile-id-or-name> [--name <名称>] [--variant <variant>] [--exe <完整EXE路径>] [设置选项]");
+        writer.WriteLine("  profile add --id <id> --name <名称> --game <genshin|starRail|zenlessZoneZero> --exe <完整EXE路径> [设置选项]");
+        writer.WriteLine("  profile set <profile-id-or-name> [--name <名称>] [--exe <完整EXE路径>] [设置选项]");
         writer.WriteLine("  profile select <profile-id-or-name>");
         writer.WriteLine("  profile remove <profile-id-or-name>");
         writer.WriteLine("  launch [profile-id-or-name]");

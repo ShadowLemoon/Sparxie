@@ -31,7 +31,6 @@ public static class ProfileManager
             Id = id,
             DisplayName = RequireText(mutation.DisplayName, "Profile 名称"),
             Game = game,
-            Variant = RequireText(mutation.Variant, "Variant"),
             ExecutablePath = NormalizeExecutablePath(game, mutation.ExecutablePath),
             Hoyo = game == GameType.ZenlessZoneZero ? null : new HoyoProfileSettings(),
         };
@@ -64,11 +63,6 @@ public static class ProfileManager
         if (mutation.DisplayName is not null)
         {
             updated.DisplayName = RequireText(mutation.DisplayName, "Profile 名称");
-        }
-
-        if (mutation.Variant is not null)
-        {
-            updated.Variant = RequireText(mutation.Variant, "Variant");
         }
 
         if (mutation.ExecutablePath is not null)
@@ -236,7 +230,6 @@ public static class ProfileManager
         Id = source.Id,
         DisplayName = source.DisplayName,
         Game = source.Game,
-        Variant = source.Variant,
         ExecutablePath = source.ExecutablePath,
         Hoyo = source.Hoyo is null
             ? null

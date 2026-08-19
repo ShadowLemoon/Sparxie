@@ -119,7 +119,6 @@ public sealed class ZzzRecoveryIntegrationTests : IAsyncLifetime
                 ProfileId = "zzz1",
                 DisplayName = "假绝区零",
                 Game = "zenlessZoneZero",
-                Variant = "cn",
                 ExecutablePath = Path.Combine(_fakeGameDir, "ZenlessZoneZero.exe"),
             },
         }, cancellationToken: cts.Token);

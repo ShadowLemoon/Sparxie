@@ -10,8 +10,8 @@ public sealed class ProfileManagerTests
     {
         var config = new AppConfig();
 
-        var genshin = ProfileManager.Add(config, Create("genshin-cn", "原神 国服", GameType.Genshin, "cn", @"D:\Games\YuanShen.exe"));
-        var zzz = ProfileManager.Add(config, Create("zzz-cn", "绝区零 国服", GameType.ZenlessZoneZero, "cn", @"D:\Games\ZenlessZoneZero.exe"));
+        var genshin = ProfileManager.Add(config, Create("genshin-cn", "原神 国服", GameType.Genshin, @"D:\Games\YuanShen.exe"));
+        var zzz = ProfileManager.Add(config, Create("zzz-cn", "绝区零 国服", GameType.ZenlessZoneZero, @"D:\Games\ZenlessZoneZero.exe"));
 
         Assert.Equal("genshin-cn", config.SelectedProfileId);
         Assert.Equal(120, genshin.Hoyo!.TargetFps);
@@ -26,7 +26,7 @@ public sealed class ProfileManagerTests
     public void 修改只改变指定字段并保持Profile身份不变()
     {
         var config = new AppConfig();
-        ProfileManager.Add(config, Create("genshin-cn", "旧名称", GameType.Genshin, "cn", @"D:\Games\YuanShen.exe"));
+        ProfileManager.Add(config, Create("genshin-cn", "旧名称", GameType.Genshin, @"D:\Games\YuanShen.exe"));
 
         var updated = ProfileManager.Update(config, "genshin-cn", new ProfileMutation(
             DisplayName: "新名称",
@@ -37,7 +37,6 @@ public sealed class ProfileManagerTests
 
         Assert.Equal("genshin-cn", updated.Id);
         Assert.Equal(GameType.Genshin, updated.Game);
-        Assert.Equal("cn", updated.Variant);
         Assert.Equal(@"D:\Games\YuanShen.exe", updated.ExecutablePath);
         Assert.Equal("新名称", updated.DisplayName);
         Assert.Equal(144, updated.Hoyo!.TargetFps);
@@ -51,8 +50,8 @@ public sealed class ProfileManagerTests
     public void 选择和删除默认Profile按约定回落()
     {
         var config = new AppConfig();
-        ProfileManager.Add(config, Create("first", "第一项", GameType.StarRail, "cn", @"D:\Games\StarRail.exe"));
-        ProfileManager.Add(config, Create("second", "第二项", GameType.StarRail, "intl", @"D:\Games\StarRail.exe"));
+        ProfileManager.Add(config, Create("first", "第一项", GameType.StarRail, @"D:\Games\StarRail.exe"));
+        ProfileManager.Add(config, Create("second", "第二项", GameType.StarRail, @"D:\Games\StarRail.exe"));
 
         ProfileManager.Select(config, "second");
         ProfileManager.Remove(config, "second");
@@ -67,18 +66,18 @@ public sealed class ProfileManagerTests
     public void 拒绝重复ID不完整路径白名单错误和不适用设置()
     {
         var config = new AppConfig();
-        ProfileManager.Add(config, Create("zzz", "绝区零", GameType.ZenlessZoneZero, "cn", @"D:\Games\ZenlessZoneZero.exe"));
-        ProfileManager.Add(config, Create("starrail", "星铁", GameType.StarRail, "cn", @"D:\Games\StarRail.exe"));
+        ProfileManager.Add(config, Create("zzz", "绝区零", GameType.ZenlessZoneZero, @"D:\Games\ZenlessZoneZero.exe"));
+        ProfileManager.Add(config, Create("starrail", "星铁", GameType.StarRail, @"D:\Games\StarRail.exe"));
 
         Assert.Throws<LauncherException>(() => ProfileManager.Add(
             config,
-            Create("zzz", "重复", GameType.ZenlessZoneZero, "intl", @"D:\Games\ZenlessZoneZero.exe")));
+            Create("zzz", "重复", GameType.ZenlessZoneZero, @"D:\Games\ZenlessZoneZero.exe")));
         Assert.Throws<LauncherException>(() => ProfileManager.Add(
             config,
-            Create("relative", "相对路径", GameType.Genshin, "cn", @"Games\YuanShen.exe")));
+            Create("relative", "相对路径", GameType.Genshin, @"Games\YuanShen.exe")));
         Assert.Throws<LauncherException>(() => ProfileManager.Add(
             config,
-            Create("wrong-exe", "错误EXE", GameType.Genshin, "cn", @"D:\Games\StarRail.exe")));
+            Create("wrong-exe", "错误EXE", GameType.Genshin, @"D:\Games\StarRail.exe")));
         Assert.Throws<LauncherException>(() => ProfileManager.Update(
             config,
             "zzz",
@@ -95,11 +94,9 @@ public sealed class ProfileManagerTests
         string id,
         string name,
         GameType game,
-        string variant,
         string executablePath) => new(
             Id: id,
             DisplayName: name,
             Game: game,
-            Variant: variant,
             ExecutablePath: executablePath);
 }

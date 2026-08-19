@@ -40,7 +40,6 @@ public sealed class CommandParserTests
             "--id", "genshin-cn",
             "--name", "原神 国服",
             "--game", "genshin",
-            "--variant", "cn",
             "--exe", @"D:\Games\YuanShen.exe",
             "--fps", "off",
             "--target-fps", "144",
@@ -93,11 +92,13 @@ public sealed class CommandParserTests
     [InlineData("list", "extra")]
     [InlineData("launch", "a", "b")]
     [InlineData("profile", "add", "--id", "p1")]
-    [InlineData("profile", "add", "--id", "p1", "--id", "p2", "--name", "x", "--game", "genshin", "--variant", "cn", "--exe", "D:\\Games\\YuanShen.exe")]
-    [InlineData("profile", "add", "--id", "p1", "--name", "x", "--game", "genshin", "--variant", "cn", "--exe", "D:\\Games\\YuanShen.exe", "--unknown", "x")]
-    [InlineData("profile", "add", "--id", "p1", "--name", "x", "--game", "genshin", "--variant", "cn", "--exe", "D:\\Games\\YuanShen.exe", "--fps")]
+    [InlineData("profile", "add", "--id", "p1", "--id", "p2", "--name", "x", "--game", "genshin", "--exe", "D:\\Games\\YuanShen.exe")]
+    [InlineData("profile", "add", "--id", "p1", "--name", "x", "--game", "genshin", "--exe", "D:\\Games\\YuanShen.exe", "--unknown", "x")]
+    [InlineData("profile", "add", "--id", "p1", "--name", "x", "--game", "genshin", "--exe", "D:\\Games\\YuanShen.exe", "--fps")]
+    [InlineData("profile", "add", "--id", "p1", "--name", "x", "--game", "genshin", "--exe", "D:\\Games\\YuanShen.exe", "--variant", "cn")]
     [InlineData("profile", "set", "p1", "--id", "renamed")]
     [InlineData("profile", "set", "p1", "--game", "starRail")]
+    [InlineData("profile", "set", "p1", "--variant", "cn")]
     [InlineData("profile", "set", "p1", "--target-fps", "9")]
     public void 拒绝未知重复缺失和越界参数(params string[] args)
     {
