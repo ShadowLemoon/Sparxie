@@ -2,11 +2,53 @@
     x:Class="Sparxie.Desktop.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Grid Padding="24">
-        <StackPanel Spacing="16">
-            <TextBlock Text="Sparxie" FontSize="32" />
-            <TextBlock Text="WinUI 3 desktop launcher" />
-            <Button Content="启动游戏" />
-        </StackPanel>
+    <Grid>
+        <!-- Home stays as the base layer. Settings drawer overlays on top. -->
+        <Grid x:Name="HomeContent">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="72" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Padding="24,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <Button Content="原神" />
+                    <Button Content="星穹铁道" />
+                    <Button Content="绝区零" />
+                </StackPanel>
+
+                <Button Grid.Column="1" Content="⚙" />
+            </Grid>
+
+            <Grid Grid.Row="1">
+                <Border HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="24">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="PROFILE" />
+                        <Button Content="国服 ▾" />
+                    </StackPanel>
+                </Border>
+
+                <Button HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="24"
+                        Content="启动游戏" />
+            </Grid>
+        </Grid>
+
+        <!-- Enabled when settings opens: dim + blur home without re-layout. -->
+        <Rectangle x:Name="ScrimOverlay"
+                   Visibility="Collapsed"
+                   Fill="#66000000" />
+
+        <!-- Right side settings drawer. -->
+        <Border x:Name="SettingsDrawer"
+                Width="480"
+                HorizontalAlignment="Right"
+                Visibility="Collapsed"
+                Background="{ThemeResource SystemControlAcrylicWindowBrush}">
+        </Border>
     </Grid>
 </Window>
