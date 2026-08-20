@@ -1,0 +1,33 @@
+<Page
+    x:Class="Sparxie.Desktop.Views.HomePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.Background>
+            <AcrylicBrush TintColor="#202020" TintOpacity="0.55" FallbackColor="#202020" />
+        </Grid.Background>
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition />
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Horizontal" Spacing="12" Margin="32,24">
+            <Button Content="原神" MinHeight="48" />
+            <Button Content="星穹铁道" MinHeight="48" />
+            <Button Content="绝区零" MinHeight="48" />
+        </StackPanel>
+
+        <Border Grid.Row="1" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="32"
+                Padding="20" CornerRadius="16" Background="#66000000">
+            <StackPanel>
+                <TextBlock Text="PROFILE" Opacity="0.7" />
+                <TextBlock Text="国服" FontSize="24" />
+                <TextBlock Text="144 FPS" />
+            </StackPanel>
+        </Border>
+
+        <Button Grid.Row="1" Content="启动游戏" HorizontalAlignment="Right"
+                VerticalAlignment="Bottom" Margin="32" MinWidth="180" MinHeight="56" />
+    </Grid>
+</Page>
