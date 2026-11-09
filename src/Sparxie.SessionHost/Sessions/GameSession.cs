@@ -114,15 +114,15 @@ public sealed class GameSession : IAsyncDisposable
         {
             Cleanup();
 
-            // 失败路径配置回滚（ZZZ：恢复 PC 配置并清理恢复资产）
+            // 失败路径收尾（Hoyo 释放 native 会话；ZZZ 不再有配置需要回滚）
             try
             {
                 await _controller.AbortAsync(cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                // 恢复失败不吞掉，但不再改变会话终态；遗留记录由 Broker/下次启动兜底
-                await EmitAsync(SessionStates.Failed, StageCode.Cleanup, ErrorCode.ZzzRecoveryFailed, $"配置恢复失败: {ex.Message}", CancellationToken.None).ConfigureAwait(false);
+                // 收尾失败不吞掉，但不再改变会话终态
+                await EmitAsync(SessionStates.Failed, StageCode.Cleanup, ErrorCode.ZzzRecoveryFailed, $"会话收尾失败: {ex.Message}", CancellationToken.None).ConfigureAwait(false);
             }
         }
     }

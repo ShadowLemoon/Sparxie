@@ -29,7 +29,7 @@
 3. 启动对应 SessionHost（管理员）并转发快照；
 4. SessionHost 创建游戏进程 → 调用 native Runtime 完成触屏初始化；
 5. 全部成功 → 宣布 Running；失败 → 整次失败并处置本次进程；
-6. Running 前 Host 异常：临时 Job/监督机制终止本次游戏进程；ZZZ 走共享恢复例程恢复 PC 配置；
+6. Running 前 Host 异常：临时 Job/监督机制终止本次游戏进程（ZZZ 不读写游戏配置，没有配置需要恢复）；
 7. Running 后 Host 异常：三款游戏均保留游戏进程，热调丢失但不重连；
 8. 控制端断开后，Broker 继续监控活动 Host，全部会话结束后退出。
 
@@ -42,7 +42,7 @@ src/
 ├─ Sparxie.Broker/        # 管理员 Broker（RPC 入口、Host 启动、异常监控）
 ├─ Sparxie.SessionHost/   # 按游戏运行会话（互斥、Job、Runtime 调用、清理）
 ├─ Sparxie.Contracts/     # Profile / RPC / 错误契约
-└─ Sparxie.Infrastructure/ # 配置存储、日志、诊断、ZZZ 恢复、进程检测
+└─ Sparxie.Infrastructure/ # 配置存储、日志、诊断、进程检测
 native/
 └─ HoyoTouchCore/
    ├─ upstream/            # Hoyo 上游 subtree（MIT，保留原结构与编码，最小补丁）
@@ -62,8 +62,8 @@ docs/                      # 架构、第三方许可证
 - **互斥**：同款游戏的所有 Profile 共享游戏级命名互斥域，由 SessionHost 持有；
 - **Running 前失效保护**：Host 独占临时 Job（KILL_ON_JOB_CLOSE），Running 前完成
   可验证的撤销/转换，不覆盖整个 Running 生命周期；
-- **ZZZ 恢复**：修改 `GENERAL_DATA.bin` 前原子写入 `recovery/zzz/` 会话恢复记录与
-  原始备份；正常清理与异常接管共用同一恢复例程；
+- **ZZZ 注入**（ZZZTouchLauncher v2）：只把 Runtime 注入游戏进程，不读写 `GENERAL_DATA.bin`；
+  触屏布局必须在游戏启动前注入，不支持游戏运行中途注入；
 - **Hoyo 接入**：上游入口补丁复用扫描/inject/ResumeThread 流程，adapter 以 C ABI
   封装为会话式接口；`FpsValue` 为 Host 内稳定变量，热调经 C ABI 原子写更新；
 - **日志与诊断**：`logs/` 结构化滚动日志保留 7 天；诊断包只含脱敏日志与非敏感
@@ -71,9 +71,9 @@ docs/                      # 架构、第三方许可证
 
 ## 当前状态与阻塞点
 
-- 已完成：Contracts/配置、LauncherCore 与 CLI Profile CRUD、Broker/SessionHost 闭环、ZZZ 配置恢复与
+- 已完成：Contracts/配置、LauncherCore 与 CLI Profile CRUD、Broker/SessionHost 闭环、ZZZ Runtime 注入与
   Running 前失效保护、Hoyo subtree 与 C ABI、Broker 单控制流和断连收尾、发布许可证交付；
-  ZZZ Runtime 已固定为 `v1.0.0`，从指定 Release 下载后经 SHA-256 校验合入无 GUI 便携 ZIP。
+  ZZZ Runtime 已固定为 `v2.0.0`（按 ZZZTouchLauncher v2：只注入 Runtime，不读写游戏配置），从指定 Release 下载后经 SHA-256 校验合入无 GUI 便携 ZIP。
 - 阻塞项：生产 UAC 确认以及原神/星铁/绝区零真实游戏环境的注入、Running 前后强杀 Host 等实机验证。
 
 ## 发布

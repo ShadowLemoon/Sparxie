@@ -1,25 +1,28 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Sparxie.Contracts.Rpc;
-using Sparxie.Infrastructure.Zzz;
 
 namespace Sparxie.SessionHost.Sessions;
 
 /// <summary>
-/// 绝区零 Runtime 控制器：启动前备份 PC 配置并写入触屏配置、建立恢复记录；
-/// 注入成功后按已验证时序（窗口客户区就绪 + 延迟）恢复 PC 文件配置并删除恢复记录；
-/// 失败路径恢复 PC 配置。Running 前 Host 异常死亡时由 Broker 用同一恢复例程兜底。
+/// 绝区零 Runtime 控制器（按 ZZZTouchLauncher v2 重构）：只负责把 ZZZTouchRuntime 注入游戏进程。
+/// v2 的 Runtime 在游戏进程内固定触屏布局、合成多指触点，因此<b>不再读写任何游戏配置</b>
+/// （不备份/改写 GENERAL_DATA.bin，也没有恢复记录），崩溃或异常退出都没有配置残留。
+/// 触屏布局必须在游戏启动、界面建好之前固定，所以只支持“启动时注入”，不支持游戏已在运行时中途注入。
 /// </summary>
 public sealed class ZzzGameController : IGameController
 {
     public bool CreatesProcess => false;
 
-    private const uint WindowWaitMs = 60_000;
-    private const int ClientAreaReadyTimeoutMs = 120_000;
-    private const int PostClientAreaDelayMs = 5_000;
+    /// <summary>首次等待游戏主窗口的时长（毫秒），与 ZZZTouchLauncher v2 一致。</summary>
+    private const uint FirstWindowWaitMs = 60_000;
+
+    /// <summary>首次返回“未找到主窗口”时的二次尝试等待时长与间隔，与 v2 的 Controller 重试一致。</summary>
+    private const uint RetryWindowWaitMs = 30_000;
+
+    private const int RetryDelayMs = 5_000;
 
     private readonly string _sessionId;
-    private ZzzRecoveryRecord? _record;
     private bool _injected;
     private bool _released;
 
@@ -28,44 +31,24 @@ public sealed class ZzzGameController : IGameController
         _sessionId = sessionId;
     }
 
-    public async Task PrepareLaunchAsync(ProfileSnapshot profile, CancellationToken cancellationToken)
+    public string SessionId => _sessionId;
+
+    public Task PrepareLaunchAsync(ProfileSnapshot profile, CancellationToken cancellationToken)
     {
-        // 1) 处理并校验遗留恢复记录：存在未完成记录时先恢复，避免与旧会话冲突。
-        foreach (var pending in ZzzRecoveryStore.FindAll())
+        // 不再有启动前的配置处理；只确认 EXE 存在，早失败比让游戏起不来再报错清楚。
+        if (string.IsNullOrWhiteSpace(profile.ExecutablePath) || !File.Exists(profile.ExecutablePath))
         {
-            if (string.Equals(pending.SessionId, _sessionId, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            ZzzRecoveryStore.Restore(pending);
+            throw new FileNotFoundException("绝区零 EXE 不存在", profile.ExecutablePath);
         }
 
-        // 2) 验证 EXE 与 GENERAL_DATA.bin。
-        var dataPath = ResolveGeneralDataPath(profile.ExecutablePath);
-        if (!File.Exists(dataPath))
-        {
-            throw new FileNotFoundException("GENERAL_DATA.bin 不存在", dataPath);
-        }
-
-        // 3) 原子备份 PC 配置并写入会话恢复记录。
-        _record = ZzzRecoveryStore.Create(_sessionId, dataPath);
-
-        // 4) 写入触屏配置；失败时回滚恢复记录。
-        try
-        {
-            ZzzGeneralData.WritePlatform(dataPath, ZzzGeneralData.PlatformTouch);
-        }
-        catch
-        {
-            TryRollbackRecord();
-            throw;
-        }
-
-        await Task.CompletedTask.ConfigureAwait(false);
+        return Task.CompletedTask;
     }
 
-    public async Task InstallAsync(Process? gameProcess, IntPtr jobHandle, Sparxie.Contracts.Models.HoyoProfileSettings? hoyo, CancellationToken cancellationToken)
+    public async Task InstallAsync(
+        Process? gameProcess,
+        IntPtr jobHandle,
+        Sparxie.Contracts.Models.HoyoProfileSettings? hoyo,
+        CancellationToken cancellationToken)
     {
         // ZZZ 由 SessionHost 预创建进程（CreatesProcess=false），运行期 gameProcess 非空
         if (gameProcess is null)
@@ -73,50 +56,30 @@ public sealed class ZzzGameController : IGameController
             throw new InvalidOperationException("ZZZ 游戏进程未创建");
         }
 
-        TargetPid = (uint)gameProcess.Id;
-        var result = ZZZTouchInjectToProcess(TargetPid, quiet: true, WindowWaitMs);
+        var targetPid = (uint)gameProcess.Id;
+        var result = ZZZTouchInjectToProcess(targetPid, quiet: true, FirstWindowWaitMs);
+        if (result == 1)
+        {
+            // 仅“未找到主窗口”才重试；其他失败（安装失败/已有注入会话等）重试只会得到误导性的错误码。
+            // 游戏有时会重新拉起一个进程，重试前按当前存活的游戏进程重新取 PID。
+            await Task.Delay(RetryDelayMs, cancellationToken).ConfigureAwait(false);
+            targetPid = FindRunningGamePid() ?? targetPid;
+            result = ZZZTouchInjectToProcess(targetPid, quiet: true, RetryWindowWaitMs);
+        }
+
         if (result != 0)
         {
+            // 失败时也要释放 native 持有的 Hook/互斥，避免下次启动被“已有注入控制器”挡住。
+            ZZZTouchRelease();
             throw new InvalidOperationException($"ZZZ Runtime 注入失败: {DescribeInjectResult(result)}");
         }
 
         _injected = true;
-        await Task.CompletedTask.ConfigureAwait(false);
     }
 
-    public async Task PostInstallAsync(CancellationToken cancellationToken)
-    {
-        // 已验证时序：等待主窗口客户区就绪（游戏完成初次配置读取），再延迟写回 PC。
-        if (_record is null)
-        {
-            return;
-        }
+    public Task PostInstallAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-        if (!WaitForClientArea(ClientAreaReadyTimeoutMs, cancellationToken))
-        {
-            // 客户区超时：保持恢复记录，由失败路径或下次启动兜底恢复。
-            throw new TimeoutException("等待游戏主窗口客户区就绪超时");
-        }
-
-        await Task.Delay(PostClientAreaDelayMs, cancellationToken).ConfigureAwait(false);
-
-        ZzzRecoveryStore.Restore(_record);
-        _record = null;
-    }
-
-    public Task AbortAsync(CancellationToken cancellationToken)
-    {
-        // 失败路径清理：若仍存在恢复记录（游戏已被终止），恢复 PC 配置。
-        var record = _record ?? ZzzRecoveryStore.TryLoad(_sessionId);
-        if (record is null)
-        {
-            return Task.CompletedTask;
-        }
-
-        ZzzRecoveryStore.Restore(record);
-        _record = null;
-        return Task.CompletedTask;
-    }
+    public Task AbortAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     public Task WaitExitAsync(CancellationToken cancellationToken)
         => Task.CompletedTask; // ZZZ 由 SessionHost 预创建并等待
@@ -139,107 +102,48 @@ public sealed class ZzzGameController : IGameController
         }
     }
 
-    private void TryRollbackRecord()
+    private static uint? FindRunningGamePid()
     {
-        try
+        foreach (var name in new[] { "ZenlessZoneZero", "ZenlessZoneZeroBeta" })
         {
-            if (_record is not null)
+            foreach (var process in Process.GetProcessesByName(name))
             {
-                ZzzRecoveryStore.Delete(_record);
+                try
+                {
+                    if (!process.HasExited)
+                    {
+                        return (uint)process.Id;
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    // 进程刚好退出，换下一个。
+                }
+                finally
+                {
+                    process.Dispose();
+                }
             }
         }
-        catch
-        {
-            // 回滚失败不掩盖原始错误；遗留记录由 Broker/下次启动兜底
-        }
 
-        _record = null;
+        return null;
     }
 
-    /// <summary>解析 {exe目录}\*_Data\Persistent\LocalStorage\GENERAL_DATA.bin，要求唯一命中。</summary>
-    public static string ResolveGeneralDataPath(string executablePath)
-    {
-        if (string.IsNullOrWhiteSpace(executablePath))
-        {
-            throw new ArgumentException("executablePath 为空", nameof(executablePath));
-        }
-
-        var root = Path.GetDirectoryName(Path.GetFullPath(executablePath));
-        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
-        {
-            throw new DirectoryNotFoundException($"游戏目录不存在: {root}");
-        }
-
-        var candidates = Directory.GetDirectories(root, "*_Data", SearchOption.TopDirectoryOnly)
-            .Select(dataDir => Path.Combine(dataDir, "Persistent", "LocalStorage", "GENERAL_DATA.bin"))
-            .Where(File.Exists)
-            .ToList();
-
-        return candidates.Count switch
-        {
-            0 => throw new FileNotFoundException("未找到唯一的 GENERAL_DATA.bin"),
-            1 => candidates[0],
-            _ => throw new InvalidDataException("找到多个 GENERAL_DATA.bin，无法安全判断所属安装"),
-        };
-    }
-
-    private static bool WaitForClientArea(int timeoutMs, CancellationToken cancellationToken)
-    {
-        var deadline = Environment.TickCount64 + timeoutMs;
-        while (Environment.TickCount64 < deadline)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var ready = false;
-            EnumWindows((hWnd, _) =>
-            {
-                if (!IsWindowVisible(hWnd))
-                {
-                    return true;
-                }
-
-                GetWindowThreadProcessId(hWnd, out var pid);
-                if (pid != TargetPid)
-                {
-                    return true;
-                }
-
-                if (GetClientRect(hWnd, out var rect) && rect.Right - rect.Left > 0 && rect.Bottom - rect.Top > 0)
-                {
-                    ready = true;
-                    return false;
-                }
-
-                return true;
-            }, IntPtr.Zero);
-
-            if (ready)
-            {
-                return true;
-            }
-
-            Thread.Sleep(250);
-        }
-
-        return false;
-    }
-
-    private static uint TargetPid { get; set; }
-
+    /// <summary>ZZZTouchCore v2 的返回码（来自 ZZZTouchLauncher v2 的 DescribeInjectResult）。</summary>
     private static string DescribeInjectResult(int result) => result switch
     {
         0 => "成功",
-        1 => "主窗口未找到",
-        2 => "LoadLibrary 失败",
-        3 => "GetProcAddress 失败",
-        4 => "OpenProcess 失败",
-        5 => "控制器互斥被占用",
-        6 => "协议事件创建失败",
-        7 => "SetWindowsHookEx 失败",
-        8 => "游戏在安装期间退出",
-        9 => "安装失败",
-        10 => "安装等待失败",
-        _ => $"未知结果码 {result}",
+        1 => "未找到游戏主窗口",
+        2 => "加载 ZZZTouchRuntime.dll 失败",
+        3 => "获取合成器导出入口失败",
+        4 => "打开游戏进程句柄失败（请以管理员权限运行）",
+        5 => "已有另一个注入控制器占用（互斥锁）",
+        6 => "协议事件创建失败（进程可能已有注入会话，请重启游戏）",
+        7 => "安装 WH_GETMESSAGE Hook 失败",
+        8 => "合成器安装失败（详见游戏侧行为）",
+        9 => "游戏在安装确认前退出",
+        10 => "等待 Runtime 安装结果失败",
+        _ => $"未知错误({result})",
     };
 
     // ---- native exports: ZZZTouchCore.dll (__cdecl) ----
@@ -249,33 +153,5 @@ public sealed class ZzzGameController : IGameController
         uint pid, [MarshalAs(UnmanagedType.Bool)] bool quiet, uint windowWaitMs);
 
     [DllImport("ZZZTouchCore.dll", CallingConvention = CallingConvention.Cdecl)]
-    private static extern int ZZZTouchWaitGameExit(uint timeoutMs);
-
-    [DllImport("ZZZTouchCore.dll", CallingConvention = CallingConvention.Cdecl)]
     private static extern void ZZZTouchRelease();
-
-    // ---- user32: 等待主窗口客户区就绪 ----
-
-    [DllImport("user32.dll")]
-    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
-
-    [DllImport("user32.dll")]
-    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-
-    [DllImport("user32.dll")]
-    private static extern bool GetClientRect(IntPtr hWnd, out RECT lpRect);
-
-    [DllImport("user32.dll")]
-    private static extern bool IsWindowVisible(IntPtr hWnd);
-
-    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct RECT
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
 }
