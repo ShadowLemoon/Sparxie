@@ -28,9 +28,7 @@ public sealed class GameBackgroundService
         return client;
     }
 
-    private static string CacheDir => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Sparxie", "backgrounds");
+    private static string CacheDir => AppPaths.BackgroundCacheDirectory;
 
     private static string BizOf(GameType game) => game switch
     {
@@ -40,7 +38,34 @@ public sealed class GameBackgroundService
         _ => string.Empty,
     };
 
-    /// <summary>返回本地背景图路径；无法获取时返回 null（调用方回退纯色背景）。</summary>
+    // 背景图缓存，文件名由图片 URL 决定（官方换图即换文件名），
+    // 并记住每个游戏“当前背景”指向哪个文件。切换游戏时先显示缓存，再在后台刷新。
+    private static readonly Dictionary<string, (string? Url, DateTime FetchedAt)> UrlMemo = [];
+    private static readonly TimeSpan UrlMemoTtl = TimeSpan.FromMinutes(10);
+
+    private static string PointerFile(string biz) => Path.Combine(CacheDir, $"{biz}.cur");
+
+    /// <summary>同步返回该游戏上次使用的本地背景图；没有缓存时返回 null。用于切换游戏时立即上屏。</summary>
+    public string? GetCachedBackgroundPath(GameType game)
+    {
+        var biz = BizOf(game);
+        if (biz.Length == 0 || !File.Exists(PointerFile(biz)))
+        {
+            return null;
+        }
+
+        try
+        {
+            var file = Path.Combine(CacheDir, File.ReadAllText(PointerFile(biz)).Trim());
+            return File.Exists(file) ? file : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>返回本地背景图路径；无法获取时回退该游戏上次的缓存，再没有则返回 null（调用方回退纯色背景）。</summary>
     public async Task<string?> GetBackgroundPathAsync(GameType game)
     {
         var biz = BizOf(game);
@@ -50,13 +75,11 @@ public sealed class GameBackgroundService
         }
 
         Directory.CreateDirectory(CacheDir);
-        var imageFile = Path.Combine(CacheDir, $"{biz}.img");
-        var urlFile = Path.Combine(CacheDir, $"{biz}.url");
 
         string? url = null;
         try
         {
-            url = await FetchBackgroundUrlAsync(biz).ConfigureAwait(false);
+            url = await GetBackgroundUrlAsync(biz).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {
@@ -65,26 +88,47 @@ public sealed class GameBackgroundService
 
         if (!string.IsNullOrWhiteSpace(url))
         {
-            var cached = File.Exists(urlFile) ? await File.ReadAllTextAsync(urlFile).ConfigureAwait(false) : null;
-            if (cached == url && File.Exists(imageFile))
-            {
-                return imageFile;
-            }
-
+            var name = $"{biz}-{Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(
+                System.Text.Encoding.UTF8.GetBytes(url)))[..12].ToLowerInvariant()}.img";
+            var imageFile = Path.Combine(CacheDir, name);
             try
             {
-                var bytes = await Http.GetByteArrayAsync(url).ConfigureAwait(false);
-                await File.WriteAllBytesAsync(imageFile, bytes).ConfigureAwait(false);
-                await File.WriteAllTextAsync(urlFile, url).ConfigureAwait(false);
+                if (!File.Exists(imageFile))
+                {
+                    var bytes = await Http.GetByteArrayAsync(url).ConfigureAwait(false);
+                    await File.WriteAllBytesAsync(imageFile, bytes).ConfigureAwait(false);
+                }
+
+                await File.WriteAllTextAsync(PointerFile(biz), name).ConfigureAwait(false);
                 return imageFile;
             }
-            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
             {
                 // 下载失败回退旧缓存。
             }
         }
 
-        return File.Exists(imageFile) ? imageFile : null;
+        return GetCachedBackgroundPath(game);
+    }
+
+    /// <summary>官方背景图 URL，10 分钟内存缓存，避免每次切游戏都请求接口。</summary>
+    private static async Task<string?> GetBackgroundUrlAsync(string biz)
+    {
+        lock (UrlMemo)
+        {
+            if (UrlMemo.TryGetValue(biz, out var memo) && DateTime.UtcNow - memo.FetchedAt < UrlMemoTtl)
+            {
+                return memo.Url;
+            }
+        }
+
+        var url = await FetchBackgroundUrlAsync(biz).ConfigureAwait(false);
+        lock (UrlMemo)
+        {
+            UrlMemo[biz] = (url, DateTime.UtcNow);
+        }
+
+        return url;
     }
 
     /// <summary>返回游戏图标（getGames → display.icon）本地路径；失败返回 null。</summary>

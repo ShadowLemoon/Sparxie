@@ -5,9 +5,7 @@ internal static class DesktopLog
 {
     private static readonly object Gate = new();
 
-    public static string Path => System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Sparxie", "desktop.log");
+    public static string Path => System.IO.Path.Combine(AppPaths.LogsDirectory, "desktop.log");
 
     public static void Write(string message)
     {

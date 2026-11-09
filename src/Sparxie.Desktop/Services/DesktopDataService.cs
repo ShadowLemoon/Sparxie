@@ -12,9 +12,9 @@ public sealed class DesktopDataService
 
     public DesktopDataService(string? configPath = null, string? preferencesPath = null)
     {
-        _configStore = new AppConfigStore(configPath ?? Path.Combine(AppContext.BaseDirectory, "config.json"));
+        _configStore = new AppConfigStore(configPath ?? Path.Combine(AppDataDirectory.Resolve(), "config.json"));
         _preferencesStore = new DesktopPreferencesStore(
-            preferencesPath ?? Path.Combine(AppContext.BaseDirectory, "desktop.json"));
+            preferencesPath ?? Path.Combine(AppDataDirectory.Resolve(), "desktop.json"));
     }
 
     public AppConfig Config { get; private set; } = new();
