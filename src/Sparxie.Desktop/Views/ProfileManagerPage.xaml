@@ -66,20 +66,34 @@
                     <DataTemplate x:DataType="vm:ProfileEditorViewModel">
                         <StackPanel Orientation="Horizontal" Spacing="6" Margin="8,0" VerticalAlignment="Center">
                             <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}" VerticalAlignment="Center" />
-                            <Ellipse Width="6" Height="6" Fill="{ThemeResource AccentFillColorDefaultBrush}"
-                                     VerticalAlignment="Center"
-                                     Visibility="{x:Bind IsDirty, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                         </StackPanel>
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
-            <Button Grid.Column="2" MinHeight="48" Padding="16,0" Click="AddProfileClick"
-                    AutomationProperties.Name="添加配置" ToolTipService.ToolTip="为这个游戏添加另一套配置（如其他服务器）">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <FontIcon Glyph="&#xE710;" FontSize="14" />
-                    <TextBlock Text="添加配置" />
-                </StackPanel>
-            </Button>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <Button MinHeight="48" Padding="16,0" Click="AddProfileClick"
+                        AutomationProperties.Name="添加配置" ToolTipService.ToolTip="为这个游戏添加另一套配置（如其他服务器）">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE710;" FontSize="14" />
+                        <TextBlock Text="添加配置" />
+                    </StackPanel>
+                </Button>
+                <!-- 更多：删除放在这里，只有存在多套配置时才出现，避免误触也不占表单位置。 -->
+                <Button Width="48" Height="48" Padding="0"
+                        AutomationProperties.Name="更多" ToolTipService.ToolTip="更多"
+                        Visibility="{Binding Profiles.HasMultiple, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <FontIcon Glyph="&#xE712;" FontSize="16" />
+                    <Button.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                            <MenuFlyoutItem Text="删除当前配置" Click="DeleteProfileClick">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE74D;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+            </StackPanel>
         </Grid>
 
         <!-- 内容面板：全程 Stretch，两栏固定 380 | *，宽度只由窗口决定。操作条叠在底部，不占行。 -->
@@ -129,8 +143,6 @@
                                                 </DataTemplate>
                                             </ComboBox.ItemTemplate>
                                         </ComboBox>
-                                        <HyperlinkButton Content="删除此配置" MinHeight="48" Padding="0" Click="DeleteProfileClick"
-                                                         Visibility="{Binding DataContext.Profiles.ShowProfileName, ElementName=ProfileRoot, Converter={StaticResource BoolToVisibilityConverter}}" />
                                     </StackPanel>
                                 </Border>
 
@@ -260,35 +272,16 @@
                                         <FontIcon Glyph="&#xE8B7;" FontSize="16" />
                                     </Button>
                                 </Grid>
-                                <HyperlinkButton Content="删除此配置" MinHeight="48" Padding="0" Click="DeleteProfileClick"
-                                                 Visibility="{Binding DataContext.Profiles.ShowProfileName, ElementName=ProfileRoot, Converter={StaticResource BoolToVisibilityConverter}}" />
                             </StackPanel>
                         </Border>
                     </Grid>
                     </ScrollViewer>
 
-                    <!-- 吸底操作条：仅在有未保存修改或有状态消息时出现，平时页面上没有保存按钮。 -->
-                    <Border VerticalAlignment="Bottom" Margin="12" Padding="20,10"
-                            CornerRadius="{StaticResource CardRadius}"
-                            Background="#F21C1F24" BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1"
-                            Visibility="{Binding Profiles.ShowActionBar, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <Grid ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                                       Text="{Binding Profiles.ActionBarMessage}" />
-                            <Button Grid.Column="1" Content="放弃" MinWidth="96" MinHeight="48"
-                                    Command="{Binding Profiles.DiscardCommand}"
-                                    Visibility="{Binding Profiles.HasPendingChanges, Converter={StaticResource BoolToVisibilityConverter}}" />
-                            <Button Grid.Column="2" Content="保存" MinWidth="120" MinHeight="48"
-                                    Style="{StaticResource AccentButtonStyle}"
-                                    Command="{Binding Profiles.SaveCommand}"
-                                    Visibility="{Binding Profiles.HasPendingChanges, Converter={StaticResource BoolToVisibilityConverter}}" />
-                        </Grid>
-                    </Border>
+                    <!-- 自动保存失败等提示：平时不出现，只在有状态消息时吸底显示。 -->
+                    <InfoBar VerticalAlignment="Bottom" Margin="12" IsClosable="False"
+                             IsOpen="{Binding Profiles.HasStatus}"
+                             Severity="{Binding Profiles.StatusSeverity}"
+                             Message="{Binding Profiles.StatusMessage}" />
                 </Grid>
             </Border>
         </Grid>

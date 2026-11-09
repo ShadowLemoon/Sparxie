@@ -1,7 +1,7 @@
 namespace Sparxie.Desktop.Services;
 
 /// <summary>
-/// 桌面端数据根目录：与 config.json / desktop.json 一样放在程序目录（便携），不写 AppData。
+/// 桌面端数据根目录：与 config.json 一样放在程序目录（便携），不写 AppData。
 /// 仅当程序目录不可写（例如装在 Program Files 下）时才回退到 %LOCALAPPDATA%\Sparxie。
 /// </summary>
 internal static class AppPaths

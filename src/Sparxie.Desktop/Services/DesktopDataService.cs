@@ -4,26 +4,22 @@ using Sparxie.LauncherCore;
 
 namespace Sparxie.Desktop.Services;
 
-/// <summary>Desktop facade over the same config/profile domain used by the CLI.</summary>
+/// <summary>Desktop facade over the config/profile domain (config.json, including the desktop preferences section).</summary>
 public sealed class DesktopDataService
 {
     private readonly AppConfigStore _configStore;
-    private readonly DesktopPreferencesStore _preferencesStore;
 
-    public DesktopDataService(string? configPath = null, string? preferencesPath = null)
+    public DesktopDataService(string? configPath = null)
     {
         _configStore = new AppConfigStore(configPath ?? Path.Combine(AppDataDirectory.Resolve(), "config.json"));
-        _preferencesStore = new DesktopPreferencesStore(
-            preferencesPath ?? Path.Combine(AppDataDirectory.Resolve(), "desktop.json"));
     }
 
     public AppConfig Config { get; private set; } = new();
 
-    public DesktopPreferences Preferences { get; private set; } = new();
+    /// <summary>界面偏好，存放在 config.json 的 desktop 段。</summary>
+    public DesktopSettings Preferences => Config.Desktop ??= new DesktopSettings();
 
     public string ConfigPath => _configStore.ConfigPath;
-
-    public string PreferencesPath => _preferencesStore.Path;
 
     public void Load()
     {
@@ -34,7 +30,6 @@ public sealed class DesktopDataService
         }
 
         Config = result.Config;
-        Preferences = _preferencesStore.Load();
     }
 
     public GameProfile? TryGetSelectedProfile()
@@ -96,5 +91,5 @@ public sealed class DesktopDataService
 
     public void SaveConfig() => _configStore.Save(Config);
 
-    public void SavePreferences() => _preferencesStore.Save(Preferences);
+    public void SavePreferences() => SaveConfig();
 }

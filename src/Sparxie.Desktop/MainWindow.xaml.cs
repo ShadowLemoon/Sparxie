@@ -300,6 +300,7 @@ public sealed partial class MainWindow : Window
 
     private async void OnClosed(object sender, WindowEventArgs args)
     {
+        _viewModel.Profiles.Flush();
         _tray?.Dispose();
         await _launcher.DisposeAsync();
     }
@@ -372,6 +373,7 @@ public sealed partial class MainWindow : Window
     private void ExitApplication()
     {
         _forceClose = true;
+        _viewModel.Profiles.Flush();
         _tray?.Dispose();
         _tray = null;
         Close();

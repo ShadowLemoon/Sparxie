@@ -41,6 +41,25 @@ public class AppConfigStoreTests : IDisposable
     }
 
     [Fact]
+    public void 桌面偏好随config一并保存且缺省时为空()
+    {
+        var store = new AppConfigStore(ConfigPath);
+        var created = store.Load().Config;
+        Assert.Null(created.Desktop);
+        Assert.DoesNotContain("desktop", File.ReadAllText(ConfigPath));
+
+        created.Desktop = new DesktopSettings { CloseAction = "Tray", DebugMode = true, SelectedGame = "Genshin" };
+        created.Desktop.LastProfileByGame["Genshin"] = "genshin-cn";
+        store.Save(created);
+
+        var reloaded = new AppConfigStore(ConfigPath).Load().Config.Desktop;
+        Assert.NotNull(reloaded);
+        Assert.Equal("Tray", reloaded.CloseAction);
+        Assert.True(reloaded.DebugMode);
+        Assert.Equal("genshin-cn", reloaded.LastProfileByGame["Genshin"]);
+    }
+
+    [Fact]
     public void 含空路径占位Profile的配置可保存并重新读取()
     {
         var store = new AppConfigStore(ConfigPath);

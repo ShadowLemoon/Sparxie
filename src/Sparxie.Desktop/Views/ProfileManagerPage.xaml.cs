@@ -21,21 +21,18 @@ public sealed partial class ProfileManagerPage : Page
             return;
         }
 
-        if (!selected.IsNew)
+        var dialog = new ContentDialog
         {
-            var dialog = new ContentDialog
-            {
-                XamlRoot = XamlRoot,
-                Title = "删除此配置？",
-                Content = $"将删除“{selected.DisplayName}”，此操作不可撤销。",
-                PrimaryButtonText = "删除",
-                CloseButtonText = "取消",
-                DefaultButton = ContentDialogButton.Close,
-            };
-            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
-            {
-                return;
-            }
+            XamlRoot = XamlRoot,
+            Title = "删除此配置？",
+            Content = $"将删除“{selected.DisplayName}”，此操作不可撤销。",
+            PrimaryButtonText = "删除",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Close,
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
         }
 
         profiles.DeleteCommand.Execute(null);

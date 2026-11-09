@@ -62,7 +62,7 @@ public sealed class SettingsViewModel : ObservableObject
         try
         {
             _data.Preferences.CloseAction = ((CloseBehavior)_closeBehaviorIndex).ToString();
-            _data.Preferences.ConfirmBeforeExit = (CloseBehavior)_closeBehaviorIndex == CloseBehavior.Ask;
+            
             _data.Preferences.DebugMode = _debugMode;
             _data.SavePreferences();
             Saved?.Invoke();
