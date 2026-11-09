@@ -96,3 +96,15 @@ git subtree add --squash --prefix=native/HoyoTouchCore/upstream \
 - 上游 `main.cpp` 的入口流程、扫描特征与载荷字段随游戏更新变化；
 - 需要时先评估能否在 adapter 内实现，再考虑最小 upstream 补丁；
 - 每次上游更新必须跑：构建、离线测试、实机回归（原神国服/国际服、星铁国服/国际服）。
+
+### 触屏载荷补齐（2026-11-09，bootstrap 内）
+
+首版 `sparxie_hoyo_bootstrap` 只复制了 FPS 与 `verfiy` 扫描，漏掉了 main() 里的“Mobile UI”部分，
+结果会话能进入 Running 但游戏内没有触屏载荷。现补齐（均位于 bootstrap 内，不动 main() 其余部分）：
+
+- `Use_mobile_UI` 对原神、星铁都置 1（触屏是 Sparxie 的必选能力）；
+- 原神：在 il2cpp 扫描成功后，按 main() 的 `if (Use_mobile_UI)` 段扫描并填充
+  `GI_Func`（Grph_class / Grph_UIcl_VA / Func_gui_set / Func_input_set / Grph_inputcl_VA /
+  Func_getDPI / UI_unhook_time）；任一特征过期（`Use_mobile_UI` 被清零）即整次失败（返回 5）；
+- 星铁：挂起进程阶段调用 `Hksr_ENmobile_get_Ptr` 取 `injectarg.Bootui`，取不到即整次失败（返回 5）；
+- 去掉原段里的 `wprintf_s`（DLL 宿主没有控制台）。

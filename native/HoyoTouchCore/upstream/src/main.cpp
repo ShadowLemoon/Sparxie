@@ -2579,7 +2579,7 @@ static int __stdcall sparxie_hoyo_bootstrap_impl(
         ? (float)(genshin_touch_ui_scale_percent >= 100 && genshin_touch_ui_scale_percent <= 500
             ? genshin_touch_ui_scale_percent : 400) / 100.0f * 96.0f / 96.0f
         : 0.0f;
-    Use_mobile_UI = isGenshin ? 1 : 0;
+    Use_mobile_UI = 1; // Sparxie：触屏是必选能力，原神/星铁都要安装触屏载荷
     isHook = 1;
     PowerSave_target = (uint32_t)(background_fps >= 10 && background_fps <= 1000 ? background_fps : 10);
     is_old_version = 0;
@@ -2636,6 +2636,17 @@ static int __stdcall sparxie_hoyo_bootstrap_impl(
 
     inject_arg injectarg = { 0 };
     Hook_func_list GI_Func = { 0 };
+    if (isGenshin == 0)
+    {
+        injectarg.Bootui = Hksr_ENmobile_get_Ptr(pi->hProcess, processDir.c_str());
+        if (!injectarg.Bootui)
+        {
+            TerminateProcess_Internal(pi->hProcess, 0);
+            CloseHandle_Internal(pi->hProcess);
+            free(boot_info);
+            return 5; // HOYO_ERR_SCAN_FAILED（StarRail 触屏入口扫描失败）
+        }
+    }
     LPVOID _imgbase_PE_buffer = 0;
     LPVOID Text_Remote_RVA = 0;
     LPVOID Unityplayer_baseAddr = 0;
@@ -2823,6 +2834,95 @@ static int __stdcall sparxie_hoyo_bootstrap_impl(
 
                 if (injectarg.verfiy)
                 {
+        if (Use_mobile_UI)
+        {
+            address = (int64_t)PatternScan_Region(Copy_Text_VA, Text_Vsize, "48 8B 05 ?? ?? ?? ?? 48 8B 88 ?? ?? ?? ?? 48 85 C9 0F ?? ?? ?? ?? ?? BA 02 00 00 00 41 B0 01 E8 ?? ?? ?? ?? 48 89 F9 BA 03 00 00 00 45 31 C0 E8");
+            if (address)
+            {
+                int64_t rip = (int64_t)address;
+                rip += 0x3;
+                rip += *(int32_t*)(rip)+4;
+                GI_Func.Grph_class = rip - (uintptr_t)Copy_Text_VA + (uintptr_t)Text_Remote_RVA;
+                rip = (int64_t)address + 0xA;
+                GI_Func.Grph_UIcl_VA = *(int32_t*)(rip);
+                rip = (int64_t)address + 0x20;
+                rip += *(int32_t*)(rip)+4;
+                GI_Func.Func_gui_set = rip - (uintptr_t)Copy_Text_VA + (uintptr_t)Text_Remote_RVA;
+                rip = (int64_t)address + 0x30;
+                rip += *(int32_t*)(rip)+4;
+                GI_Func.Func_input_set = rip - (uintptr_t)Copy_Text_VA + (uintptr_t)Text_Remote_RVA;
+            }
+            else if (address = (int64_t)PatternScan_Region(Copy_Text_VA, Text_Vsize, "48 8B 05 ?? ?? ?? ?? 48 8B 88 ?? ?? ?? ?? 48 85 C9 0F ?? ?? ?? ?? ?? BA 02 00 00 00 E8 ?? ?? ?? ?? 48 89 F9 BA 03 00 00 00 E8"))
+            {
+                int64_t rip = (int64_t)address;
+                rip += 0x3;
+                rip += *(int32_t*)(rip)+4;
+                GI_Func.Grph_class = rip - (uintptr_t)Copy_Text_VA + (uintptr_t)Text_Remote_RVA;
+                rip = (int64_t)address + 0xA;
+                GI_Func.Grph_UIcl_VA = *(int32_t*)(rip);
+                rip = (int64_t)address + 0x1D;
+                rip += *(int32_t*)(rip)+4;
+                GI_Func.Func_gui_set = rip - (uintptr_t)Copy_Text_VA + (uintptr_t)Text_Remote_RVA;
+                rip = (int64_t)address + 0x2A;
+                rip += *(int32_t*)(rip)+4;
+				GI_Func.Func_input_set = rip - (uintptr_t)Copy_Text_VA + (uintptr_t)Text_Remote_RVA;
+            }
+            else
+            {
+                Use_mobile_UI = 0;
+            }
+            address = (int64_t)PatternScan_Region(Copy_Text_VA, Text_Vsize, "48 8B 05 ?? ?? ?? ?? 0F 85 ?? ?? ?? ?? 48 8B B8 ?? ?? ?? ?? 48 85 FF 0F 84 ?? ?? ?? ?? 83 BF ?? ?? ?? ?? 03");
+            if (address)
+            {
+                int64_t rip = address;
+                rip += 0x10;
+                GI_Func.Grph_inputcl_VA = *(int32_t*)(rip);
+            }
+            else
+            {
+                Use_mobile_UI = 0;
+			}
+
+            if (Custom_DPI_Scale)
+            {
+                address = (int64_t)PatternScan_Region(Copy_Text_VA, Text_Vsize, "0F 14 F8 E8 ?? ?? ?? ?? 0F 14 F0 0F 59 F7");
+                if (address)
+                {
+                    int64_t rip = (int64_t)address;
+                    rip += 0x4;
+                    rip += *(int32_t*)(rip)+4;
+                    GI_Func.Func_getDPI = rip - (uintptr_t)Copy_Text_VA + (uintptr_t)Text_Remote_RVA;
+                }
+                else
+                {
+                    Show_Error_Msg(L"Get DPI_Scale Fail !");
+                }
+            }
+
+            //Unhook_hook
+            //old 48 89 F1 E8 ?? ?? ?? ?? 48 89 D9 E8 ?? ?? ?? ?? 80 3D ?? ?? ?? ?? 00 0F 85 ?? ?? ?? ?? 48 8B 0D ?? ?? ?? ?? 80 B9 ?? ?? ?? ?? 00
+            address = (int64_t)PatternScan_Region(Copy_Text_VA, Text_Vsize, "E8 ?? ?? ?? ?? 48 89 D9 E8 ?? ?? ?? ?? 80 3D ?? ?? ?? ?? 00 0F 85 ?? ?? ?? ?? 48 8B 0D");
+            if (address)
+            {
+                int64_t rip = address;
+                rip += 0x9;
+                rip += *(int32_t*)(rip)+4;
+                GI_Func.UI_unhook_time = rip - (int64_t)Copy_Text_VA + (int64_t)Text_Remote_RVA;
+            }
+            else
+            {
+                Use_mobile_UI = 0;
+            }
+        }
+                    if (!Use_mobile_UI)
+                    {
+                        TerminateProcess_Internal(pi->hProcess, 0);
+                        CloseHandle_Internal(pi->hProcess);
+                        VirtualFree_Internal(_imgbase_PE_buffer, 0, MEM_RELEASE);
+                        VirtualFree_Internal(Copy_Text_VA, 0, MEM_RELEASE);
+                        free(boot_info);
+                        return 5; // HOYO_ERR_SCAN_FAILED（Genshin 触屏特征过期）
+                    }
                     injectarg.PfuncList = &GI_Func;
                 }
             }
