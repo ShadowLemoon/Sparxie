@@ -27,7 +27,7 @@ public sealed class LauncherProcessIntegrationTests
                     WorkingDirectory = startInfo.WorkingDirectory,
                     CreateNoWindow = true,
                 };
-                var pipeName = startInfo.Arguments["--pipe-name=".Length..];
+                var pipeName = startInfo.Arguments["--pipe-name=".Length..].Split(' ')[0];
                 nonElevated.Environment["SPARXIE_PIPE_NAME"] = pipeName;
                 nonElevated.Environment["SPARXIE_SESSIONHOST_EXE"] = sessionHostExe;
                 brokerProcess = Process.Start(nonElevated);

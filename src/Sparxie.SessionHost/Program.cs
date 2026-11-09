@@ -42,7 +42,7 @@ TaskScheduler.UnobservedTaskException += (_, e) =>
 var builder = WebApplication.CreateBuilder();
 
 // 结构化滚动日志：logs/host-*.log，保留 7 天
-builder.Logging.AddRollingFile(AppContext.BaseDirectory, "host");
+builder.Logging.AddRollingFile(Sparxie.Infrastructure.Configuration.AppDataDirectory.Resolve(), "host");
 
 // Host 是单会话进程：会话结束（Exited/Failed）后立即退出，
 // 不等待 gRPC 连接优雅关闭的默认 30 秒超时。

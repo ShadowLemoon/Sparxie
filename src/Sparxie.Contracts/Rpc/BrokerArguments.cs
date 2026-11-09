@@ -16,6 +16,45 @@ public static class BrokerProcessArguments
         return PipeNameOption + pipeName;
     }
 
+    public const string ParentPidOption = "--parent-pid=";
+
+    /// <summary>管道名之后追加父进程 PID：Broker 据此随启动它的主程序一起退出（生命周期绑定）。</summary>
+    public static string Build(string pipeName, int parentProcessId)
+    {
+        if (parentProcessId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(parentProcessId));
+        }
+
+        return Build(pipeName) + " " + ParentPidOption + parentProcessId;
+    }
+
+    /// <summary>解析 <c>--pipe-name=&lt;name&gt; [--parent-pid=&lt;pid&gt;]</c>；父 PID 可选。</summary>
+    public static bool TryParse(
+        IReadOnlyList<string> args,
+        out string? pipeName,
+        out int? parentProcessId,
+        out string error)
+    {
+        parentProcessId = null;
+        if (args.Count == 2)
+        {
+            if (!args[1].StartsWith(ParentPidOption, StringComparison.Ordinal)
+                || !int.TryParse(args[1][ParentPidOption.Length..], out var pid)
+                || pid <= 0)
+            {
+                pipeName = null;
+                error = "Broker 只接受 --parent-pid=<正整数> 作为第二个参数";
+                return false;
+            }
+
+            parentProcessId = pid;
+            return TryParse([args[0]], out pipeName, out error);
+        }
+
+        return TryParse(args, out pipeName, out error);
+    }
+
     public static bool TryParse(
         IReadOnlyList<string> args,
         out string? pipeName,

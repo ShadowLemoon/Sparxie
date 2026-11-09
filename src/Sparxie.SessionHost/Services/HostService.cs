@@ -1,6 +1,7 @@
 using System.Threading.Channels;
 using Grpc.Core;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Sparxie.Contracts.Rpc;
 using Sparxie.SessionHost.Hosting;
 using Sparxie.SessionHost.Sessions;
@@ -15,10 +16,12 @@ namespace Sparxie.SessionHost.Services;
 public sealed class HostService : SparxieHost.SparxieHostBase
 {
     private readonly IHostApplicationLifetime _lifetime;
+    private readonly Microsoft.Extensions.Logging.ILogger<HostService> _logger;
 
-    public HostService(IHostApplicationLifetime lifetime)
+    public HostService(IHostApplicationLifetime lifetime, Microsoft.Extensions.Logging.ILogger<HostService> logger)
     {
         _lifetime = lifetime;
+        _logger = logger;
     }
 
     public override async Task Connect(
@@ -30,7 +33,13 @@ public sealed class HostService : SparxieHost.SparxieHostBase
         var events = Channel.CreateUnbounded<HostEvent>();
 
         using var controller = CreateController(options);
-        await using var session = new GameSession(options, controller, ev => events.Writer.WriteAsync(ev).AsTask());
+        await using var session = new GameSession(options, controller, ev =>
+        {
+            // 把阶段/状态/错误码/消息写进 host 日志：注入在哪一步失败，不再只能靠界面上看。
+            _logger.LogInformation("会话事件 session={SessionId} state={State} stage={Stage} error={ErrorCode} message={Message}",
+                ev.SessionId, ev.State, ev.Stage, ev.ErrorCode, ev.Message);
+            return events.Writer.WriteAsync(ev).AsTask();
+        });
         var reportTask = Task.Run(async () =>
         {
             try

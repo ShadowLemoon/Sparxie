@@ -21,4 +21,25 @@ public sealed class BrokerArgumentsTests
         Assert.False(BrokerProcessArguments.TryParse(["--pipe-name=a/b"], out _, out _));
         Assert.False(BrokerProcessArguments.TryParse([], out _, out _));
     }
+
+    [Fact]
+    public void 可选的父进程PID随管道名一起往返()
+    {
+        var arguments = BrokerProcessArguments.Build("sparxie-test-123", 4321).Split(' ');
+
+        Assert.True(BrokerProcessArguments.TryParse(arguments, out var pipeName, out var parentPid, out var error));
+        Assert.Equal("sparxie-test-123", pipeName);
+        Assert.Equal(4321, parentPid);
+        Assert.Equal(string.Empty, error);
+    }
+
+    [Fact]
+    public void 没有父进程PID时仍然合法_且拒绝非法PID()
+    {
+        Assert.True(BrokerProcessArguments.TryParse(["--pipe-name=sparxie-test-123"], out _, out var parentPid, out _));
+        Assert.Null(parentPid);
+        Assert.False(BrokerProcessArguments.TryParse(["--pipe-name=sparxie-test-123", "--parent-pid=0"], out _, out _, out _));
+        Assert.False(BrokerProcessArguments.TryParse(["--pipe-name=sparxie-test-123", "--parent-pid=abc"], out _, out _, out _));
+        Assert.False(BrokerProcessArguments.TryParse(["--pipe-name=sparxie-test-123", "--other=1"], out _, out _, out _));
+    }
 }

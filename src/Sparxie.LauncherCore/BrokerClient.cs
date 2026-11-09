@@ -15,6 +15,9 @@ public sealed class BrokerClientOptions
 
     public TimeSpan RetryDelay { get; init; } = TimeSpan.FromMilliseconds(250);
 
+    /// <summary>连接失败的原始异常默认被吞掉（只会得到“无法在限定时间内连接”）；宿主可注入此回调把它们记到日志里便于排障。</summary>
+    public Action<string, Exception?>? Diagnostics { get; init; }
+
     /// <summary>生产使用 Process.Start；测试可注入启动行为以验证 UAC 启动参数。</summary>
     public Func<ProcessStartInfo, Process?> ProcessStarter { get; init; } =
         static startInfo => Process.Start(startInfo);
@@ -201,8 +204,9 @@ public class BrokerClient : IAsyncDisposable
         {
             throw;
         }
-        catch
+        catch (Exception ex)
         {
+            _options.Diagnostics?.Invoke($"连接 Broker 管道失败（{_pipeName}）", ex);
             channel?.Dispose();
             return false;
         }
@@ -224,7 +228,8 @@ public class BrokerClient : IAsyncDisposable
             FileName = brokerExe,
             UseShellExecute = true,
             Verb = "runas",
-            Arguments = BrokerProcessArguments.Build(_pipeName),
+            Arguments = BrokerProcessArguments.Build(_pipeName, Environment.ProcessId),
+            WindowStyle = ProcessWindowStyle.Hidden,
             WorkingDirectory = Path.GetDirectoryName(brokerExe) ?? AppContext.BaseDirectory,
         };
 

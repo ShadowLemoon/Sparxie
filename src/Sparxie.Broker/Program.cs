@@ -9,15 +9,15 @@ using Sparxie.Broker.Services;
 using Sparxie.Broker.Sessions;
 using Sparxie.Contracts.Rpc;
 using Sparxie.Infrastructure.Logging;
-using Sparxie.Infrastructure.Zzz;
 
 string? pipeName;
+int? parentProcessId = null;
 if (args.Length == 0)
 {
     // 仅供非提权测试/调试进程使用；生产 Launcher 通过受控命令行参数传递。
     pipeName = Environment.GetEnvironmentVariable("SPARXIE_PIPE_NAME");
 }
-else if (!BrokerProcessArguments.TryParse(args, out pipeName, out var argumentError))
+else if (!BrokerProcessArguments.TryParse(args, out pipeName, out parentProcessId, out var argumentError))
 {
     Console.Error.WriteLine(argumentError);
     return 2;
@@ -32,9 +32,26 @@ if (string.IsNullOrWhiteSpace(pipeName))
 var builder = WebApplication.CreateBuilder();
 
 // 结构化滚动日志：logs/broker-*.log，保留 7 天
-builder.Logging.AddRollingFile(AppContext.BaseDirectory, "broker");
+builder.Logging.AddRollingFile(Sparxie.Infrastructure.Configuration.AppDataDirectory.Resolve(), "broker");
 
-// Kestrel 命名管道默认带 PipeOptions.CurrentUserOnly：仅当前用户 SID 可连接。
+// Kestrel 命名管道默认 CurrentUserOnly 使用的是令牌的 Owner SID。提权（UAC）后的管理员令牌 Owner 是
+// BUILTIN\Administrators，而非提权前的普通令牌里该组仅为 deny-only，于是同一用户的非提权 Launcher/桌面端
+// 会被拒绝连接（表现为 Broker 空等 10 秒后因无控制流而退出）。这里改为显式 ACL：只允许当前用户 SID。
+builder.WebHost.UseNamedPipes(options =>
+{
+    options.CurrentUserOnly = false;
+    {
+        var user = System.Security.Principal.WindowsIdentity.GetCurrent().User
+            ?? throw new InvalidOperationException("无法取得当前用户 SID");
+        var security = new System.IO.Pipes.PipeSecurity();
+        security.AddAccessRule(new System.IO.Pipes.PipeAccessRule(
+            user,
+            System.IO.Pipes.PipeAccessRights.FullControl,
+            System.Security.AccessControl.AccessControlType.Allow));
+        options.PipeSecurity = security;
+    }
+});
+
 builder.WebHost.ConfigureKestrel(serverOptions =>
 {
     serverOptions.ListenNamedPipe(pipeName, listenOptions =>
@@ -71,24 +88,31 @@ app.Lifetime.ApplicationStarted.Register(() =>
     });
 });
 
-// 双重故障兜底：上次 Broker 与 Host 同时不可用时遗留的 ZZZ 恢复记录，
-// 在本次 Broker 启动时先恢复 PC 配置。恢复失败时保留资产并阻止后续 ZZZ 会话。
-using (var scope = app.Services.CreateScope())
+// 生命周期绑定（后台 RPC 进程）：由主程序传入其 PID，主程序一退出 Broker 就跟着退出，
+// 不留下隐藏的提权后台进程。已进入 Running 的游戏进程不受影响（Host 与游戏的关系不变）。
+if (parentProcessId is { } parentPid)
 {
-    var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("ZzzRecoveryBootstrap");
-    foreach (var record in ZzzRecoveryStore.FindAll())
+    app.Lifetime.ApplicationStarted.Register(() =>
     {
-        try
+        _ = Task.Run(async () =>
         {
-            ZzzRecoveryStore.Restore(record);
-            logger.LogInformation("启动时已恢复遗留 ZZZ 配置: session={SessionId}", record.SessionId);
-        }
-        catch (Exception ex)
-        {
-            // 游戏仍运行、备份损坏或路径越界：保留资产，由 ZZZ 启动前校验再次阻止。
-            logger.LogError(ex, "启动时恢复遗留 ZZZ 配置失败: session={SessionId}", record.SessionId);
-        }
-    }
+            try
+            {
+                using var parent = System.Diagnostics.Process.GetProcessById(parentPid);
+                await parent.WaitForExitAsync(app.Lifetime.ApplicationStopping).ConfigureAwait(false);
+            }
+            catch (ArgumentException)
+            {
+                // 父进程已经不存在：立即退出。
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            app.Lifetime.StopApplication();
+        });
+    });
 }
 
 await app.RunAsync();
