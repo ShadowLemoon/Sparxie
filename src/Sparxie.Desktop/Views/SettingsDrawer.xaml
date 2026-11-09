@@ -1,0 +1,49 @@
+<UserControl
+    x:Class="Sparxie.Desktop.Views.SettingsDrawer"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Width="480" CornerRadius="16,0,0,16"
+            Background="#B3111315"
+            BorderBrush="#40FFFFFF" BorderThickness="1,0,0,0">
+        <Grid Padding="28">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Spacing="4">
+                    <TextBlock Text="应用设置" FontSize="28" FontWeight="SemiBold" />
+                    <TextBlock Text="只包含桌面端偏好" Opacity="0.65" />
+                </StackPanel>
+                <Button Grid.Column="1" Width="48" Height="48" Command="{Binding CloseSettingsCommand}"
+                        ToolTipService.ToolTip="关闭" AutomationProperties.Name="关闭设置">
+                    <FontIcon Glyph="&#xE711;" />
+                </Button>
+            </Grid>
+
+            <ScrollViewer Grid.Row="1" Margin="0,28,0,20">
+                <StackPanel Spacing="20">
+                    <ToggleSwitch Header="退出前确认" IsOn="{Binding Settings.ConfirmBeforeExit, Mode=TwoWay}" />
+
+                    <StackPanel Spacing="4" Margin="0,12,0,0">
+                        <TextBlock Text="数据文件" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="游戏与 Profile 配置仍由 config.json 保存；桌面偏好单独保存在 desktop.json。"
+                                   TextWrapping="Wrap" Opacity="0.68" />
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+
+            <StackPanel Grid.Row="2" Spacing="10">
+                <TextBlock Text="{Binding Settings.StatusMessage}" Opacity="0.72" TextWrapping="Wrap" />
+                <Button Content="保存应用设置" Command="{Binding Settings.SaveCommand}"
+                        HorizontalAlignment="Stretch" MinHeight="52" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

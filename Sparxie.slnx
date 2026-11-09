@@ -11,6 +11,7 @@
     <Project Path="src/Sparxie.Launcher/Sparxie.Launcher.csproj" />
     <Project Path="src/Sparxie.LauncherCore/Sparxie.LauncherCore.csproj" />
     <Project Path="src/Sparxie.SessionHost/Sparxie.SessionHost.csproj" />
+    <Project Path="src/Sparxie.Desktop/Sparxie.Desktop.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Broker.Tests/Broker.Tests.csproj" />
