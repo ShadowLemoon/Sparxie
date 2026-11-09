@@ -31,12 +31,12 @@ public static class ProfileManager
             Id = id,
             DisplayName = RequireText(mutation.DisplayName, "Profile 名称"),
             Game = game,
-            ExecutablePath = NormalizeExecutablePath(game, mutation.ExecutablePath),
+            ExecutablePath = NormalizeOptionalExecutablePath(game, mutation.ExecutablePath),
             Hoyo = game == GameType.ZenlessZoneZero ? null : new HoyoProfileSettings(),
         };
 
         ApplySettings(profile, mutation);
-        ValidateCompleteProfile(profile);
+        ValidateProfile(profile);
 
         config.Profiles.Add(profile);
         if (config.Profiles.Count == 1)
@@ -65,13 +65,27 @@ public static class ProfileManager
             updated.DisplayName = RequireText(mutation.DisplayName, "Profile 名称");
         }
 
-        if (mutation.ExecutablePath is not null)
+        // 改游戏类型必须先落到 updated.Game，后续路径归一化与设置校验才按新游戏的规则执行。
+        if (mutation.Game is { } game && game != updated.Game)
+        {
+            updated.Game = game;
+            updated.Hoyo = game == GameType.ZenlessZoneZero ? null : updated.Hoyo ?? new HoyoProfileSettings();
+
+            // 原路径属于旧游戏白名单，换游戏后必然非法；调用方未同时给出新路径时清空回占位状态。
+            if (string.IsNullOrWhiteSpace(mutation.ExecutablePath))
+            {
+                updated.ExecutablePath = string.Empty;
+            }
+        }
+
+        // 空白路径表示「界面没填」，按不修改处理；域层只在收到实际路径时才归一化与校验。
+        if (!string.IsNullOrWhiteSpace(mutation.ExecutablePath))
         {
             updated.ExecutablePath = NormalizeExecutablePath(updated.Game, mutation.ExecutablePath);
         }
 
         ApplySettings(updated, mutation);
-        ValidateUpdatedProfile(updated);
+        ValidateProfile(updated);
 
         var index = config.Profiles.IndexOf(current);
         config.Profiles[index] = updated;
@@ -179,7 +193,11 @@ public static class ProfileManager
         }
     }
 
-    private static void ValidateCompleteProfile(GameProfile profile)
+    /// <summary>
+    /// 校验 Profile 是否满足配置契约。空 EXE 路径被视为「未完成配置」而放行，
+    /// 与 AppConfigValidator 口径一致；实际能否启动由会话边界判定。
+    /// </summary>
+    private static void ValidateProfile(GameProfile profile)
     {
         var errors = AppConfigValidator.Validate(new AppConfig { Profiles = [profile] });
         if (errors.Count > 0)
@@ -188,20 +206,20 @@ public static class ProfileManager
         }
     }
 
-    private static void ValidateUpdatedProfile(GameProfile profile)
+    /// <summary>空白输入表示「未填写路径」，保留占位状态；非空则强制完整路径与游戏白名单。</summary>
+    private static string NormalizeOptionalExecutablePath(GameType game, string? executablePath)
     {
-        // 历史空路径 Profile 仍可编辑非路径字段，兼容此前“先创建、后填路径”的配置契约；
-        // 一旦 CLI 传入 --exe，则 NormalizeExecutablePath 已强制完整路径和白名单。
-        var errors = AppConfigValidator.Validate(new AppConfig { Profiles = [profile] });
-        if (errors.Count > 0)
+        if (string.IsNullOrWhiteSpace(executablePath))
         {
-            throw Fail(string.Join("；", errors));
+            return string.Empty;
         }
+
+        return NormalizeExecutablePath(game, executablePath);
     }
 
-    private static string NormalizeExecutablePath(GameType game, string? executablePath)
+    private static string NormalizeExecutablePath(GameType game, string executablePath)
     {
-        var input = RequireText(executablePath, "EXE 路径");
+        var input = executablePath.Trim();
         if (!Path.IsPathFullyQualified(input))
         {
             throw Fail("EXE 路径必须是完整路径");

@@ -49,6 +49,7 @@ public sealed record ProfileMutation(
     public bool HasAnySettableField =>
         !string.IsNullOrWhiteSpace(DisplayName)
         || !string.IsNullOrWhiteSpace(ExecutablePath)
+        || Game.HasValue
         || HasHoyoSettings
         || HasGenshinSettings;
 }

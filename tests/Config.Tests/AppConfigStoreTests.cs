@@ -41,6 +41,43 @@ public class AppConfigStoreTests : IDisposable
     }
 
     [Fact]
+    public void 含空路径占位Profile的配置可保存并重新读取()
+    {
+        var store = new AppConfigStore(ConfigPath);
+        var config = new AppConfig
+        {
+            SelectedProfileId = "done",
+            Profiles =
+            [
+                new GameProfile
+                {
+                    Id = "done",
+                    DisplayName = "已完成",
+                    Game = GameType.Genshin,
+                    ExecutablePath = @"D:\Games\YuanShen.exe",
+                    Hoyo = new HoyoProfileSettings(),
+                },
+                new GameProfile
+                {
+                    Id = "placeholder",
+                    DisplayName = "待补全",
+                    Game = GameType.StarRail,
+                    ExecutablePath = string.Empty,
+                    Hoyo = new HoyoProfileSettings(),
+                },
+            ],
+        };
+
+        // 未完成配置不应阻断整份配置的保存，否则任何一次切换 Profile 都会失败。
+        store.Save(config);
+
+        var result = store.Load();
+        Assert.Equal(ConfigLoadState.Loaded, result.State);
+        Assert.Equal(2, result.Config.Profiles.Count);
+        Assert.Equal(string.Empty, result.Config.Profiles[1].ExecutablePath);
+    }
+
+    [Fact]
     public void 正常配置可读取()
     {
         var store = new AppConfigStore(ConfigPath);
