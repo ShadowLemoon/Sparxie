@@ -23,8 +23,12 @@ public sealed class ZzzGameController : IGameController
     private const int RetryDelayMs = 5_000;
 
     private readonly string _sessionId;
-    private bool _injected;
+    /// <summary>持钩线程等待游戏退出时检查停止信号的间隔（毫秒）。</summary>
+    private const uint HookPollMs = 500;
+
     private bool _released;
+    private Thread? _hookOwner;
+    private ManualResetEventSlim? _stopOwner;
 
     public ZzzGameController(string sessionId)
     {
@@ -57,24 +61,67 @@ public sealed class ZzzGameController : IGameController
         }
 
         var targetPid = (uint)gameProcess.Id;
+
+        // WH_GETMESSAGE Hook 归调用 SetWindowsHookEx 的线程所有，该线程退出时系统会自动卸载 Hook。
+        // 这里经过多次 await，当前线程是线程池线程，空闲后会被回收，Hook 随之消失，触控合成静默失效。
+        // 因此注入、等待游戏退出、释放都放在同一个专用线程上，和 ZZZTouchLauncher v2 的 Controller 一致。
+        var injectResult = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stop = new ManualResetEventSlim(false);
+        var owner = new Thread(() => HookOwnerLoop(targetPid, injectResult, stop))
+        {
+            IsBackground = true,
+            Name = "zzz-hook-owner",
+        };
+        _hookOwner = owner;
+        _stopOwner = stop;
+        owner.Start();
+
+        int result;
+        using (cancellationToken.Register(() => stop.Set()))
+        {
+            result = await injectResult.Task.ConfigureAwait(false);
+        }
+
+        if (result != 0)
+        {
+            // 失败时持有线程已释放 native 持有的 Hook/互斥，避免下次启动被“已有注入控制器”挡住。
+            owner.Join();
+            _hookOwner = null;
+            throw new InvalidOperationException($"ZZZ Runtime 注入失败: {DescribeInjectResult(result)}");
+        }
+
+    }
+
+    /// <summary>
+    /// 持钩专用线程：注入 → 阻塞到游戏退出（或收到停止信号）→ 释放，三步都在本线程上完成。
+    /// </summary>
+    private static void HookOwnerLoop(uint targetPid, TaskCompletionSource<int> injectResult, ManualResetEventSlim stop)
+    {
         var result = ZZZTouchInjectToProcess(targetPid, quiet: true, FirstWindowWaitMs);
-        if (result == 1)
+        if (result == 1 && !stop.IsSet)
         {
             // 仅“未找到主窗口”才重试；其他失败（安装失败/已有注入会话等）重试只会得到误导性的错误码。
             // 游戏有时会重新拉起一个进程，重试前按当前存活的游戏进程重新取 PID。
-            await Task.Delay(RetryDelayMs, cancellationToken).ConfigureAwait(false);
+            stop.Wait(RetryDelayMs);
             targetPid = FindRunningGamePid() ?? targetPid;
             result = ZZZTouchInjectToProcess(targetPid, quiet: true, RetryWindowWaitMs);
         }
 
         if (result != 0)
         {
-            // 失败时也要释放 native 持有的 Hook/互斥，避免下次启动被“已有注入控制器”挡住。
             ZZZTouchRelease();
-            throw new InvalidOperationException($"ZZZ Runtime 注入失败: {DescribeInjectResult(result)}");
+            injectResult.TrySetResult(result);
+            return;
         }
 
-        _injected = true;
+        injectResult.TrySetResult(0);
+
+        // 游戏退出（0）或无活动会话（2）时结束；超时（1）则检查是否收到停止信号。
+        while (!stop.IsSet && ZZZTouchWaitGameExit(HookPollMs) == 1)
+        {
+        }
+
+        ZZZTouchRelease();
     }
 
     public Task PostInstallAsync(CancellationToken cancellationToken) => Task.CompletedTask;
@@ -95,11 +142,11 @@ public sealed class ZzzGameController : IGameController
         }
 
         _released = true;
-        if (_injected)
-        {
-            // 只有注入成功后才有需要释放的 native 会话
-            ZZZTouchRelease();
-        }
+
+        // Hook 的释放由持钩线程完成：通知它停止并等待结束（超时则放弃，线程是后台线程，进程退出时会被终止）。
+        _stopOwner?.Set();
+        _hookOwner?.Join(TimeSpan.FromSeconds(5));
+        _stopOwner?.Dispose();
     }
 
     private static uint? FindRunningGamePid()
@@ -151,6 +198,9 @@ public sealed class ZzzGameController : IGameController
     [DllImport("ZZZTouchCore.dll", CallingConvention = CallingConvention.Cdecl)]
     private static extern int ZZZTouchInjectToProcess(
         uint pid, [MarshalAs(UnmanagedType.Bool)] bool quiet, uint windowWaitMs);
+
+    [DllImport("ZZZTouchCore.dll", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int ZZZTouchWaitGameExit(uint timeoutMs);
 
     [DllImport("ZZZTouchCore.dll", CallingConvention = CallingConvention.Cdecl)]
     private static extern void ZZZTouchRelease();
