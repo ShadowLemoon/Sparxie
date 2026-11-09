@@ -18,6 +18,19 @@
       "problemMatcher": "$msCompile"
     },
     {
+      "label": "build-desktop",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/Sparxie.Desktop/Sparxie.Desktop.csproj",
+        "-c",
+        "Debug",
+        "-p:Platform=x64"
+      ],
+      "problemMatcher": "$msCompile"
+    },
+    {
       "label": "build-solution",
       "type": "process",
       "command": "dotnet",
