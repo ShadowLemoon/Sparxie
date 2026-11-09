@@ -117,7 +117,7 @@ public class ZzzRuntimeManifestTests
     private static string RepoRoot()
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);
-        while (root is not null && root.Name != "Sparxie")
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "build", "zzz-runtime.json")))
         {
             root = root.Parent;
         }
