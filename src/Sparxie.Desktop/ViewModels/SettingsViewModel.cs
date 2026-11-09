@@ -2,44 +2,73 @@ using Sparxie.Desktop.Services;
 
 namespace Sparxie.Desktop.ViewModels;
 
+/// <summary>应用设置：所有项改动即保存（没有保存按钮）。</summary>
 public sealed class SettingsViewModel : ObservableObject
 {
     private readonly DesktopDataService _data;
-    private bool _confirmBeforeExit;
-    private string _statusMessage = string.Empty;
+    private int _closeBehaviorIndex;
+    private bool _debugMode;
+    private bool _loading;
 
     public SettingsViewModel(DesktopDataService data)
     {
         _data = data;
-        _confirmBeforeExit = data.Preferences.ConfirmBeforeExit;
-        SaveCommand = new RelayCommand(Save);
+        _closeBehaviorIndex = (int)data.Preferences.ResolveCloseBehavior();
+        _debugMode = data.Preferences.DebugMode;
     }
 
-    public RelayCommand SaveCommand { get; }
+    /// <summary>设置保存成功后触发，让主页、托盘等依赖偏好的部分刷新。</summary>
+    public event Action? Saved;
 
-    public bool ConfirmBeforeExit
+    /// <summary>0 = 询问，1 = 最小化到托盘，2 = 直接退出（与 <see cref="CloseBehavior"/> 一一对应）。</summary>
+    public int CloseBehaviorIndex
     {
-        get => _confirmBeforeExit;
-        set => SetProperty(ref _confirmBeforeExit, value);
+        get => _closeBehaviorIndex;
+        set
+        {
+            if (value < 0 || value > 2)
+            {
+                return; // ComboBox 在重建时会回写 -1，忽略
+            }
+
+            if (SetProperty(ref _closeBehaviorIndex, value))
+            {
+                SaveNow();
+            }
+        }
     }
 
-    public string StatusMessage
+    public CloseBehavior CurrentCloseBehavior => (CloseBehavior)_closeBehaviorIndex;
+
+    public bool DebugMode
     {
-        get => _statusMessage;
-        private set => SetProperty(ref _statusMessage, value);
+        get => _debugMode;
+        set
+        {
+            if (SetProperty(ref _debugMode, value))
+            {
+                SaveNow();
+            }
+        }
     }
 
-    private void Save()
+    private void SaveNow()
     {
+        if (_loading)
+        {
+            return;
+        }
+
         try
         {
-            _data.Preferences.ConfirmBeforeExit = ConfirmBeforeExit;
+            _data.Preferences.CloseAction = ((CloseBehavior)_closeBehaviorIndex).ToString();
+            _data.Preferences.ConfirmBeforeExit = (CloseBehavior)_closeBehaviorIndex == CloseBehavior.Ask;
+            _data.Preferences.DebugMode = _debugMode;
             _data.SavePreferences();
-            StatusMessage = "应用设置已保存";
+            Saved?.Invoke();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            StatusMessage = $"保存失败：{ex.Message}";
             DesktopLog.Write("保存桌面偏好失败", ex);
         }
     }

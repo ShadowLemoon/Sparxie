@@ -11,6 +11,13 @@
 
         <StackPanel Grid.Row="1" Margin="28,0,28,28"
                     Visibility="{Binding IsHomeChromeVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+            <!-- 启动状态条：启动/注入各阶段与失败原因（之前只写在内部状态里，界面上看不到）。 -->
+            <Border HorizontalAlignment="Right" Margin="0,0,0,12" Padding="16,10" CornerRadius="16" MaxWidth="720"
+                    Background="{StaticResource GlassAcrylicBrush}"
+                    BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1"
+                    Visibility="{Binding Home.HasStatusMessage, Converter={StaticResource BoolToVisibilityConverter}}">
+                <TextBlock Text="{Binding Home.StatusMessage}" TextWrapping="Wrap" FontSize="14" />
+            </Border>
             <Grid ColumnSpacing="16">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -18,60 +25,131 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <Button Width="360" MinHeight="56" Padding="24,10" CornerRadius="28"
-                        Background="#66000000" BorderBrush="#40FFFFFF" BorderThickness="1" Foreground="White"
-                        AutomationProperties.Name="选择 Profile">
-                    <Button.Flyout>
-                        <Flyout x:Name="ProfileFlyout" Placement="TopEdgeAlignedLeft">
-                            <Flyout.FlyoutPresenterStyle>
-                                <Style TargetType="FlyoutPresenter">
-                                    <Setter Property="Background" Value="#66000000" />
-                                    <Setter Property="BorderBrush" Value="#40FFFFFF" />
-                                    <Setter Property="BorderThickness" Value="1" />
-                                    <Setter Property="CornerRadius" Value="28" />
-                                    <Setter Property="Padding" Value="16" />
-                                </Style>
-                            </Flyout.FlyoutPresenterStyle>
-                            <StackPanel Width="326" Spacing="8">
-                                <TextBlock Text="选择 Profile" FontSize="20" FontWeight="SemiBold" Margin="4,4,4,8" />
-                                <ListView ItemsSource="{Binding Home.Profiles}"
-                                          SelectionChanged="ProfileSelectionChanged"
-                                          IsItemClickEnabled="True"
-                                          ItemClick="ProfileItemClicked">
-                                    <ListView.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:ProfileListItemViewModel">
-                                            <StackPanel Padding="8" Spacing="2">
-                                                <TextBlock Text="{x:Bind DisplayName}" FontWeight="SemiBold" />
-                                                <TextBlock Text="{x:Bind Details}" Opacity="0.68" TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </ListView.ItemTemplate>
-                                </ListView>
-                                <Button Content="管理 Profile" Command="{Binding ShowProfilesCommand}"
-                                        Click="ManageProfilesClicked"
-                                        HorizontalAlignment="Stretch" MinHeight="48" />
-                            </StackPanel>
-                        </Flyout>
-                    </Button.Flyout>
-                    <Grid ColumnSpacing="12">
+                <!-- 游戏 + 配置合并切换：一张固定宽度的卡。左侧切换区点开 Flyout 选游戏（多配置的游戏下挂配置 Chip），右侧齿轮进入当前游戏设置。 -->
+                <Border Width="380" Height="68" CornerRadius="20"
+                        Background="{StaticResource GlassAcrylicBrush}"
+                        BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1">
+                    <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="1" />
+                            <ColumnDefinition Width="68" />
                         </Grid.ColumnDefinitions>
-                        <StackPanel Spacing="2" VerticalAlignment="Center">
-                            <TextBlock Text="PROFILE" FontSize="11" Opacity="0.62" />
-                            <TextBlock Text="{Binding Home.CurrentProfileName}" FontSize="16" FontWeight="SemiBold" />
-                            <TextBlock Text="{Binding Home.CurrentProfileDetails}" Opacity="0.68" MaxWidth="420"
-                                       FontSize="12" TextTrimming="CharacterEllipsis" />
-                        </StackPanel>
-                        <FontIcon Grid.Column="1" Glyph="&#xE70D;" VerticalAlignment="Center" FontSize="14" />
-                    </Grid>
-                </Button>
 
-                <Button Grid.Column="2" Content="启动游戏" Command="{Binding Home.LaunchCommand}"
-                        Width="240" Height="64" CornerRadius="32" Padding="0"
-                        Background="#F2FFFFFF" Foreground="#FF17181A"
-                        FontSize="18" FontWeight="SemiBold" />
+                        <Button x:Name="SwitcherButton" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch" Padding="12,0,14,0"
+                                CornerRadius="20,0,0,20" Background="Transparent" BorderThickness="0" Foreground="White"
+                                AutomationProperties.Name="{Binding Home.SwitcherAutomationName}">
+                            <Button.Flyout>
+                                <Flyout x:Name="SwitcherFlyout" Placement="TopEdgeAlignedLeft">
+                                    <Flyout.FlyoutPresenterStyle>
+                                        <Style TargetType="FlyoutPresenter">
+                                            <Setter Property="Background" Value="{StaticResource GlassPanelBrush}" />
+                                            <Setter Property="BorderBrush" Value="{StaticResource GlassStrokeBrush}" />
+                                            <Setter Property="BorderThickness" Value="1" />
+                                            <Setter Property="CornerRadius" Value="{StaticResource PanelRadius}" />
+                                            <Setter Property="Padding" Value="8" />
+                                        </Style>
+                                    </Flyout.FlyoutPresenterStyle>
+                                    <StackPanel Width="344" Spacing="2">
+                                        <ItemsControl ItemsSource="{Binding Home.GameEntries}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:GameEntryViewModel">
+                                                    <Border CornerRadius="14" Background="{x:Bind RowBackground}" Margin="0,0,0,2">
+                                                    <StackPanel Spacing="4">
+                                                        <Button Command="{x:Bind SelectCommand}"
+                                                                MinHeight="56" Padding="12,0" CornerRadius="14"
+                                                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                                Background="Transparent" BorderThickness="0"
+                                                                AutomationProperties.Name="{x:Bind AutomationName}">
+                                                            <Grid ColumnSpacing="12">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <Image Source="{x:Bind Icon}" Width="28" Height="28" />
+                                                                <TextBlock Grid.Column="1" Text="{x:Bind Title}" FontSize="15" VerticalAlignment="Center"
+                                                                           Foreground="{x:Bind TitleForeground}" />
+                                                            </Grid>
+                                                        </Button>
+                                                        <ItemsControl ItemsSource="{x:Bind Profiles}" Margin="52,0,8,6"
+                                                                      Visibility="{x:Bind HasMultipleProfiles, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                            <ItemsControl.ItemsPanel>
+                                                                <ItemsPanelTemplate>
+                                                                    <StackPanel Orientation="Horizontal" Spacing="8" />
+                                                                </ItemsPanelTemplate>
+                                                            </ItemsControl.ItemsPanel>
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate x:DataType="vm:ProfileChipViewModel">
+                                                                    <Button Command="{x:Bind SelectCommand}"
+                                                                            MinHeight="48" Padding="16,0" CornerRadius="24"
+                                                                            Background="{x:Bind ChipBackground}"
+                                                                            Foreground="{x:Bind ChipForeground}"
+                                                                            BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1"
+                                                                            AutomationProperties.Name="{x:Bind AutomationName}">
+                                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                            <TextBlock Text="{x:Bind DisplayName}" MaxWidth="160" TextTrimming="CharacterEllipsis" />
+                                                                        </StackPanel>
+                                                                    </Button>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </StackPanel>
+                                                </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Flyout>
+                            </Button.Flyout>
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Image Source="{Binding Home.CurrentGameIcon}" Width="40" Height="40" />
+                                <TextBlock Grid.Column="1" Text="{Binding Home.SwitcherLabel}" FontSize="18" FontWeight="SemiBold"
+                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                <FontIcon Grid.Column="2" Glyph="&#xE70E;" FontSize="12" Opacity="0.7" />
+                            </Grid>
+                        </Button>
+
+                        <Rectangle Grid.Column="1" Fill="{StaticResource GlassStrokeBrush}" Margin="0,12" />
+
+                        <Button Grid.Column="2" Width="68" Height="68" Padding="0" CornerRadius="0,20,20,0"
+                                Background="Transparent" BorderThickness="0" Foreground="White"
+                                Command="{Binding ShowProfilesCommand}" ToolTipService.ToolTip="游戏设置"
+                                AutomationProperties.Name="{Binding Home.GameSettingsAutomationName}">
+                            <FontIcon Glyph="&#xE713;" FontSize="16" />
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <!-- 系统强调色按钮样式（悬停/按下由 SystemAccentColor 的亮/暗变体自动派生）+ 圆角 + 双箭头图标。 -->
+                <Grid Grid.Column="2" Width="320" Height="68" CornerRadius="34"
+                      Background="{StaticResource GlassOverlayBrush}">
+                    <Button HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                            BorderThickness="0" CornerRadius="34" FontSize="22" FontWeight="Bold"
+                            Style="{ThemeResource AccentButtonStyle}"
+                            Command="{Binding Home.LaunchCommand}"
+                            AutomationProperties.Name="{Binding Home.LaunchAutomationName}">
+                        <Button.Resources>
+                            <StaticResource x:Key="AccentButtonBackground" ResourceKey="StartButtonBrush" />
+                            <StaticResource x:Key="AccentButtonBackgroundPointerOver" ResourceKey="StartButtonHoverBrush" />
+                            <StaticResource x:Key="AccentButtonBackgroundPressed" ResourceKey="StartButtonPressedBrush" />
+                            <StaticResource x:Key="AccentButtonForeground" ResourceKey="StartButtonForegroundBrush" />
+                            <StaticResource x:Key="AccentButtonForegroundPointerOver" ResourceKey="StartButtonForegroundBrush" />
+                            <StaticResource x:Key="AccentButtonForegroundPressed" ResourceKey="StartButtonForegroundBrush" />
+                        </Button.Resources>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock VerticalAlignment="Center" Text="启动游戏" />
+                            <FontIcon Margin="0,2,0,0" VerticalAlignment="Center" FontSize="18" FontWeight="Bold" Glyph="&#xE76C;" />
+                            <FontIcon Margin="-22,2,0,0" VerticalAlignment="Center" FontSize="18" FontWeight="Bold" Glyph="&#xE76C;" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
             </Grid>
         </StackPanel>
     </Grid>

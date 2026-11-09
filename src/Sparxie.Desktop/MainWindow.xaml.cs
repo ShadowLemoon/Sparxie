@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Sparxie.Contracts.Models;
 using Sparxie.Desktop.Services;
 using Sparxie.Desktop.ViewModels;
@@ -30,10 +31,17 @@ public sealed partial class MainWindow : Window
         Title = "Sparxie";
         Closed += OnClosed;
         TryConfigureWindow();
+        AppWindow.Closing += OnAppWindowClosing;
+        _viewModel.Settings.Saved += ApplyCloseBehavior;
+        ApplyCloseBehavior();
         Activated += OnFirstActivated;
 
         _viewModel.Home.PropertyChanged += OnHomePropertyChanged;
-        SyncGameTabs();
+        // 缓存背景在 HomeViewModel 构造期就同步设置了，早于这里订阅；补一次，否则启动时背景与主题色不会生效。
+        if (_viewModel.Home.BackgroundPath is { } initial)
+        {
+            UpdateWindowBackground(initial);
+        }
         _ = LoadGameIconsAsync();
     }
 
@@ -56,61 +64,18 @@ public sealed partial class MainWindow : Window
             }
         }
 
-        IconGenshin.Source = IconSource(GameType.Genshin);
-        IconStarRail.Source = IconSource(GameType.StarRail);
-        IconZenlessZoneZero.Source = IconSource(GameType.ZenlessZoneZero);
-    }
-
-    private static Microsoft.UI.Xaml.Media.ImageSource? IconSource(GameType game) =>
-        Services.GameIconCache.Get(game) is { } path
-            ? new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(path))
-            : null;
-
-    private bool _syncingTabs;
-
-    private void OnGameTabChecked(object sender, RoutedEventArgs e)
-    {
-        if (_syncingTabs)
-        {
-            return;
-        }
-
-        if ((sender as FrameworkElement)?.Tag is string tag && Enum.TryParse<GameType>(tag, out var game))
-        {
-            _viewModel.Home.SelectGameCommand.Execute(game);
-        }
-    }
-
-    private void SyncGameTabs()
-    {
-        _syncingTabs = true;
-        ApplyTabState(TabGenshin, _viewModel.Home.SelectedGame == GameType.Genshin);
-        ApplyTabState(TabStarRail, _viewModel.Home.SelectedGame == GameType.StarRail);
-        ApplyTabState(TabZenlessZoneZero, _viewModel.Home.SelectedGame == GameType.ZenlessZoneZero);
-        _syncingTabs = false;
-    }
-
-    /// <summary>选中态视觉由代码驱动（白胶囊+深色字），避免依赖模板 CheckStates。</summary>
-    private static void ApplyTabState(ToggleButton button, bool selected)
-    {
-        button.IsChecked = selected;
-        button.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
-            selected ? Windows.UI.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF) : Windows.UI.Color.FromArgb(0x66, 0x00, 0x00, 0x00));
-        button.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(
-            selected ? Windows.UI.Color.FromArgb(0xFF, 0x17, 0x18, 0x1A) : Windows.UI.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
+        _viewModel.Home.NotifyGameIconsLoaded();
     }
 
     private void OnHomePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(HomeViewModel.SelectedGame))
-        {
-            SyncGameTabs();
-        }
-        else if (e.PropertyName == nameof(HomeViewModel.BackgroundPath))
+        if (e.PropertyName == nameof(HomeViewModel.BackgroundPath))
         {
             UpdateWindowBackground(_viewModel.Home.BackgroundPath);
         }
     }
+
+    private Storyboard? _fade;
 
     private void UpdateWindowBackground(string? path)
     {
@@ -118,17 +83,166 @@ public sealed partial class MainWindow : Window
         {
             WindowBackground.Source = null;
             WindowBackground.Visibility = Visibility.Collapsed;
+            WindowBackgroundFade.Opacity = 0;
             return;
         }
 
         try
         {
-            WindowBackground.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(path));
-            WindowBackground.Visibility = Visibility.Visible;
+            var next = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(path));
+            _ = ApplyAccentAsync(path);
+            if (WindowBackground.Source is null)
+            {
+                WindowBackground.Source = next;
+                WindowBackground.Visibility = Visibility.Visible;
+                return;
+            }
+
+            // 新图叠在旧图之上淡入，结束后换到底层，避免切换游戏时硬切。
+            _fade?.Stop();
+            WindowBackgroundFade.Source = next;
+            WindowBackgroundFade.Opacity = 0;
+            var animation = new DoubleAnimation
+            {
+                From = 0,
+                To = 1,
+                Duration = new Duration(TimeSpan.FromMilliseconds(450)),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            };
+            Storyboard.SetTarget(animation, WindowBackgroundFade);
+            Storyboard.SetTargetProperty(animation, "Opacity");
+            var storyboard = new Storyboard();
+            storyboard.Children.Add(animation);
+            storyboard.Completed += (_, _) =>
+            {
+                WindowBackground.Source = next;
+                WindowBackgroundFade.Opacity = 0;
+            };
+            _fade = storyboard;
+            storyboard.Begin();
         }
         catch
         {
             WindowBackground.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>按背景图主色更新启动按钮：画刷是应用级资源，改 Color 即时生效。</summary>
+    private async Task ApplyAccentAsync(string path)
+    {
+        try
+        {
+            await ApplyAccentCoreAsync(path);
+        }
+        catch (Exception ex)
+        {
+            DesktopLog.Write("应用主题色失败", ex);
+        }
+    }
+
+    private async Task ApplyAccentCoreAsync(string path)
+    {
+        var color = await AccentColorExtractor.ExtractAsync(path).ConfigureAwait(true);
+        DesktopLog.Write($"主题色 {color} ({path})");
+        if (Application.Current.Resources["LaunchAccentBrush"] is SolidColorBrush accent)
+        {
+            accent.Color = color;
+        }
+
+        // 悬停提亮 12%、按下压暗 15%（与系统强调色的 Light1 / 深色变体同思路），保证悬停态一眼能看出。
+        SetStartButtonColors(color);
+
+        if (Application.Current.Resources["LaunchAccentHoverBrush"] is SolidColorBrush hover)
+        {
+            hover.Color = Mix(color, Colors.White, 0.88);
+            // 悬停色更亮，文字色必须按悬停色重新选，否则白字压在浅色上看不清。
+            if (Application.Current.Resources["LaunchAccentHoverForegroundBrush"] is SolidColorBrush hoverFore)
+            {
+                var hoverLuma = (0.299 * hover.Color.R + 0.587 * hover.Color.G + 0.114 * hover.Color.B) / 255.0;
+                hoverFore.Color = hoverLuma > 0.55 ? Windows.UI.Color.FromArgb(0xFF, 0x14, 0x16, 0x1A) : Colors.White;
+            }
+        }
+
+        if (Application.Current.Resources["LaunchAccentPressedBrush"] is SolidColorBrush pressed)
+        {
+            pressed.Color = Mix(color, Colors.Black, 0.85);
+        }
+
+        ApplySystemAccent(color);
+
+        // 相对亮度高的主色配深色字，否则白字。
+        var luma = (0.299 * color.R + 0.587 * color.G + 0.114 * color.B) / 255.0;
+        if (Application.Current.Resources["LaunchAccentForegroundBrush"] is SolidColorBrush fore)
+        {
+            fore.Color = luma > 0.62 ? Windows.UI.Color.FromArgb(0xFF, 0x14, 0x16, 0x1A) : Colors.White;
+        }
+    }
+
+    /// <summary>
+    /// 覆盖 SystemAccentColor 及其亮/暗变体（按 20% 递进与白/黑混合），
+    /// 系统强调色按钮的悬停、按下色由它们派生；随后翻转一次 RequestedTheme 让 ThemeResource 重新取值。
+    /// </summary>
+    private void ApplySystemAccent(Windows.UI.Color color)
+    {
+        var res = Application.Current.Resources;
+        res["SystemAccentColor"] = color;
+        for (var i = 1; i <= 3; i++)
+        {
+            var percent = 1 - 0.2 * i;
+            res[$"SystemAccentColorLight{i}"] = Mix(color, Colors.White, percent);
+            res[$"SystemAccentColorDark{i}"] = Mix(color, Colors.Black, percent);
+        }
+
+        if (Content is FrameworkElement root)
+        {
+            root.RequestedTheme = ElementTheme.Light;
+            root.RequestedTheme = ElementTheme.Default;
+        }
+    }
+
+    private static void SetStartButtonColors(Windows.UI.Color back)
+    {
+        var res = Application.Current.Resources;
+        void Set(string key, Windows.UI.Color c)
+        {
+            if (res[key] is SolidColorBrush brush)
+            {
+                brush.Color = c;
+            }
+        }
+
+        Set("StartButtonBrush", AccentColorExtractor.WithSv(back, 0.42, 0.97));
+        Set("StartButtonHoverBrush", AccentColorExtractor.WithSv(back, 0.52, 0.90));
+        Set("StartButtonPressedBrush", AccentColorExtractor.WithSv(back, 0.58, 0.80));
+    }
+
+    private static Windows.UI.Color Mix(Windows.UI.Color input, Windows.UI.Color blend, double percent) =>
+        Windows.UI.Color.FromArgb(
+            255,
+            (byte)(input.R * percent + blend.R * (1 - percent)),
+            (byte)(input.G * percent + blend.G * (1 - percent)),
+            (byte)(input.B * percent + blend.B * (1 - percent)));
+
+    /// <summary>
+    /// Esc：设置打开时关设置，在设置页时返回主页。用按键事件而不是 KeyboardAccelerator——
+    /// 后者会让框架给相关控件的 ToolTip 追加“Esc”快捷键提示。
+    /// </summary>
+    private void OnRootPreviewKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key != Windows.System.VirtualKey.Escape)
+        {
+            return;
+        }
+
+        if (_viewModel.IsSettingsOpen)
+        {
+            _viewModel.CloseSettingsCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (_viewModel.IsProfilesVisible)
+        {
+            _viewModel.ShowHomeCommand.Execute(null);
+            e.Handled = true;
         }
     }
 
@@ -186,7 +300,117 @@ public sealed partial class MainWindow : Window
 
     private async void OnClosed(object sender, WindowEventArgs args)
     {
+        _tray?.Dispose();
         await _launcher.DisposeAsync();
+    }
+
+    // ---- 关闭按钮行为：退出前确认 / 最小化到托盘 / 直接退出 ----
+
+    private TrayIcon? _tray;
+    private bool _forceClose;
+    private bool _dialogOpen;
+
+    /// <summary>设置里改了关闭行为后同步托盘图标：只有选了“托盘”才常驻图标。</summary>
+    private void ApplyCloseBehavior()
+    {
+        if (_viewModel.Settings.CurrentCloseBehavior == CloseBehavior.Tray)
+        {
+            _tray ??= new TrayIcon("Sparxie", ShowFromTray, ExitApplication);
+            _tray.Show();
+        }
+        else if (AppWindow.IsVisible)
+        {
+            _tray?.Hide();
+        }
+    }
+
+    private void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        if (_forceClose)
+        {
+            return;
+        }
+
+        switch (_viewModel.Settings.CurrentCloseBehavior)
+        {
+            case CloseBehavior.Exit:
+                return;
+            case CloseBehavior.Tray:
+                args.Cancel = true;
+                HideToTray();
+                return;
+            default:
+                args.Cancel = true;
+                _ = ConfirmExitAsync();
+                return;
+        }
+    }
+
+    private void HideToTray()
+    {
+        // 即便设置不是“托盘”（确认框里选了“最小化到托盘”），隐藏窗口前也必须先有托盘图标，否则无法恢复。
+        _tray ??= new TrayIcon("Sparxie", ShowFromTray, ExitApplication);
+        _tray.Show();
+        AppWindow.Hide();
+    }
+
+    private void ShowFromTray()
+    {
+        AppWindow.Show();
+        if (AppWindow.Presenter is OverlappedPresenter presenter)
+        {
+            presenter.Restore();
+        }
+
+        Activate();
+        if (_viewModel.Settings.CurrentCloseBehavior != CloseBehavior.Tray)
+        {
+            _tray?.Hide(); // 临时托盘：窗口回来后图标不必保留
+        }
+    }
+
+    private void ExitApplication()
+    {
+        _forceClose = true;
+        _tray?.Dispose();
+        _tray = null;
+        Close();
+    }
+
+    private async Task ConfirmExitAsync()
+    {
+        if (_dialogOpen || Content?.XamlRoot is not { } xamlRoot)
+        {
+            return;
+        }
+
+        _dialogOpen = true;
+        try
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = xamlRoot,
+                Title = "退出 Sparxie？",
+                Content = "退出后会关闭启动器，已经启动的游戏不受影响。",
+                PrimaryButtonText = "退出",
+                SecondaryButtonText = "最小化到托盘",
+                CloseButtonText = "取消",
+                DefaultButton = ContentDialogButton.Close,
+            };
+            switch (await dialog.ShowAsync())
+            {
+                case ContentDialogResult.Primary:
+                    ExitApplication();
+                    break;
+                case ContentDialogResult.Secondary:
+                    HideToTray();
+                    break;
+            }
+        }
+        finally
+        {
+            _dialogOpen = false;
+        }
     }
 
     private void OnScrimTapped(object sender, TappedRoutedEventArgs e) =>
@@ -203,6 +427,13 @@ public sealed partial class MainWindow : Window
         appWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
         appWindow.TitleBar.ButtonBackgroundColor = Colors.Transparent;
         appWindow.TitleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
+        // 系统最小化/最大化/关闭按钮压在壁纸上，默认前景色随主题可能看不清：统一白色图标，悬停/按下给半透明白底。
+        appWindow.TitleBar.ButtonForegroundColor = Colors.White;
+        appWindow.TitleBar.ButtonHoverForegroundColor = Colors.White;
+        appWindow.TitleBar.ButtonPressedForegroundColor = Colors.White;
+        appWindow.TitleBar.ButtonInactiveForegroundColor = Windows.UI.Color.FromArgb(0xB3, 0xFF, 0xFF, 0xFF);
+        appWindow.TitleBar.ButtonHoverBackgroundColor = Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF);
+        appWindow.TitleBar.ButtonPressedBackgroundColor = Windows.UI.Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF);
 
         if (appWindow.Presenter is OverlappedPresenter presenter)
         {

@@ -10,6 +10,37 @@ public sealed partial class ProfileManagerPage : Page
 {
     public ProfileManagerPage() => InitializeComponent();
 
+    private ProfileManagerViewModel? Profiles => (DataContext as MainWindowViewModel)?.Profiles;
+
+    private void AddProfileClick(object sender, RoutedEventArgs e) => Profiles?.NewCommand.Execute(null);
+
+    private async void DeleteProfileClick(object sender, RoutedEventArgs e)
+    {
+        if (Profiles is not { SelectedProfile: { } selected } profiles)
+        {
+            return;
+        }
+
+        if (!selected.IsNew)
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = XamlRoot,
+                Title = "删除此配置？",
+                Content = $"将删除“{selected.DisplayName}”，此操作不可撤销。",
+                PrimaryButtonText = "删除",
+                CloseButtonText = "取消",
+                DefaultButton = ContentDialogButton.Close,
+            };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                return;
+            }
+        }
+
+        profiles.DeleteCommand.Execute(null);
+    }
+
     private async void BrowseExecutableClick(object sender, RoutedEventArgs e)
     {
         try

@@ -21,6 +21,7 @@ public sealed class HomeViewModel : ObservableObject
         _data = data;
         _launcher = launcher;
         Profiles = new ObservableCollection<ProfileListItemViewModel>();
+        GameEntries = new ObservableCollection<GameEntryViewModel>();
         SelectGameCommand = new ParameterRelayCommand(SelectGame);
         SelectProfileCommand = new ParameterRelayCommand(SelectProfile);
         LaunchCommand = new AsyncRelayCommand(LaunchAsync, () => SelectedProfile is not null && !IsLaunching);
@@ -30,6 +31,9 @@ public sealed class HomeViewModel : ObservableObject
     public ObservableCollection<ProfileListItemViewModel> Profiles { get; }
 
     public GameType[] Games { get; } = Enum.GetValues<GameType>();
+
+    /// <summary>左下游戏卡 Flyout 的内容：三个游戏，多配置的游戏下挂配置 Chip。</summary>
+    public ObservableCollection<GameEntryViewModel> GameEntries { get; }
 
     public ParameterRelayCommand SelectGameCommand { get; }
 
@@ -49,6 +53,7 @@ public sealed class HomeViewModel : ObservableObject
 
             PersistSelectedGame(value);
             RefreshProfiles();
+            RebuildEntries();
             _ = LoadBackgroundAsync(value);
         }
     }
@@ -77,6 +82,12 @@ public sealed class HomeViewModel : ObservableObject
     {
         try
         {
+            // 先立即显示该游戏上次的缓存背景，再后台检查官方是否换图。
+            if (_backgrounds.GetCachedBackgroundPath(game) is { } cached && SelectedGame == game)
+            {
+                BackgroundPath = cached;
+            }
+
             var path = await _backgrounds.GetBackgroundPathAsync(game).ConfigureAwait(true);
             if (SelectedGame == game)
             {
@@ -105,19 +116,43 @@ public sealed class HomeViewModel : ObservableObject
             OnPropertyChanged(nameof(CurrentProfileName));
             OnPropertyChanged(nameof(CurrentProfileDetails));
             LaunchCommand.NotifyCanExecuteChanged();
+            RememberProfile(value);
+
+            RebuildEntries();
         }
     }
+
+    /// <summary>该游戏有多个配置（如国服/国际服）时主页才提供配置下拉；否则直接是“游戏设置”入口。</summary>
+    public bool HasMultipleProfiles => Profiles.Count > 1;
+
+    public bool HasSingleProfile => Profiles.Count <= 1;
+
+    public string CurrentGameTitle => $"{GameNames.Display(SelectedGame)} 设置";
 
     public string CurrentProfileName => SelectedProfile?.DisplayName ?? "未选择配置";
 
     public string CurrentProfileDetails => SelectedProfile is null
-        ? "请先在 Profile 管理中添加游戏配置"
+        ? "尚未设置游戏路径，点击设置"
         : $"{FormatGame(SelectedProfile.Game)} · {SelectedProfile.ExecutablePath}";
+
+    /// <summary>主页状态条：仅调试模式下显示（设置里开启，或环境变量 SPARXIE_DEBUG=1）；平时隐藏，失败原因仍写入 desktop.log。</summary>
+    public bool HasStatusMessage => IsDebugMode && !string.IsNullOrWhiteSpace(StatusMessage) && StatusMessage != "准备就绪";
+
+    public bool IsDebugMode =>
+        _data.Preferences.DebugMode || Environment.GetEnvironmentVariable("SPARXIE_DEBUG") == "1";
+
+    public void NotifyDebugModeChanged() => OnPropertyChanged(nameof(HasStatusMessage));
 
     public string StatusMessage
     {
         get => _statusMessage;
-        private set => SetProperty(ref _statusMessage, value);
+        private set
+        {
+            if (SetProperty(ref _statusMessage, value))
+            {
+                OnPropertyChanged(nameof(HasStatusMessage));
+            }
+        }
     }
 
     public bool IsLaunching
@@ -149,6 +184,7 @@ public sealed class HomeViewModel : ObservableObject
             .FirstOrDefault(item => string.Equals(item.Profile.Id, selected?.Id, StringComparison.Ordinal))
             ?.Profile
             ?? Profiles.FirstOrDefault()?.Profile;
+        RebuildEntries();
         _ = LoadBackgroundAsync(SelectedGame);
     }
 
@@ -163,40 +199,124 @@ public sealed class HomeViewModel : ObservableObject
         {
             Profiles.Add(new ProfileListItemViewModel(profile));
         }
+        OnPropertyChanged(nameof(HasMultipleProfiles));
+        OnPropertyChanged(nameof(HasSingleProfile));
+        OnPropertyChanged(nameof(CurrentGameTitle));
     }
 
     private void SelectGame(object? parameter)
     {
+        if (parameter is string text && Enum.TryParse<GameType>(text, out var parsed))
+        {
+            parameter = parsed;
+        }
+
         if (parameter is GameType game)
         {
             SelectedGame = game;
-            SelectedProfile = Profiles.FirstOrDefault()?.Profile;
-        }
-        else if (parameter is string text && Enum.TryParse<GameType>(text, out game))
-        {
-            SelectedGame = game;
-            SelectedProfile = Profiles.FirstOrDefault()?.Profile;
+            // 点游戏标题 = 该游戏“记住的配置”（Flyout 里已高亮显示），而不是随机一个。
+            var targetId = ResolveProfileId(game);
+            SelectedProfile = Profiles.FirstOrDefault(item => item.Profile.Id == targetId)?.Profile
+                ?? Profiles.FirstOrDefault()?.Profile;
         }
     }
 
     private void SelectProfile(object? parameter)
     {
-        if (parameter is not ProfileListItemViewModel item)
+        if (parameter is ProfileListItemViewModel item)
         {
-            return;
+            ApplyProfile(item.Profile);
         }
+    }
 
-        SelectedProfile = item.Profile;
+    private void ApplyProfile(GameProfile profile)
+    {
+        SelectedProfile = profile;
         try
         {
-            _data.SelectProfile(item.Profile.Id);
+            _data.SelectProfile(profile.Id);
         }
         catch (Exception ex)
         {
             // 配置中存在校验不通过的 Profile 时保存会失败；此处只提示，不让主页崩溃。
             StatusMessage = $"记录所选配置失败：{ex.Message}";
-            Services.DesktopLog.Write($"记录所选 Profile 失败（id={item.Profile.Id}）", ex);
+            Services.DesktopLog.Write($"记录所选 Profile 失败（id={profile.Id}）", ex);
         }
+    }
+
+    /// <summary>某游戏点标题时会用到的配置：偏好里记住的 → 否则该游戏第一个。</summary>
+    private string? ResolveProfileId(GameType game)
+    {
+        var inGame = _data.Config.Profiles.Where(item => item.Game == game).ToList();
+        if (_data.Preferences.LastProfileByGame.TryGetValue(game.ToString(), out var saved)
+            && inGame.Any(item => item.Id == saved))
+        {
+            return saved;
+        }
+
+        return inGame.FirstOrDefault()?.Id;
+    }
+
+    private void RememberProfile(GameProfile? profile)
+    {
+        if (profile is null
+            || (_data.Preferences.LastProfileByGame.TryGetValue(profile.Game.ToString(), out var current) && current == profile.Id))
+        {
+            return;
+        }
+
+        _data.Preferences.LastProfileByGame[profile.Game.ToString()] = profile.Id;
+        try
+        {
+            _data.SavePreferences();
+        }
+        catch
+        {
+            // 偏好保存失败不影响切换。
+        }
+    }
+
+    /// <summary>左下游戏卡显示的文字：多配置时“原神 · 国服”，单配置只有游戏名。</summary>
+    public string SwitcherLabel => HasMultipleProfiles && SelectedProfile is { } profile
+        ? $"{GameNames.Display(SelectedGame)} · {profile.DisplayName}"
+        : GameNames.Display(SelectedGame);
+
+    public Microsoft.UI.Xaml.Media.ImageSource? CurrentGameIcon => GameTabBinding.Icon(SelectedGame);
+
+    public string SwitcherAutomationName => $"当前：{SwitcherLabel}。切换游戏或配置";
+
+    public string GameSettingsAutomationName => $"{GameNames.Display(SelectedGame)} 游戏设置";
+
+    public string LaunchAutomationName => $"启动 {SwitcherLabel}";
+
+    /// <summary>游戏图标是异步下载的，加载完后补发属性变更并重建 Flyout 内容。</summary>
+    public void NotifyGameIconsLoaded() => RebuildEntries();
+
+    private void RebuildEntries()
+    {
+        GameEntries.Clear();
+        foreach (var game in Games)
+        {
+            var profiles = _data.Config.Profiles.Where(item => item.Game == game).ToList();
+            var chips = profiles
+                .Select(profile => new ProfileChipViewModel(
+                    profile,
+                    game == SelectedGame && SelectedProfile?.Id == profile.Id,
+                    profile.Id == ResolveProfileId(game),
+                    () =>
+                    {
+                        SelectedGame = game;
+                        ApplyProfile(profile);
+                    }))
+                .ToList();
+            GameEntries.Add(new GameEntryViewModel(game, game == SelectedGame, chips, () => SelectGame(game)));
+        }
+
+        OnPropertyChanged(nameof(SwitcherLabel));
+        OnPropertyChanged(nameof(CurrentGameIcon));
+        OnPropertyChanged(nameof(SwitcherAutomationName));
+        OnPropertyChanged(nameof(GameSettingsAutomationName));
+        OnPropertyChanged(nameof(LaunchAutomationName));
     }
 
     private async Task LaunchAsync()
@@ -237,6 +357,11 @@ public sealed class HomeViewModel : ObservableObject
                         : $"会话结束：{ev.Message}";
                     break;
                 }
+
+                // 非终态事件也展示：阶段（启动中/注入中/Running…）与消息，方便看到注入卡在哪一步。
+                StatusMessage = string.IsNullOrWhiteSpace(ev.Message)
+                    ? $"{ev.Stage} {ev.State}".Trim()
+                    : $"{ev.Stage} {ev.State}：{ev.Message}".Trim();
             }
         }
         catch (Exception ex)
@@ -245,13 +370,7 @@ public sealed class HomeViewModel : ObservableObject
         }
     }
 
-    private static string FormatGame(GameType game) => game switch
-    {
-        GameType.Genshin => "原神",
-        GameType.StarRail => "星穹铁道",
-        GameType.ZenlessZoneZero => "绝区零",
-        _ => game.ToString(),
-    };
+    private static string FormatGame(GameType game) => GameNames.Display(game);
 }
 
 public sealed class ProfileListItemViewModel

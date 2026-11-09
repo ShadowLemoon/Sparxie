@@ -22,6 +22,7 @@ public sealed class MainWindowViewModel : ObservableObject
         Home = home;
         Profiles = profiles;
         Settings = settings;
+        Settings.Saved += Home.NotifyDebugModeChanged;
         _settingsPanel = settingsPanel;
         _settingsPanel.Changed += OnSettingsPanelChanged;
         ShowHomeCommand = new RelayCommand(ShowHome);
@@ -79,8 +80,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private void ShowProfiles()
     {
         _settingsPanel.Close();
-        Profiles.EnsureDefaultIfEmpty(Home.SelectedGame);
-        Profiles.Refresh();
+        Profiles.SetScope(Home.SelectedGame);
         CurrentPage = DesktopPage.Profiles;
     }
 

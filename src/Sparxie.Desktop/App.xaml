@@ -14,9 +14,53 @@
             <converters:GameDisplayConverter x:Key="GameDisplayConverter" />
             <converters:GameIconConverter x:Key="GameIconConverter" />
             <converters:PriorityDisplayConverter x:Key="PriorityDisplayConverter" />
+
+            <!-- 统一视觉令牌：玻璃面板、描边、圆角。各页面只引用，不再各写各的色值。 -->
+            <SolidColorBrush x:Key="GlassPanelBrush" Color="#E6111315" />
+            <SolidColorBrush x:Key="GlassCardBrush" Color="#1FFFFFFF" />
+            <SolidColorBrush x:Key="GlassOverlayBrush" Color="#66000000" />
+            <SolidColorBrush x:Key="GlassStrokeBrush" Color="#26FFFFFF" />
+            <SolidColorBrush x:Key="GlassMutedTextBrush" Color="#B3FFFFFF" />
+            <!-- 启动按钮主题色：随当前游戏背景图提取，由 MainWindow 在运行时改 Color。 -->
+            <SolidColorBrush x:Key="LaunchAccentBrush" Color="#FF5B8DEF" />
+            <SolidColorBrush x:Key="LaunchAccentForegroundBrush" Color="#FFFFFFFF" />
+            <SolidColorBrush x:Key="LaunchAccentHoverBrush" Color="#FF7FA3F2" />
+            <SolidColorBrush x:Key="LaunchAccentHoverForegroundBrush" Color="#FFFFFFFF" />
+            <!-- 参照官方启动器：开始游戏按钮用该游戏色相的柔色填充 + 深色粗体字，悬停略深、按下更深。 -->
+            <SolidColorBrush x:Key="StartButtonBrush" Color="#FFF1D98A" />
+            <SolidColorBrush x:Key="StartButtonHoverBrush" Color="#FFE8C96A" />
+            <SolidColorBrush x:Key="StartButtonPressedBrush" Color="#FFD6B552" />
+            <SolidColorBrush x:Key="StartButtonForegroundBrush" Color="#FF2B2118" />
+            <AcrylicBrush x:Key="GlassAcrylicBrush" TintColor="#FF0B0E14" TintOpacity="0.45" TintLuminosityOpacity="0.55" FallbackColor="#CC0B0E14" />
+            <SolidColorBrush x:Key="LaunchAccentPressedBrush" Color="#FF4D75CC" />
+            <CornerRadius x:Key="PanelRadius">20</CornerRadius>
+            <CornerRadius x:Key="CardRadius">14</CornerRadius>
+            <CornerRadius x:Key="PillRadius">28</CornerRadius>
+
+            <Style x:Key="GlassCard" TargetType="Border">
+                <Setter Property="CornerRadius" Value="{StaticResource CardRadius}" />
+                <Setter Property="Padding" Value="20" />
+                <Setter Property="Background" Value="{StaticResource GlassCardBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource GlassStrokeBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+            </Style>
+            <Style x:Key="PageTitle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="22" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+            </Style>
+            <Style x:Key="SectionHeading" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="15" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+            </Style>
+            <Style x:Key="CaptionText" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Foreground" Value="{StaticResource GlassMutedTextBrush}" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+            </Style>
+
                 <Style x:Key="PillTabStyle" TargetType="ToggleButton">
-                    <Setter Property="MinHeight" Value="44" />
-                    <Setter Property="Padding" Value="20,0" />
+                    <Setter Property="MinHeight" Value="36" />
+                    <Setter Property="Padding" Value="14,0" />
                     <Setter Property="Foreground" Value="White" />
                     <Setter Property="Template">
                         <Setter.Value>

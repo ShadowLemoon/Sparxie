@@ -13,13 +13,24 @@ public sealed class ProfileManagerViewModel : ObservableObject
     private string _statusMessage = string.Empty;
     private InfoBarSeverity _statusSeverity = InfoBarSeverity.Informational;
     private bool _isRebuilding;
+    private GameType _scope = GameType.Genshin;
+    private readonly Microsoft.UI.Dispatching.DispatcherQueue? _dispatcher;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _clearTimer;
 
     public ProfileManagerViewModel(DesktopDataService data)
     {
         _data = data;
         Profiles = new ObservableCollection<ProfileEditorViewModel>();
+        Profiles.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasMultiple));
+            OnPropertyChanged(nameof(ShowProfileName));
+            RaisePending();
+        };
+        _dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
         NewCommand = new RelayCommand(NewProfile);
-        SaveCommand = new RelayCommand(Save, () => SelectedProfile is not null);
+        SaveCommand = new RelayCommand(Save, () => HasPendingChanges);
+        DiscardCommand = new RelayCommand(Discard);
         DeleteCommand = new RelayCommand(Delete, () => SelectedProfile is not null);
         Refresh();
     }
@@ -30,7 +41,29 @@ public sealed class ProfileManagerViewModel : ObservableObject
 
     public RelayCommand SaveCommand { get; }
 
+    public RelayCommand DiscardCommand { get; }
+
     public RelayCommand DeleteCommand { get; }
+
+    /// <summary>当前管理的游戏：配置按游戏分开管理，页面只展示该游戏的配置。</summary>
+    public GameType Scope => _scope;
+
+    public string ScopeTitle => $"{GameNames.Display(_scope)} 设置";
+
+    /// <summary>该游戏有多个配置（如国服/国际服）时才显示列表；大多数人只有一个，直接是表单。</summary>
+    public bool HasMultiple => Profiles.Count > 1;
+
+    /// <summary>切换到某个游戏的配置页；该游戏还没有配置时自动落一个占位配置。</summary>
+    public void SetScope(GameType game)
+    {
+        _scope = game;
+        OnPropertyChanged(nameof(Scope));
+        OnPropertyChanged(nameof(ScopeTitle));
+        Profiles.Clear();
+        _selectedProfile = null;
+        EnsureDefaultIfEmpty(game);
+        Refresh();
+    }
 
     /// <summary>与列表 SelectedItem 双向绑定，保证界面选中项与编辑表单是同一真相源。</summary>
     public ProfileEditorViewModel? SelectedProfile
@@ -52,6 +85,7 @@ public sealed class ProfileManagerViewModel : ObservableObject
 
             SaveCommand.NotifyCanExecuteChanged();
             DeleteCommand.NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(ShowProfileName));
             OnPropertyChanged(nameof(HasSelection));
         }
     }
@@ -67,6 +101,8 @@ public sealed class ProfileManagerViewModel : ObservableObject
             if (SetProperty(ref _statusMessage, value))
             {
                 OnPropertyChanged(nameof(HasStatus));
+                OnPropertyChanged(nameof(ShowActionBar));
+                OnPropertyChanged(nameof(ActionBarMessage));
             }
         }
     }
@@ -89,6 +125,7 @@ public sealed class ProfileManagerViewModel : ObservableObject
     {
         StatusSeverity = InfoBarSeverity.Success;
         StatusMessage = message;
+        ScheduleClearStatus();
     }
 
     private void ReportError(string message)
@@ -100,15 +137,22 @@ public sealed class ProfileManagerViewModel : ObservableObject
     /// <summary>进入 Profile 页时若一个 Profile 都没有，则自动落一个占位 Profile 供右侧补全。</summary>
     public void EnsureDefaultIfEmpty(GameType game)
     {
-        if (_data.Config.Profiles.Count > 0)
+        if (_data.Config.Profiles.Any(item => item.Game == game))
         {
             return;
         }
 
         try
         {
-            _data.EnsureDefaultProfile(game);
-            ReportInfo("已自动创建默认 Profile，请在右侧补全游戏路径");
+            var taken = _data.Config.Profiles.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
+            var id = game.ToString().ToLowerInvariant();
+            for (var n = 2; taken.Contains(id); n++)
+            {
+                id = $"{game.ToString().ToLowerInvariant()}-{n}";
+            }
+
+            _data.AddProfile(new ProfileMutation(Id: id, DisplayName: $"{GameNames.Display(game)} 配置", Game: game));
+            ReportInfo("请先选择游戏 EXE 路径");
         }
         catch (Exception ex)
         {
@@ -130,9 +174,9 @@ public sealed class ProfileManagerViewModel : ObservableObject
         try
         {
             Profiles.Clear();
-            foreach (var profile in _data.Config.Profiles)
+            foreach (var profile in _data.Config.Profiles.Where(item => item.Game == _scope))
             {
-                Profiles.Add(ProfileEditorViewModel.From(profile));
+                Profiles.Add(Track(ProfileEditorViewModel.From(profile)));
             }
 
             if (pendingNew is not null)
@@ -171,49 +215,146 @@ public sealed class ProfileManagerViewModel : ObservableObject
         }
 
         // 加入集合后左栏才会出现该条目，否则新建项不可见且切换即丢失。
-        var created = ProfileEditorViewModel.New(_data.Config.Profiles.Select(profile => profile.Id));
-        Profiles.Add(created);
+        var created = ProfileEditorViewModel.New(_data.Config.Profiles.Select(profile => profile.Id), _scope);
+        Profiles.Add(Track(created));
         SelectedProfile = created;
-        ReportInfo("填写 Profile 信息后保存；游戏路径可稍后补全");
+        ReportInfo("为同一游戏添加另一套配置（如另一个服务器），填写后保存");
     }
 
     private void Save()
     {
-        if (SelectedProfile is not { } editing)
+        var targets = Profiles.Where(item => item.IsNew || item.IsDirty).ToList();
+        if (targets.Count == 0)
         {
             return;
         }
 
-        var wasNew = editing.IsNew;
-        try
+        var selectedWasNew = SelectedProfile?.IsNew ?? false;
+        var selectedId = SelectedProfile?.Id;
+        GameProfile? lastSaved = null;
+        foreach (var editing in targets)
         {
-            var mutation = editing.ToMutation();
-            var saved = wasNew
-                ? _data.AddProfile(mutation)
-                : _data.UpdateProfile(editing.Id, mutation);
-
-            if (wasNew)
+            try
             {
-                Profiles.Remove(editing);
+                var mutation = editing.ToMutation();
+                var saved = editing.IsNew
+                    ? _data.AddProfile(mutation)
+                    : _data.UpdateProfile(editing.Id, mutation);
+                lastSaved = saved;
+                if (editing.IsNew)
+                {
+                    Profiles.Remove(editing);
+                    if (selectedWasNew && ReferenceEquals(editing, SelectedProfile))
+                    {
+                        selectedId = saved.Id;
+                    }
+                }
+                else
+                {
+                    editing.IsDirty = false;
+                }
             }
-
-            Refresh();
-            SelectedProfile = Profiles.FirstOrDefault(item =>
-                !item.IsNew && string.Equals(item.Id, saved.Id, StringComparison.Ordinal));
-            if (string.IsNullOrEmpty(saved.ExecutablePath))
+            catch (Exception ex)
             {
-                ReportInfo($"已保存 {saved.DisplayName}；尚未设置游戏路径，启动前需补全");
-            }
-            else
-            {
-                ReportSuccess($"已保存 {saved.DisplayName}");
+                // 出错的那一套留在列表里并选中，已成功的不受影响；错误一直显示到下次修改。
+                SelectedProfile = editing;
+                ReportError(Describe(ex, "保存失败"));
+                DesktopLog.Write($"保存配置失败（id={editing.Id}）", ex);
+                return;
             }
         }
-        catch (Exception ex)
+
+        Refresh();
+        SelectedProfile = Profiles.FirstOrDefault(item =>
+            !item.IsNew && string.Equals(item.Id, selectedId, StringComparison.Ordinal))
+            ?? Profiles.FirstOrDefault(item => !item.IsNew);
+        if (lastSaved is not null && string.IsNullOrEmpty(lastSaved.ExecutablePath))
         {
-            ReportError(Describe(ex, "保存失败"));
-            DesktopLog.Write($"保存 Profile 失败（id={editing.Id}）", ex);
+            ReportInfo("已保存；尚未设置游戏路径，启动前需补全");
         }
+        else
+        {
+            ReportSuccess("已保存");
+        }
+    }
+
+    private void Discard()
+    {
+        foreach (var item in Profiles.Where(item => item.IsNew).ToList())
+        {
+            Profiles.Remove(item);
+        }
+
+        _selectedProfile = null;
+        Refresh();
+        StatusMessage = string.Empty;
+    }
+
+    private ProfileEditorViewModel Track(ProfileEditorViewModel editor)
+    {
+        editor.PropertyChanged += OnEditorChanged;
+        return editor;
+    }
+
+    private void OnEditorChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (sender is not ProfileEditorViewModel editor)
+        {
+            return;
+        }
+
+        if (e.PropertyName is not (nameof(ProfileEditorViewModel.IsDirty) or nameof(ProfileEditorViewModel.IsNew)))
+        {
+            editor.IsDirty = true;
+
+            // 用户继续编辑后，上一次的保存结果/错误不再适用。
+            if (HasStatus)
+            {
+                StatusMessage = string.Empty;
+            }
+        }
+
+        RaisePending();
+    }
+
+    private void RaisePending()
+    {
+        OnPropertyChanged(nameof(HasPendingChanges));
+        OnPropertyChanged(nameof(ShowActionBar));
+        OnPropertyChanged(nameof(ActionBarMessage));
+        OnPropertyChanged(nameof(ShowProfileName));
+        SaveCommand.NotifyCanExecuteChanged();
+    }
+
+    public bool HasPendingChanges => Profiles.Any(item => item.IsNew || item.IsDirty);
+
+    /// <summary>单配置时不展示名称；多配置或正在新建时展示，用来区分各套配置。</summary>
+    public bool ShowProfileName => HasMultiple || (SelectedProfile?.IsNew ?? false);
+
+    public bool ShowActionBar => HasPendingChanges || HasStatus;
+
+    public string ActionBarMessage => HasStatus ? StatusMessage : "有未保存的修改";
+
+    /// <summary>保存成功的提示几秒后自动消失；错误提示保留到用户再次修改。</summary>
+    private void ScheduleClearStatus()
+    {
+        if (_dispatcher is null)
+        {
+            return;
+        }
+
+        _clearTimer?.Stop();
+        _clearTimer = _dispatcher.CreateTimer();
+        _clearTimer.Interval = TimeSpan.FromSeconds(3);
+        _clearTimer.IsRepeating = false;
+        _clearTimer.Tick += (_, _) =>
+        {
+            if (StatusSeverity == InfoBarSeverity.Success)
+            {
+                StatusMessage = string.Empty;
+            }
+        };
+        _clearTimer.Start();
     }
 
     private void Delete()
@@ -256,6 +397,15 @@ public sealed class ProfileManagerViewModel : ObservableObject
 
 public sealed class ProfileEditorViewModel : ObservableObject
 {
+    private bool _isDirty;
+
+    /// <summary>构造完成后任何可编辑字段变化即为 true；保存或重建后清除。</summary>
+    public bool IsDirty
+    {
+        get => _isDirty;
+        set => SetProperty(ref _isDirty, value);
+    }
+
     private string _id = string.Empty;
     private string _displayName = string.Empty;
     private GameType _game;
@@ -311,7 +461,7 @@ public sealed class ProfileEditorViewModel : ObservableObject
     public bool IsGenshin => Game == GameType.Genshin;
 
     /// <summary>新建编辑项。ID 与名称预填可用默认值，避免「必填但界面无提示」导致保存必然失败。</summary>
-    public static ProfileEditorViewModel New(IEnumerable<string> existingIds)
+    public static ProfileEditorViewModel New(IEnumerable<string> existingIds, GameType game)
     {
         var taken = new HashSet<string>(existingIds, StringComparer.Ordinal);
         var suffix = 1;
@@ -325,9 +475,9 @@ public sealed class ProfileEditorViewModel : ObservableObject
         return new ProfileEditorViewModel
         {
             IsNew = true,
-            Game = GameType.Genshin,
+            Game = game,
             Id = id,
-            DisplayName = suffix == 1 ? "新配置" : $"新配置 {suffix}",
+            DisplayName = suffix == 1 ? $"{GameNames.Display(game)} 新配置" : $"{GameNames.Display(game)} 新配置 {suffix}",
         };
     }
 
