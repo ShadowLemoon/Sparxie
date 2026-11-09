@@ -11,6 +11,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Platforms>x64;AnyCPU</Platforms>
+    <!-- slnx 整体构建（如 CI）不带 Platform，自包含 WinAppSDK 需要明确架构。 -->
+    <RuntimeIdentifier Condition="'$(Platform)' == 'AnyCPU' and '$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
   </PropertyGroup>
 
   <ItemGroup>
