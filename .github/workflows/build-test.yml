@@ -54,19 +54,9 @@ jobs:
         run: |
           Copy-Item "native/HoyoTouchCore/build/Release/HoyoTouchCore.dll" "tests/HoyoAbi.Tests/bin/Release/net10.0/" -Force
 
-      - name: 发布三个进程（自包含 win-x64）
+      - name: 打包桌面应用（壳 + app-版本目录，含已校验 ZZZ Runtime）
         shell: pwsh
-        run: |
-          foreach ($proj in @(
-            'src/Sparxie.Launcher/Sparxie.Launcher.csproj',
-            'src/Sparxie.Broker/Sparxie.Broker.csproj',
-            'src/Sparxie.SessionHost/Sparxie.SessionHost.csproj')) {
-            dotnet publish $proj -c Release -r win-x64 --self-contained -o (Join-Path (Split-Path $proj) 'bin/Release/net10.0-windows/win-x64/publish') --nologo
-            if ($LASTEXITCODE -ne 0) { throw "publish 失败: $proj" }
-          }
-
-      - name: 打包完整便携 ZIP（含已校验 ZZZ Runtime）
-        run: python build/package_runtime.py package --runtime-directory runtime/zzz --hoyo-touch-core native/HoyoTouchCore/build/Release/HoyoTouchCore.dll
+        run: ./build/package_desktop.ps1 -Version 0.0.0-ci -RuntimeDirectory runtime/zzz -OutputDirectory artifacts
 
       - name: 运行全部测试（含发布 ZIP 审计）
         run: dotnet test Sparxie.slnx -c Release --no-build --nologo -v q
@@ -74,6 +64,6 @@ jobs:
       - name: 上传 ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: sparxie-portable
-          path: artifacts/Sparxie-portable.zip
+          name: sparxie-desktop
+          path: artifacts/Sparxie-desktop-*-win-x64.zip
           retention-days: 14

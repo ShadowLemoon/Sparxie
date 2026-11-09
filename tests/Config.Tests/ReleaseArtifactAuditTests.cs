@@ -4,7 +4,7 @@ using Xunit;
 namespace Config.Tests;
 
 /// <summary>
-/// 发布产物审计：便携 ZIP 存在时验证发布门禁。
+/// 发布产物审计：桌面 ZIP 存在时验证发布门禁。
 /// 本地未构建 Release 产物时跳过（不阻塞单元测试）。
 /// </summary>
 public class ReleaseArtifactAuditTests
@@ -24,8 +24,10 @@ public class ReleaseArtifactAuditTests
 
     private static string? FindZip()
     {
-        var zip = Path.Combine(RepoRoot(), "artifacts", "Sparxie-portable.zip");
-        return File.Exists(zip) ? zip : null;
+        var directory = Path.Combine(RepoRoot(), "artifacts");
+        return Directory.Exists(directory)
+            ? Directory.GetFiles(directory, "Sparxie-desktop-*-win-x64.zip").OrderBy(f => f).LastOrDefault()
+            : null;
     }
 
     [Fact]
@@ -40,9 +42,17 @@ public class ReleaseArtifactAuditTests
         using var archive = ZipFile.OpenRead(zip);
         var names = archive.Entries.Select(e => e.FullName.Replace('\\', '/')).ToHashSet();
 
+        // 壳启动器 + version.ini 在根，其余都在 Sparxie/app-<版本>/ 下。
+        Assert.Contains("Sparxie/Sparxie.exe", names);
+        Assert.Contains("Sparxie/version.ini", names);
+        var appPrefix = names.Where(n => n.StartsWith("Sparxie/app-", StringComparison.Ordinal))
+            .Select(n => n[..(n.IndexOf('/', "Sparxie/".Length) + 1)])
+            .FirstOrDefault();
+        Assert.NotNull(appPrefix);
+
         foreach (var required in new[]
         {
-            "Sparxie.Launcher.exe",
+            "Sparxie.Desktop.exe",
             "Sparxie.Broker.exe",
             "Sparxie.SessionHost.exe",
             "HoyoTouchCore.dll",
@@ -55,7 +65,7 @@ public class ReleaseArtifactAuditTests
             "RUNTIME-NOTICE.md",
         })
         {
-            Assert.True(names.Contains(required), $"ZIP 缺少 {required}");
+            Assert.True(names.Contains(appPrefix + required), $"ZIP 缺少 {required}");
         }
 
         Assert.DoesNotContain(names, n => n.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase));

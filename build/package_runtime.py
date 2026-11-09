@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""校验固定 ZZZ Runtime 并生成 Sparxie 便携 ZIP。"""
+"""下载并校验固定 ZZZ Runtime（桌面包由 build/package_desktop.ps1 生成）。"""
 
 from __future__ import annotations
 
@@ -159,82 +159,8 @@ def require_directory(path: Path, description: str) -> Path:
     return path
 
 
-def copy_publish_outputs(staging_path: Path) -> None:
-    for name in ("Sparxie.Launcher", "Sparxie.Broker", "Sparxie.SessionHost"):
-        publish_path = REPOSITORY_ROOT / "src" / name / "bin" / "Release" / "net10.0-windows" / "win-x64" / "publish"
-        require_directory(publish_path, "publish 目录")
-        shutil.copytree(publish_path, staging_path, dirs_exist_ok=True)
-
-
-def remove_pdbs(staging_path: Path) -> None:
-    for file in staging_path.rglob("*"):
-        if file.is_file() and file.suffix.casefold() == ".pdb":
-            file.unlink()
-
-    if any(file.is_file() and file.suffix.casefold() == ".pdb" for file in staging_path.rglob("*")):
-        fail("staging 仍含 PDB")
-
-
-def write_archive(staging_path: Path, archive_path: Path) -> None:
-    remove_path(archive_path)
-    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        files: Iterable[Path] = sorted(
-            (path for path in staging_path.rglob("*") if path.is_file()),
-            key=lambda path: path.relative_to(staging_path).as_posix(),
-        )
-        for file in files:
-            archive.write(file, file.relative_to(staging_path).as_posix())
-
-
-def package_portable(runtime_directory: Path, hoyo_touch_core_path: Path) -> None:
-    _, _, _, runtime_files = load_manifest()
-    runtime_directory = require_directory(runtime_directory.resolve(), "已校验 Runtime staging 目录")
-    hoyo_touch_core_path = require_file(hoyo_touch_core_path.resolve(), "HoyoTouchCore.dll")
-
-    staging_path = REPOSITORY_ROOT / "artifacts" / "Sparxie"
-    archive_path = REPOSITORY_ROOT / "artifacts" / "Sparxie-portable.zip"
-    staging_path.parent.mkdir(parents=True, exist_ok=True)
-    remove_path(staging_path)
-    staging_path.mkdir()
-
-    copy_publish_outputs(staging_path)
-    shutil.copy2(hoyo_touch_core_path, staging_path / "HoyoTouchCore.dll")
-
-    for file in runtime_files:
-        runtime_file = require_file(runtime_directory / file, "已校验 Runtime staging 文件")
-        shutil.copy2(runtime_file, staging_path / file)
-
-    for source, destination in (
-        (REPOSITORY_ROOT / "LICENSE", "LICENSE"),
-        (REPOSITORY_ROOT / "THIRD-PARTY-NOTICES.md", "THIRD-PARTY-NOTICES.md"),
-        (REPOSITORY_ROOT / "native" / "HoyoTouchCore" / "upstream" / "LICENSE", "UPSTREAM-LICENSE-MIT.txt"),
-        (REPOSITORY_ROOT / "native" / "HoyoTouchCore" / "adapter" / "licenses" / "inih-LICENSE.txt", "inih-LICENSE.txt"),
-        (REPOSITORY_ROOT / "docs" / "RUNTIME-NOTICE.md", "RUNTIME-NOTICE.md"),
-    ):
-        shutil.copy2(require_file(source, "发布文件"), staging_path / destination)
-
-    required_files = [
-        "Sparxie.Launcher.exe",
-        "Sparxie.Broker.exe",
-        "Sparxie.SessionHost.exe",
-        "HoyoTouchCore.dll",
-        "LICENSE",
-        "THIRD-PARTY-NOTICES.md",
-        "UPSTREAM-LICENSE-MIT.txt",
-        "inih-LICENSE.txt",
-        "RUNTIME-NOTICE.md",
-        *runtime_files,
-    ]
-    for file in required_files:
-        require_file(staging_path / file, "staging 文件")
-
-    remove_pdbs(staging_path)
-    write_archive(staging_path, archive_path)
-    print(f"完整便携 ZIP 已生成：{archive_path}")
-
-
 def parse_arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="校验固定 ZZZ Runtime 并生成 Sparxie 便携 ZIP。")
+    parser = argparse.ArgumentParser(description="下载并校验固定 ZZZ Runtime（桌面包由 build/package_desktop.ps1 生成）。")
     commands = parser.add_subparsers(dest="command", required=True)
 
     download = commands.add_parser("download-runtime", help="下载固定 Release Runtime ZIP。")
@@ -243,10 +169,6 @@ def parse_arguments() -> argparse.Namespace:
     prepare = commands.add_parser("prepare-runtime", help="校验 Runtime ZIP 并准备 staging。")
     prepare.add_argument("--archive", type=Path, required=True, help="固定 Release 下载的 ZIP 路径。")
     prepare.add_argument("--destination", type=Path, required=True, help="已校验 Runtime staging 输出目录。")
-
-    package = commands.add_parser("package", help="生成包含已校验 Runtime 的便携 ZIP。")
-    package.add_argument("--runtime-directory", type=Path, required=True, help="已校验 Runtime staging 目录。")
-    package.add_argument("--hoyo-touch-core", type=Path, required=True, help="HoyoTouchCore.dll 路径。")
 
     return parser.parse_args()
 
@@ -258,8 +180,6 @@ def main() -> int:
             download_runtime(arguments.destination)
         elif arguments.command == "prepare-runtime":
             prepare_runtime(arguments.archive, arguments.destination)
-        elif arguments.command == "package":
-            package_portable(arguments.runtime_directory, arguments.hoyo_touch_core)
         else:
             fail(f"未知命令: {arguments.command}")
     except (OSError, ValueError) as error:

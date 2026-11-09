@@ -1,11 +1,11 @@
 # Sparxie 架构
 
-无 GUI 的控制台启动器核心 + 管理员 Broker + 按游戏独立的 SessionHost。三款游戏（绝区零、原神、崩坏：星穹铁道）均以“触屏初始化成功”为启动成功硬条件。
+WinUI 3 桌面应用 + 启动器核心 + 管理员 Broker + 按游戏独立的 SessionHost。三款游戏（绝区零、原神、崩坏：星穹铁道）均以“触屏初始化成功”为启动成功硬条件。
 
 ## 进程拓扑
 
 ```text
-普通权限 Sparxie.Launcher
+普通权限 Sparxie.Desktop（经 Sparxie.exe 壳启动）
         │
         │ Sparxie.LauncherCore：配置选择、Broker 控制流、事件路由
         ▼
@@ -16,11 +16,11 @@
         └─ 星铁   SessionHost ──▶ HoyoTouchCore.dll
 ```
 
-- Launcher 不提升权限、不直接创建游戏进程、不加载 native Runtime；
+- Desktop 不提升权限、不直接创建游戏进程、不加载 native Runtime；
 - Broker 只暴露固定 RPC，为获准请求启动 SessionHost；
-- 每个 Launcher 私有 Broker 只接受一个控制事件流，控制端断开后按活动 Host 状态收尾；
+- 每个 Desktop 私有 Broker 只接受一个控制事件流，控制端断开后按活动 Host 状态收尾；
 - SessionHost 持有不可变 Profile 快照，是游戏级命名互斥锁的权威所有者；
-- Launcher 退出不结束已启动游戏；Broker 退出/崩溃不结束既有 Host 与游戏。
+- Desktop 退出不结束已启动游戏；Broker 退出/崩溃不结束既有 Host 与游戏。
 
 ## 会话生命周期
 
@@ -37,7 +37,8 @@
 
 ```text
 src/
-├─ Sparxie.Launcher/      # 控制台宿主（Profile CRUD、launch、fps、quit）
+├─ Sparxie.Desktop/       # WinUI 3 桌面应用（主页、游戏设置、托盘）
+├─ Sparxie.Shell/         # 壳启动器（读取 version.ini 拉起 app-<版本>\Sparxie.Desktop.exe）
 ├─ Sparxie.LauncherCore/  # 无界面启动器核心（选择、快照、RPC、事件、会话句柄）
 ├─ Sparxie.Broker/        # 管理员 Broker（RPC 入口、Host 启动、异常监控）
 ├─ Sparxie.SessionHost/   # 按游戏运行会话（互斥、Job、Runtime 调用、清理）
@@ -56,8 +57,8 @@ docs/                      # 架构、第三方许可证
 
 ## 关键机制
 
-- **配置**：`config.json` 与 Launcher 同目录，原子保存；损坏时按原始字节备份为
-  `config.invalid-<UTC>-<随机>.json` 并生成空白 v1 配置，CLI 输出提醒；
+- **配置**：`config.json` 与 `Sparxie.exe` 同目录（含界面偏好 `desktop` 段），原子保存；损坏时按原始字节备份为
+  `config.invalid-<UTC>-<随机>.json` 并生成空白 v1 配置；
 - **Profile 选择**：优先按 ID，再按显示名精确匹配；重名、空配置和不存在项明确失败；
 - **互斥**：同款游戏的所有 Profile 共享游戏级命名互斥域，由 SessionHost 持有；
 - **Running 前失效保护**：Host 独占临时 Job（KILL_ON_JOB_CLOSE），Running 前完成
@@ -71,15 +72,15 @@ docs/                      # 架构、第三方许可证
 
 ## 当前状态与阻塞点
 
-- 已完成：Contracts/配置、LauncherCore 与 CLI Profile CRUD、Broker/SessionHost 闭环、ZZZ Runtime 注入与
+- 已完成：Contracts/配置、LauncherCore 与桌面 GUI、Broker/SessionHost 闭环、ZZZ Runtime 注入与
   Running 前失效保护、Hoyo subtree 与 C ABI、Broker 单控制流和断连收尾、发布许可证交付；
-  ZZZ Runtime 已固定为 `v2.0.0`（按 ZZZTouchLauncher v2：只注入 Runtime，不读写游戏配置），从指定 Release 下载后经 SHA-256 校验合入无 GUI 便携 ZIP。
+  ZZZ Runtime 已固定为 `v2.0.0`（按 ZZZTouchLauncher v2：只注入 Runtime，不读写游戏配置），从指定 Release 下载后经 SHA-256 校验合入桌面发布 ZIP。
 - 阻塞项：生产 UAC 确认以及原神/星铁/绝区零真实游戏环境的注入、Running 前后强杀 Host 等实机验证。
 
 ## 发布
 
-- 自包含 `win-x64` 便携 ZIP；`config.json` 跟随 Launcher；
-- CI 先构建 `HoyoTouchCore.dll`，下载固定 `v1.0.0` ZZZ Runtime 并校验 SHA-256，再发布 Launcher、Broker、SessionHost；
+- 自包含 `win-x64` 桌面 ZIP（`Sparxie.exe` 壳 + `app-<版本>\`）；`config.json` 跟随壳；
+- CI 先构建 `HoyoTouchCore.dll`，下载固定 `v1.0.0` ZZZ Runtime 并校验 SHA-256，再由 build/package_desktop.ps1 发布 Desktop、Broker、SessionHost 并打包；
 - 发布 staging 只复制 manifest 声明的 ZZZ DLL，不含调试符号、CI 凭据或私库痕迹；
 - 许可证：根 LICENSE 覆盖自有代码（闭源专有）；THIRD-PARTY-NOTICES.md 与
   `adapter/licenses/` 覆盖 Hoyo(MIT)、inih(BSD-3-Clause)、gRPC(Apache-2.0)、.NET(MIT)；

@@ -8,7 +8,6 @@
 
 ### LauncherCore 与控制台宿主
 
-- CLI Profile 创建、查看、修改、选择、删除、原子保存与重载；
 - Profile ID、显示名、默认选中、回退首项、重名歧义、空配置和不存在项；
 - Profile 快照全字段与游戏/优先级枚举映射；
 - Broker 受控 `--pipe-name` 参数生成、严格解析和拒绝未知参数；
@@ -26,7 +25,7 @@
 
 ## 离线缺口
 
-- 自包含目录直接运行 Launcher 并读取同目录 `config.json`；
+- 自包含目录直接运行 Desktop 并读取同目录 `config.json`；
 - 完整诊断包敏感项审计（`config.invalid-*`、凭据、路径组合）；
 - Broker 只处置本次 SessionHost 创建的进程；
 - 句柄继承、外部/嵌套 Job、Running 前转换失败等极端进程边界；
@@ -48,7 +47,7 @@
 ## 已由架构保证（无需单测）
 
 - Profile 快照不可变：快照经 JSON 序列化传给独立 Host 进程（天然副本）；
-- Launcher 与私有 Broker 不跨进程重连或接管旧会话；
+- Desktop 与私有 Broker 不跨进程重连或接管旧会话；
 - 控制端退出不主动结束已进入 Running 的游戏。
 
 ## 跟踪方式
