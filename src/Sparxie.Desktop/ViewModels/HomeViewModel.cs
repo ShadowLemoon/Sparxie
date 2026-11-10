@@ -14,6 +14,7 @@ public sealed class HomeViewModel : ObservableObject
     private GameProfile? _selectedProfile;
     private string _statusMessage = "准备就绪";
     private bool _isLaunching;
+    private readonly HashSet<GameType> _activeGames = new();
     private string? _backgroundPath;
 
     public HomeViewModel(DesktopDataService data, LauncherService launcher)
@@ -24,7 +25,7 @@ public sealed class HomeViewModel : ObservableObject
         GameEntries = new ObservableCollection<GameEntryViewModel>();
         SelectGameCommand = new ParameterRelayCommand(SelectGame);
         SelectProfileCommand = new ParameterRelayCommand(SelectProfile);
-        LaunchCommand = new AsyncRelayCommand(LaunchAsync, () => SelectedProfile is not null && !IsLaunching);
+        LaunchCommand = new AsyncRelayCommand(LaunchAsync, () => SelectedProfile is not null && !IsLaunching && !IsSelectedGameActive);
         Refresh();
     }
 
@@ -115,7 +116,7 @@ public sealed class HomeViewModel : ObservableObject
 
             OnPropertyChanged(nameof(CurrentProfileName));
             OnPropertyChanged(nameof(CurrentProfileDetails));
-            LaunchCommand.NotifyCanExecuteChanged();
+            RaiseLaunchState();
             RememberProfile(value);
 
             RebuildEntries();
@@ -165,7 +166,29 @@ public sealed class HomeViewModel : ObservableObject
                 return;
             }
 
-            LaunchCommand.NotifyCanExecuteChanged();
+            RaiseLaunchState();
+        }
+    }
+
+    /// <summary>当前选中的游戏已有会话在运行（同款游戏同一时间只允许一个会话）。</summary>
+    public bool IsSelectedGameActive => SelectedProfile is { } profile && _activeGames.Contains(profile.Game);
+
+    /// <summary>启动按钮文字：启动中 / 运行中 / 启动游戏。</summary>
+    public string LaunchLabel => IsLaunching ? "启动中…" : IsSelectedGameActive ? "运行中" : "启动游戏";
+
+    private void RaiseLaunchState()
+    {
+        OnPropertyChanged(nameof(IsSelectedGameActive));
+        OnPropertyChanged(nameof(LaunchLabel));
+        OnPropertyChanged(nameof(LaunchAutomationName));
+        LaunchCommand.NotifyCanExecuteChanged();
+    }
+
+    private void SetGameActive(GameType game, bool active)
+    {
+        if (active ? _activeGames.Add(game) : _activeGames.Remove(game))
+        {
+            RaiseLaunchState();
         }
     }
 
@@ -287,7 +310,7 @@ public sealed class HomeViewModel : ObservableObject
 
     public string GameSettingsAutomationName => $"{GameNames.Display(SelectedGame)} 游戏设置";
 
-    public string LaunchAutomationName => $"启动 {SwitcherLabel}";
+    public string LaunchAutomationName => IsSelectedGameActive ? $"{SwitcherLabel} 运行中" : $"启动 {SwitcherLabel}";
 
     /// <summary>游戏图标是异步下载的，加载完后补发属性变更并重建 Flyout 内容。</summary>
     public void NotifyGameIconsLoaded() => RebuildEntries();
@@ -326,13 +349,17 @@ public sealed class HomeViewModel : ObservableObject
             return;
         }
 
+        var profile = SelectedProfile;
         IsLaunching = true;
-        StatusMessage = $"正在启动 {SelectedProfile.DisplayName}…";
+        StatusMessage = $"正在启动 {profile.DisplayName}…";
         try
         {
-            var session = await _launcher.StartAsync(SelectedProfile).ConfigureAwait(true);
-            StatusMessage = $"已启动 {SelectedProfile.DisplayName}，会话 {session.SessionId[..Math.Min(8, session.SessionId.Length)]}";
-            _ = ObserveSessionAsync(session);
+            var session = await _launcher.StartAsync(profile).ConfigureAwait(true);
+            StatusMessage = $"已启动 {profile.DisplayName}，会话 {session.SessionId[..Math.Min(8, session.SessionId.Length)]}";
+
+            // 会话存续期间该游戏的启动按钮禁用并显示“运行中”，直到收到终态事件。
+            SetGameActive(profile.Game, true);
+            _ = ObserveSessionAsync(session, profile.Game);
         }
         catch (Exception ex)
         {
@@ -344,7 +371,7 @@ public sealed class HomeViewModel : ObservableObject
         }
     }
 
-    private async Task ObserveSessionAsync(LauncherSession session)
+    private async Task ObserveSessionAsync(LauncherSession session, GameType game)
     {
         try
         {
@@ -367,6 +394,11 @@ public sealed class HomeViewModel : ObservableObject
         catch (Exception ex)
         {
             StatusMessage = $"会话事件流中断：{ex.Message}";
+        }
+        finally
+        {
+            // 终态事件、事件流中断或结束，都不再认为该游戏在运行。
+            SetGameActive(game, false);
         }
     }
 

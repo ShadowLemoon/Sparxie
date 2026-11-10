@@ -144,7 +144,7 @@
                             <StaticResource x:Key="AccentButtonForegroundPressed" ResourceKey="StartButtonForegroundBrush" />
                         </Button.Resources>
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock VerticalAlignment="Center" Text="启动游戏" />
+                            <TextBlock VerticalAlignment="Center" Text="{Binding Home.LaunchLabel}" />
                         </StackPanel>
                     </Button>
                 </Grid>
