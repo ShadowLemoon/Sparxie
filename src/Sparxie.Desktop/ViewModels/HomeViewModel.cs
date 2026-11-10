@@ -197,6 +197,8 @@ public sealed class HomeViewModel : ObservableObject
 
     private void RaiseLaunchState()
     {
+        OnPropertyChanged(nameof(SwitcherText));
+        OnPropertyChanged(nameof(SwitcherLabel));
         OnPropertyChanged(nameof(PathIssue));
         OnPropertyChanged(nameof(HasPathIssue));
         OnPropertyChanged(nameof(PathIssueMessage));
@@ -321,9 +323,14 @@ public sealed class HomeViewModel : ObservableObject
         }
     }
 
-    /// <summary>左下游戏卡显示的文字：多配置时“原神 · 国服”，单配置只有游戏名。</summary>
+    /// <summary>左下游戏卡的完整名称（读屏用）：多配置时“原神 · 国服”，单配置只有游戏名。</summary>
     public string SwitcherLabel => HasMultipleProfiles && SelectedProfile is { } profile
         ? $"{GameNames.Display(SelectedGame)} · {profile.DisplayName}"
+        : GameNames.Display(SelectedGame);
+
+    /// <summary>游戏卡上显示的文字：图标已标识游戏，多配置时只显示配置名（名字太长会被截断），单配置显示游戏名。</summary>
+    public string SwitcherText => HasMultipleProfiles && SelectedProfile is { } profile
+        ? profile.DisplayName
         : GameNames.Display(SelectedGame);
 
     public Microsoft.UI.Xaml.Media.ImageSource? CurrentGameIcon => GameTabBinding.Icon(SelectedGame);
@@ -358,6 +365,7 @@ public sealed class HomeViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(SwitcherLabel));
+        OnPropertyChanged(nameof(SwitcherText));
         OnPropertyChanged(nameof(CurrentGameIcon));
         OnPropertyChanged(nameof(SwitcherAutomationName));
         OnPropertyChanged(nameof(GameSettingsAutomationName));

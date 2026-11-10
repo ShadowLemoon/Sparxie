@@ -184,7 +184,7 @@ public sealed class ProfileManagerViewModel : ObservableObject
                 id = $"{game.ToString().ToLowerInvariant()}-{n}";
             }
 
-            _data.AddProfile(new ProfileMutation(Id: id, DisplayName: $"{GameNames.Display(game)} 配置", Game: game));
+            _data.AddProfile(new ProfileMutation(Id: id, DisplayName: "默认配置", Game: game));
             ReportInfo("请先选择游戏 EXE 路径");
         }
         catch (Exception ex)
@@ -465,7 +465,7 @@ public sealed class ProfileEditorViewModel : ObservableObject
             IsNew = true,
             Game = game,
             Id = id,
-            DisplayName = suffix == 1 ? $"{GameNames.Display(game)} 新配置" : $"{GameNames.Display(game)} 新配置 {suffix}",
+            DisplayName = suffix == 1 ? "新配置" : $"新配置 {suffix}",
         };
     }
 

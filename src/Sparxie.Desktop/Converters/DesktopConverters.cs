@@ -27,7 +27,7 @@ public sealed class GameDisplayConverter : IValueConverter
     public object Convert(object value, Type targetType, object parameter, string language) => value switch
     {
         GameType.Genshin => "原神",
-        GameType.StarRail => "星穹铁道",
+        GameType.StarRail => "崩坏：星穹铁道",
         GameType.ZenlessZoneZero => "绝区零",
         _ => value?.ToString() ?? string.Empty,
     };

@@ -122,7 +122,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <Image Source="{Binding Home.CurrentGameIcon}" Width="40" Height="40" />
-                                <TextBlock Grid.Column="1" Text="{Binding Home.SwitcherLabel}" FontSize="18" FontWeight="SemiBold"
+                                <TextBlock Grid.Column="1" Text="{Binding Home.SwitcherText}" FontSize="18" FontWeight="SemiBold"
                                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                 <FontIcon Grid.Column="2" Glyph="&#xE70E;" FontSize="12" Opacity="0.7" />
                             </Grid>
