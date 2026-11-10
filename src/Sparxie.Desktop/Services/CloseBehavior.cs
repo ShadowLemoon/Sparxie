@@ -18,4 +18,16 @@ internal static class DesktopSettingsExtensions
 {
     public static CloseBehavior ResolveCloseBehavior(this DesktopSettings settings) =>
         Enum.TryParse<CloseBehavior>(settings.CloseAction, out var parsed) ? parsed : CloseBehavior.Ask;
+
+    public static AfterLaunchBehavior ResolveAfterLaunch(this DesktopSettings settings) =>
+        Enum.TryParse<AfterLaunchBehavior>(settings.AfterLaunch, out var parsed) ? parsed : AfterLaunchBehavior.Keep;
+}
+
+public enum AfterLaunchBehavior
+{
+    /// <summary>游戏运行后主窗口保持不变。</summary>
+    Keep,
+
+    /// <summary>游戏运行后最小化主窗口。</summary>
+    Minimize,
 }

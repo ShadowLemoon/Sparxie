@@ -41,9 +41,39 @@
                         </StackPanel>
                     </Border>
                     <Border Style="{StaticResource GlassCard}">
+                        <StackPanel Spacing="8">
+                            <ComboBox Header="游戏启动后" HorizontalAlignment="Stretch" MinHeight="48"
+                                      SelectedIndex="{Binding Settings.AfterLaunchIndex, Mode=TwoWay}">
+                                <ComboBoxItem Content="保持窗口不变" />
+                                <ComboBoxItem Content="最小化主窗口" />
+                            </ComboBox>
+                            <TextBlock Text="游戏进入运行状态后再生效；启动失败时不会最小化。" Style="{StaticResource CaptionText}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource GlassCard}">
                         <StackPanel Spacing="4">
                             <ToggleSwitch Header="调试模式" IsOn="{Binding Settings.DebugMode, Mode=TwoWay}" />
                             <TextBlock Text="在主页显示启动与注入状态条，便于排查问题；也可用环境变量 SPARXIE_DEBUG=1 开启。" Style="{StaticResource CaptionText}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource GlassCard}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="数据与诊断" Style="{StaticResource SectionHeading}" />
+                            <Button Content="打开配置目录" HorizontalAlignment="Stretch" MinHeight="48" Command="{Binding Settings.OpenDataFolderCommand}" />
+                            <Button Content="打开日志目录" HorizontalAlignment="Stretch" MinHeight="48" Command="{Binding Settings.OpenLogsFolderCommand}" />
+                            <Button Content="导出脱敏诊断包" HorizontalAlignment="Stretch" MinHeight="48" Command="{Binding Settings.ExportDiagnosticsCommand}" />
+                            <TextBlock Text="诊断包只含日志与环境信息，不含 config.json 和完整用户路径。" Style="{StaticResource CaptionText}" />
+                            <TextBlock Text="{Binding Settings.ToolMessage}" TextWrapping="Wrap"
+                                       Visibility="{Binding Settings.HasToolMessage, Converter={StaticResource BoolToVisibilityConverter}}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource GlassCard}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="关于" Style="{StaticResource SectionHeading}" />
+                            <TextBlock Text="Sparxie" FontSize="16" />
+                            <TextBlock Text="{Binding Settings.VersionText}" Style="{StaticResource CaptionText}" />
+                            <TextBlock Text="许可证、第三方声明（THIRD-PARTY-NOTICES.md）与 Runtime 声明（RUNTIME-NOTICE.md）位于程序目录。" Style="{StaticResource CaptionText}" TextWrapping="Wrap" />
+                            <Button Content="打开程序目录" HorizontalAlignment="Stretch" MinHeight="48" Command="{Binding Settings.OpenInstallFolderCommand}" />
                         </StackPanel>
                     </Border>
                 </StackPanel>

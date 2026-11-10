@@ -42,6 +42,9 @@ public sealed class HomeViewModel : ObservableObject
 
     public AsyncRelayCommand LaunchCommand { get; }
 
+    /// <summary>某个游戏会话进入 Running（注入成功、游戏已在运行）时触发，用于“启动后窗口行为”。</summary>
+    public event Action? GameRunning;
+
     public GameType SelectedGame
     {
         get => _selectedGame;
@@ -403,6 +406,11 @@ public sealed class HomeViewModel : ObservableObject
                         ? $"会话结束：{ev.State}"
                         : $"会话结束：{ev.Message}";
                     break;
+                }
+
+                if (ev.State == "Running")
+                {
+                    GameRunning?.Invoke();
                 }
 
                 // 非终态事件也展示：阶段（启动中/注入中/Running…）与消息，方便看到注入卡在哪一步。

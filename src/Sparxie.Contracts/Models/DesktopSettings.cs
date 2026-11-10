@@ -11,6 +11,9 @@ public sealed class DesktopSettings
     /// <summary>调试模式：主页显示启动/注入状态条等诊断信息。默认关闭；环境变量 SPARXIE_DEBUG=1 可强制开启。</summary>
     public bool DebugMode { get; set; }
 
+    /// <summary>游戏进入运行后主窗口的行为：Keep 保持不变（缺省）/ Minimize 最小化。</summary>
+    public string? AfterLaunch { get; set; }
+
     /// <summary>主页最后选中的游戏标签，跨启动持久化。</summary>
     public string? SelectedGame { get; set; }
 

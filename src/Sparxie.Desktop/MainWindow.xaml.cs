@@ -37,6 +37,7 @@ public sealed partial class MainWindow : Window
         Activated += OnFirstActivated;
 
         _viewModel.Home.PropertyChanged += OnHomePropertyChanged;
+        _viewModel.Home.GameRunning += OnGameRunning;
         // 缓存背景在 HomeViewModel 构造期就同步设置了，早于这里订阅；补一次，否则启动时背景与主题色不会生效。
         if (_viewModel.Home.BackgroundPath is { } initial)
         {
@@ -296,6 +297,16 @@ public sealed partial class MainWindow : Window
         // +10 覆盖系统对最小跟踪尺寸的取整损耗，保证可见下限不低于目标。
         presenter.PreferredMinimumWidth = 1650 + padX + 10;
         presenter.PreferredMinimumHeight = 1000 + padY;
+    }
+
+    /// <summary>“游戏启动后”设置为最小化时，游戏进入运行就把主窗口最小化。</summary>
+    private void OnGameRunning()
+    {
+        if (_viewModel.Settings.CurrentAfterLaunch == AfterLaunchBehavior.Minimize
+            && AppWindow.Presenter is OverlappedPresenter presenter)
+        {
+            presenter.Minimize();
+        }
     }
 
     private async void OnClosed(object sender, WindowEventArgs args)
