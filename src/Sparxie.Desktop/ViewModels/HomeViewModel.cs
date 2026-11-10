@@ -176,8 +176,27 @@ public sealed class HomeViewModel : ObservableObject
     /// <summary>启动按钮文字：启动中 / 运行中 / 启动游戏。</summary>
     public string LaunchLabel => IsLaunching ? "启动中…" : IsSelectedGameActive ? "运行中" : "启动游戏";
 
+    /// <summary>当前配置的游戏 EXE 路径问题；有问题时主页提示并提供「定位游戏」入口。</summary>
+    public ExecutablePathIssue PathIssue => SelectedProfile is { } profile
+        ? ExecutablePathCheck.Check(profile.Game, profile.ExecutablePath)
+        : ExecutablePathIssue.None;
+
+    public bool HasPathIssue => PathIssue != ExecutablePathIssue.None;
+
+    public string PathIssueMessage => SelectedProfile is { } profile
+        ? PathIssue switch
+        {
+            ExecutablePathIssue.Empty => $"还没有设置 {GameNames.Display(profile.Game)} 的游戏路径",
+            ExecutablePathIssue.NotFound => $"找不到 {GameNames.Display(profile.Game)}，游戏可能已移动或卸载",
+            var issue => ExecutablePathCheck.Describe(profile.Game, issue),
+        }
+        : string.Empty;
+
     private void RaiseLaunchState()
     {
+        OnPropertyChanged(nameof(PathIssue));
+        OnPropertyChanged(nameof(HasPathIssue));
+        OnPropertyChanged(nameof(PathIssueMessage));
         OnPropertyChanged(nameof(IsSelectedGameActive));
         OnPropertyChanged(nameof(LaunchLabel));
         OnPropertyChanged(nameof(LaunchAutomationName));
@@ -340,6 +359,7 @@ public sealed class HomeViewModel : ObservableObject
         OnPropertyChanged(nameof(SwitcherAutomationName));
         OnPropertyChanged(nameof(GameSettingsAutomationName));
         OnPropertyChanged(nameof(LaunchAutomationName));
+        RaiseLaunchState();
     }
 
     private async Task LaunchAsync()

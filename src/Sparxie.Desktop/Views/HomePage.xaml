@@ -11,6 +11,18 @@
 
         <StackPanel Grid.Row="1" Margin="28,0,28,28"
                     Visibility="{Binding IsHomeChromeVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+            <!-- 路径异常：EXE 未设置 / 找不到 / 不属于该游戏时提示，并直达当前游戏设置页。 -->
+            <Border HorizontalAlignment="Right" Margin="0,0,0,12" Padding="16,8,8,8" CornerRadius="16" MaxWidth="720"
+                    Background="{StaticResource GlassAcrylicBrush}"
+                    BorderBrush="{ThemeResource SystemFillColorCautionBrush}" BorderThickness="1"
+                    Visibility="{Binding Home.HasPathIssue, Converter={StaticResource BoolToVisibilityConverter}}">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <FontIcon Glyph="&#xE7BA;" FontSize="16" Foreground="{ThemeResource SystemFillColorCautionBrush}" />
+                    <TextBlock Text="{Binding Home.PathIssueMessage}" TextWrapping="Wrap" FontSize="14" VerticalAlignment="Center" />
+                    <Button Content="定位游戏" MinHeight="48" Padding="16,0"
+                            Command="{Binding ShowProfilesCommand}" AutomationProperties.Name="定位游戏" />
+                </StackPanel>
+            </Border>
             <!-- 启动状态条：启动/注入各阶段与失败原因（之前只写在内部状态里，界面上看不到）。 -->
             <Border HorizontalAlignment="Right" Margin="0,0,0,12" Padding="16,10" CornerRadius="16" MaxWidth="720"
                     Background="{StaticResource GlassAcrylicBrush}"

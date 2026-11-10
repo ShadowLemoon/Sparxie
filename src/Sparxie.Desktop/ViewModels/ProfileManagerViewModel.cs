@@ -241,7 +241,8 @@ public sealed class ProfileManagerViewModel : ObservableObject
     private void OnEditorChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (sender is not ProfileEditorViewModel editor
-            || e.PropertyName is nameof(ProfileEditorViewModel.IsHoyoGame) or nameof(ProfileEditorViewModel.IsGenshin))
+            || e.PropertyName is nameof(ProfileEditorViewModel.IsHoyoGame) or nameof(ProfileEditorViewModel.IsGenshin)
+                or nameof(ProfileEditorViewModel.PathHint) or nameof(ProfileEditorViewModel.HasPathHint))
         {
             return;
         }
@@ -367,10 +368,28 @@ public sealed class ProfileEditorViewModel : ObservableObject
             }
 
             OnPropertyChanged(nameof(IsHoyoGame));
+            OnPropertyChanged(nameof(PathHint));
+            OnPropertyChanged(nameof(HasPathHint));
             OnPropertyChanged(nameof(IsGenshin));
         }
     }
-    public string ExecutablePath { get => _executablePath; set => SetProperty(ref _executablePath, value); }
+    public string ExecutablePath
+    {
+        get => _executablePath;
+        set
+        {
+            if (SetProperty(ref _executablePath, value))
+            {
+                OnPropertyChanged(nameof(PathHint));
+                OnPropertyChanged(nameof(HasPathHint));
+            }
+        }
+    }
+
+    /// <summary>路径即时检查结果（未设置 / 非完整路径 / 文件名不属于该游戏 / 文件不存在），合法时为空。</summary>
+    public string PathHint => ExecutablePathCheck.Describe(Game, ExecutablePathCheck.Check(Game, ExecutablePath));
+
+    public bool HasPathHint => PathHint.Length > 0;
     public bool FpsUnlockEnabled { get => _fpsUnlockEnabled; set => SetProperty(ref _fpsUnlockEnabled, value); }
     public double TargetFps { get => _targetFps; set => SetProperty(ref _targetFps, value); }
     public bool BackgroundFpsLimitEnabled { get => _backgroundFpsLimitEnabled; set => SetProperty(ref _backgroundFpsLimitEnabled, value); }

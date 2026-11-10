@@ -133,6 +133,9 @@
                                                 <FontIcon Glyph="&#xE8B7;" FontSize="16" />
                                             </Button>
                                         </Grid>
+                                        <TextBlock Text="{Binding PathHint}" Style="{StaticResource CaptionText}" TextWrapping="Wrap"
+                                                   Foreground="{ThemeResource SystemFillColorCautionBrush}" Margin="0,-8,0,0"
+                                                   Visibility="{Binding HasPathHint, Converter={StaticResource BoolToVisibilityConverter}}" />
                                         <ComboBox Header="进程优先级" HorizontalAlignment="Stretch" MinHeight="48"
                                                   Visibility="{Binding IsHoyoGame, Converter={StaticResource BoolToVisibilityConverter}}"
                                                   ItemsSource="{x:Bind vm:ProfileEditorViewModel.PriorityOptions}"
@@ -272,6 +275,9 @@
                                         <FontIcon Glyph="&#xE8B7;" FontSize="16" />
                                     </Button>
                                 </Grid>
+                                <TextBlock Text="{Binding PathHint}" Style="{StaticResource CaptionText}" TextWrapping="Wrap"
+                                           Foreground="{ThemeResource SystemFillColorCautionBrush}" Margin="0,-8,0,0"
+                                           Visibility="{Binding HasPathHint, Converter={StaticResource BoolToVisibilityConverter}}" />
                             </StackPanel>
                         </Border>
                     </Grid>
