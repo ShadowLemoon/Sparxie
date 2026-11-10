@@ -32,6 +32,7 @@ public sealed class ProfileManagerViewModel : ObservableObject
         };
         _dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
         NewCommand = new RelayCommand(NewProfile);
+        CopyCommand = new RelayCommand(CopyProfile, () => SelectedProfile is not null);
         DeleteCommand = new RelayCommand(Delete, () => SelectedProfile is not null);
         Refresh();
     }
@@ -39,6 +40,8 @@ public sealed class ProfileManagerViewModel : ObservableObject
     public ObservableCollection<ProfileEditorViewModel> Profiles { get; }
 
     public RelayCommand NewCommand { get; }
+
+    public RelayCommand CopyCommand { get; }
 
     public RelayCommand DeleteCommand { get; }
 
@@ -82,6 +85,7 @@ public sealed class ProfileManagerViewModel : ObservableObject
             }
 
             DeleteCommand.NotifyCanExecuteChanged();
+            CopyCommand.NotifyCanExecuteChanged();
             OnPropertyChanged(nameof(HasSelection));
         }
     }
@@ -209,6 +213,7 @@ public sealed class ProfileManagerViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedProfile));
         OnPropertyChanged(nameof(HasSelection));
         DeleteCommand.NotifyCanExecuteChanged();
+        CopyCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>为当前游戏立即新建并保存另一套配置（如另一个服务器），随后在表单里补全。</summary>
@@ -229,6 +234,33 @@ public sealed class ProfileManagerViewModel : ObservableObject
         {
             ReportError(Describe(ex, "添加配置失败"));
             DesktopLog.Write("添加配置失败", ex);
+        }
+    }
+
+    /// <summary>复制当前配置（路径与全部设置）为一套新配置并立即保存，名称加“副本”。</summary>
+    private void CopyProfile()
+    {
+        if (SelectedProfile is not { } source)
+        {
+            return;
+        }
+
+        Flush();
+        try
+        {
+            var newId = ProfileEditorViewModel.New(_data.Config.Profiles.Select(profile => profile.Id), _scope).Id;
+            var mutation = source.ToMutation() with { Id = newId, DisplayName = $"{source.DisplayName} 副本" };
+            var saved = _data.AddProfile(mutation);
+            StatusMessage = string.Empty;
+            _selectedProfile = null;
+            Refresh();
+            SelectedProfile = Profiles.FirstOrDefault(item => string.Equals(item.Id, saved.Id, StringComparison.Ordinal))
+                ?? SelectedProfile;
+        }
+        catch (Exception ex)
+        {
+            ReportError(Describe(ex, "复制配置失败"));
+            DesktopLog.Write("复制配置失败", ex);
         }
     }
 

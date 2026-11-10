@@ -78,14 +78,19 @@
                         <TextBlock Text="添加配置" />
                     </StackPanel>
                 </Button>
-                <!-- 更多：删除放在这里，只有存在多套配置时才出现，避免误触也不占表单位置。 -->
+                <!-- 更多：复制 / 删除放在这里（删除只有存在多套配置时才出现），避免误触也不占表单位置。 -->
                 <Button Width="48" Height="48" Padding="0"
-                        AutomationProperties.Name="更多" ToolTipService.ToolTip="更多"
-                        Visibility="{Binding Profiles.HasMultiple, Converter={StaticResource BoolToVisibilityConverter}}">
+                        AutomationProperties.Name="更多" ToolTipService.ToolTip="更多">
                     <FontIcon Glyph="&#xE712;" FontSize="16" />
                     <Button.Flyout>
-                        <MenuFlyout Placement="BottomEdgeAlignedRight">
-                            <MenuFlyoutItem Text="删除当前配置" Click="DeleteProfileClick">
+                        <MenuFlyout Placement="BottomEdgeAlignedRight" Opening="MoreMenuOpening">
+                            <MenuFlyoutItem Text="复制当前配置" Click="CopyProfileClick">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE8C8;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem x:Name="DeleteMenuItem" Text="删除当前配置" Click="DeleteProfileClick"
+                                            >
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE74D;" />
                                 </MenuFlyoutItem.Icon>

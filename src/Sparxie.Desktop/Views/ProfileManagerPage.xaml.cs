@@ -14,6 +14,12 @@ public sealed partial class ProfileManagerPage : Page
 
     private void AddProfileClick(object sender, RoutedEventArgs e) => Profiles?.NewCommand.Execute(null);
 
+    private void CopyProfileClick(object sender, RoutedEventArgs e) => Profiles?.CopyCommand.Execute(null);
+
+    /// <summary>MenuFlyout 不在可视树内、绑定取不到页面上下文，打开时按当前配置数决定是否显示“删除”。</summary>
+    private void MoreMenuOpening(object? sender, object e) =>
+        DeleteMenuItem.Visibility = Profiles?.HasMultiple == true ? Visibility.Visible : Visibility.Collapsed;
+
     private async void DeleteProfileClick(object sender, RoutedEventArgs e)
     {
         if (Profiles is not { SelectedProfile: { } selected } profiles)
