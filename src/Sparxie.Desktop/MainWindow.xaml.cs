@@ -31,6 +31,7 @@ public sealed partial class MainWindow : Window
         Title = "Sparxie";
         Closed += OnClosed;
         TryConfigureWindow();
+        TrySetWindowIcon();
         AppWindow.Closing += OnAppWindowClosing;
         _viewModel.Settings.Saved += ApplyCloseBehavior;
         ApplyCloseBehavior();
@@ -297,6 +298,30 @@ public sealed partial class MainWindow : Window
         // +10 覆盖系统对最小跟踪尺寸的取整损耗，保证可见下限不低于目标。
         presenter.PreferredMinimumWidth = 1650 + padX + 10;
         presenter.PreferredMinimumHeight = 1000 + padY;
+    }
+
+    /// <summary>窗口 / 任务栏图标；ico 随程序一起复制，缺失时回退到 exe 自带图标。</summary>
+    private void TrySetWindowIcon()
+    {
+        try
+        {
+            var icon = Path.Combine(AppContext.BaseDirectory, "sparxie.ico");
+            if (File.Exists(icon))
+            {
+                AppWindow.SetIcon(icon);
+            }
+
+            // 自绘标题栏左侧的图标（系统标题栏图标被 ExtendsContentIntoTitleBar 取代，需要自己放）。
+            var png = Path.Combine(AppContext.BaseDirectory, "sparxie-64.png");
+            if (File.Exists(png))
+            {
+                TitleBarIcon.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(png));
+            }
+        }
+        catch (Exception ex)
+        {
+            DesktopLog.Write("设置窗口图标失败", ex);
+        }
     }
 
     /// <summary>“游戏启动后”设置为最小化时，游戏进入运行就把主窗口最小化。</summary>

@@ -20,7 +20,10 @@ $out = Join-Path (Resolve-Path $OutputDirectory) 'Sparxie.exe'
 $obj = Join-Path ([System.IO.Path]::GetTempPath()) 'sparxie-shell-obj'
 New-Item -ItemType Directory -Force -Path $obj | Out-Null
 
-$cmd = "`"$vcvars`" >nul && cl /nologo /std:c++20 /O2 /MT /EHsc /utf-8 /Fo`"$obj\\`" /Fe`"$out`" `"$source`" /link /SUBSYSTEM:WINDOWS"
+$res = Join-Path $obj 'Sparxie.Shell.res'
+$rcSource = Join-Path $repo 'src/Sparxie.Shell/Sparxie.Shell.rc'
+# 图标资源（Sparxie.exe 在资源管理器 / 任务栏里显示的图标）
+$cmd = "`"$vcvars`" >nul && rc /nologo /fo `"$res`" `"$rcSource`" && cl /nologo /std:c++20 /O2 /MT /EHsc /utf-8 /Fo`"$obj\\`" /Fe`"$out`" `"$source`" `"$res`" /link /SUBSYSTEM:WINDOWS"
 cmd /c $cmd
 if ($LASTEXITCODE -ne 0) { throw "Shell launcher build failed (exit code $LASTEXITCODE)" }
 Write-Host "Shell launcher built: $out"

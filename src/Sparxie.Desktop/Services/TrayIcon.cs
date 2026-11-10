@@ -117,7 +117,18 @@ internal sealed class TrayIcon : IDisposable
 
     private static IntPtr LoadAppIcon()
     {
-        // 取本程序 exe 里的第一个图标；没有时回退系统默认应用图标。
+        // 托盘图标只有 16–24px（随 DPI），直接从 ico 里按系统小图标尺寸取对应的那一帧，
+        // 而不是取 32px 再缩小（缩小后细节全糊）；ico 缺失时依次回退到 exe 自带图标、系统默认图标。
+        var ico = Path.Combine(AppContext.BaseDirectory, "sparxie.ico");
+        if (File.Exists(ico))
+        {
+            var exact = LoadImage(IntPtr.Zero, ico, IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_LOADFROMFILE);
+            if (exact != IntPtr.Zero)
+            {
+                return exact;
+            }
+        }
+
         var path = Environment.ProcessPath;
         var icon = path is null ? IntPtr.Zero : ExtractIcon(IntPtr.Zero, path, 0);
         return icon.ToInt64() > 1 ? icon : LoadIcon(IntPtr.Zero, new IntPtr(32512)); // IDI_APPLICATION
@@ -208,6 +219,15 @@ internal sealed class TrayIcon : IDisposable
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     private static extern bool Shell_NotifyIcon(uint message, ref NOTIFYICONDATA data);
+
+    private const uint IMAGE_ICON = 1, LR_LOADFROMFILE = 0x10;
+    private const int SM_CXSMICON = 49, SM_CYSMICON = 50;
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr LoadImage(IntPtr instance, string name, uint type, int cx, int cy, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr ExtractIcon(IntPtr instance, string file, int index);

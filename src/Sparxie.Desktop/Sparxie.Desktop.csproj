@@ -11,9 +11,17 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Platforms>x64;AnyCPU</Platforms>
+    <ApplicationIcon>..\..\assets\sparxie.ico</ApplicationIcon>
     <!-- slnx 整体构建（如 CI）不带 Platform，自包含 WinAppSDK 需要明确架构。 -->
     <RuntimeIdentifier Condition="'$(Platform)' == 'AnyCPU' and '$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 窗口图标（AppWindow.SetIcon）需要运行时能找到 ico 文件。 -->
+    <Content Include="..\..\assets\sparxie.ico" Link="sparxie.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\assets\sparxie-64.png" Link="sparxie-64.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\assets\sparxie-256.png" Link="sparxie-256.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Sparxie.Contracts\Sparxie.Contracts.csproj" />

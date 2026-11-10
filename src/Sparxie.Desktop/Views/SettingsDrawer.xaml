@@ -70,8 +70,9 @@
                     <Border Style="{StaticResource GlassCard}">
                         <StackPanel Spacing="10">
                             <TextBlock Text="关于" Style="{StaticResource SectionHeading}" />
-                            <TextBlock Text="Sparxie" FontSize="16" />
-                            <TextBlock Text="{Binding Settings.VersionText}" Style="{StaticResource CaptionText}" />
+                            <Image x:Name="AboutIcon" Width="128" Height="128" HorizontalAlignment="Center" Margin="0,4,0,0" />
+                            <TextBlock Text="Sparxie" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                            <TextBlock Text="{Binding Settings.VersionText}" Style="{StaticResource CaptionText}" HorizontalAlignment="Center" />
                             <TextBlock Text="许可证、第三方声明（THIRD-PARTY-NOTICES.md）与 Runtime 声明（RUNTIME-NOTICE.md）位于程序目录。" Style="{StaticResource CaptionText}" TextWrapping="Wrap" />
                             <Button Content="打开程序目录" HorizontalAlignment="Stretch" MinHeight="48" Command="{Binding Settings.OpenInstallFolderCommand}" />
                         </StackPanel>
