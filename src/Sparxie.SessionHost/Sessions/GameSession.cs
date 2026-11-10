@@ -89,10 +89,13 @@ public sealed class GameSession : IAsyncDisposable
 
             _announcedRunning = true;
             await EmitAsync(SessionStates.Running, StageCode.Running, ErrorCode.None, null, cancellationToken).ConfigureAwait(false);
+            var runningSince = DateTimeOffset.UtcNow;
 
+            int? exitCode = null;
             if (_gameProcess is not null)
             {
                 await _gameProcess.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+                exitCode = TryGetExitCode(_gameProcess);
             }
             else
             {
@@ -100,7 +103,8 @@ public sealed class GameSession : IAsyncDisposable
                 await _controller.WaitExitAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            await EmitAsync(SessionStates.Exited, StageCode.Wait, ErrorCode.None, null, cancellationToken).ConfigureAwait(false);
+            await EmitAsync(SessionStates.Exited, StageCode.Wait, ErrorCode.None,
+                GameExitDescription.Describe(exitCode, DateTimeOffset.UtcNow - runningSince), cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -124,6 +128,18 @@ public sealed class GameSession : IAsyncDisposable
                 // 收尾失败不吞掉，但不再改变会话终态
                 await EmitAsync(SessionStates.Failed, StageCode.Cleanup, ErrorCode.ZzzRecoveryFailed, $"会话收尾失败: {ex.Message}", CancellationToken.None).ConfigureAwait(false);
             }
+        }
+    }
+
+    private static int? TryGetExitCode(Process process)
+    {
+        try
+        {
+            return process.ExitCode;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
         }
     }
 
