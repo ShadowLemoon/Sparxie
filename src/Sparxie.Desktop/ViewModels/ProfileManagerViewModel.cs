@@ -30,11 +30,24 @@ public sealed class ProfileManagerViewModel : ObservableObject
             OnPropertyChanged(nameof(HasMultiple));
             OnPropertyChanged(nameof(ShowProfileName));
         };
-        _dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        _dispatcher = TryGetDispatcher();
         NewCommand = new RelayCommand(NewProfile);
         CopyCommand = new RelayCommand(CopyProfile, () => SelectedProfile is not null);
         DeleteCommand = new RelayCommand(Delete, () => SelectedProfile is not null);
         Refresh();
+    }
+
+    /// <summary>取 UI 线程的调度队列；没有 WinUI 运行环境（如单元测试）时返回 null，此时自动保存退化为立即保存。</summary>
+    private static Microsoft.UI.Dispatching.DispatcherQueue? TryGetDispatcher()
+    {
+        try
+        {
+            return Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+            return null;
+        }
     }
 
     public ObservableCollection<ProfileEditorViewModel> Profiles { get; }

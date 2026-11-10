@@ -15,6 +15,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/Broker.Tests/Broker.Tests.csproj" />
     <Project Path="tests/Config.Tests/Config.Tests.csproj" />
+    <Project Path="tests/Desktop.Tests/Desktop.Tests.csproj" />
     <Project Path="tests/HoyoAbi.Tests/HoyoAbi.Tests.csproj" />
     <Project Path="tests/LauncherCore.Tests/LauncherCore.Tests.csproj" />
     <Project Path="tests/Zzz.Tests/Zzz.Tests.csproj" />
