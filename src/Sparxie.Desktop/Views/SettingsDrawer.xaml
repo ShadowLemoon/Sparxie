@@ -37,7 +37,7 @@
                                 <ComboBoxItem Content="最小化到系统托盘" />
                                 <ComboBoxItem Content="直接退出" />
                             </ComboBox>
-                            <TextBlock Text="选择托盘后，关闭窗口会隐藏到任务栏右下角的托盘图标；左键单击图标恢复，右键菜单里可退出。" Style="{StaticResource CaptionText}" />
+                            <TextBlock Text="托盘图标始终显示在任务栏右下角；选择托盘后，关闭窗口只是隐藏，左键单击图标恢复，右键菜单里可退出。退出确认框里勾选“记住本次选择”也会改这里。" Style="{StaticResource CaptionText}" />
                         </StackPanel>
                     </Border>
                     <Border Style="{StaticResource GlassCard}">

@@ -347,18 +347,11 @@ public sealed partial class MainWindow : Window
     private bool _forceClose;
     private bool _dialogOpen;
 
-    /// <summary>设置里改了关闭行为后同步托盘图标：只有选了“托盘”才常驻图标。</summary>
+    /// <summary>托盘图标始终显示（与关闭行为无关）：启动时创建，退出时才移除。</summary>
     private void ApplyCloseBehavior()
     {
-        if (_viewModel.Settings.CurrentCloseBehavior == CloseBehavior.Tray)
-        {
-            _tray ??= new TrayIcon("Sparxie", ShowFromTray, ExitApplication);
-            _tray.Show();
-        }
-        else if (AppWindow.IsVisible)
-        {
-            _tray?.Hide();
-        }
+        _tray ??= new TrayIcon("Sparxie", ShowFromTray, ExitApplication);
+        _tray.Show();
     }
 
     private void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
@@ -385,9 +378,8 @@ public sealed partial class MainWindow : Window
 
     private void HideToTray()
     {
-        // 即便设置不是“托盘”（确认框里选了“最小化到托盘”），隐藏窗口前也必须先有托盘图标，否则无法恢复。
-        _tray ??= new TrayIcon("Sparxie", ShowFromTray, ExitApplication);
-        _tray.Show();
+        // 隐藏窗口前必须有托盘图标，否则无法恢复（正常情况下图标一直都在，这里兜底）。
+        ApplyCloseBehavior();
         AppWindow.Hide();
     }
 
@@ -400,10 +392,6 @@ public sealed partial class MainWindow : Window
         }
 
         Activate();
-        if (_viewModel.Settings.CurrentCloseBehavior != CloseBehavior.Tray)
-        {
-            _tray?.Hide(); // 临时托盘：窗口回来后图标不必保留
-        }
     }
 
     private void ExitApplication()
@@ -425,11 +413,25 @@ public sealed partial class MainWindow : Window
         _dialogOpen = true;
         try
         {
+            // 不自定义 MinHeight：加高后复选框方块与文字会上下错位；默认 32px 高，文字与方块对齐。
+            var remember = new CheckBox { Content = "记住本次选择，下次不再询问", VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(10, 0, 0, 0) };
             var dialog = new ContentDialog
             {
                 XamlRoot = xamlRoot,
                 Title = "退出 Sparxie？",
-                Content = "退出后会关闭启动器，已经启动的游戏不受影响。",
+                Content = new StackPanel
+                {
+                    Spacing = 12,
+                    Children =
+                    {
+                        new TextBlock
+                        {
+                            Text = "退出后会关闭启动器，已经启动的游戏不受影响。",
+                            TextWrapping = TextWrapping.Wrap,
+                        },
+                        remember,
+                    },
+                },
                 PrimaryButtonText = "退出",
                 SecondaryButtonText = "最小化到托盘",
                 CloseButtonText = "取消",
@@ -438,9 +440,11 @@ public sealed partial class MainWindow : Window
             switch (await dialog.ShowAsync())
             {
                 case ContentDialogResult.Primary:
+                    Remember(remember, CloseBehavior.Exit);
                     ExitApplication();
                     break;
                 case ContentDialogResult.Secondary:
+                    Remember(remember, CloseBehavior.Tray);
                     HideToTray();
                     break;
             }
@@ -448,6 +452,15 @@ public sealed partial class MainWindow : Window
         finally
         {
             _dialogOpen = false;
+        }
+    }
+
+    /// <summary>勾选“记住本次选择”时把选择写入设置（之后点关闭不再询问；可在应用设置里改回）。</summary>
+    private void Remember(CheckBox remember, CloseBehavior choice)
+    {
+        if (remember.IsChecked == true)
+        {
+            _viewModel.Settings.CloseBehaviorIndex = (int)choice;
         }
     }
 
