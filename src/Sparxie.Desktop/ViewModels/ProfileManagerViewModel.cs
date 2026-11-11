@@ -16,15 +16,12 @@ public sealed class ProfileManagerViewModel : ObservableObject
     private bool _isRebuilding;
     private GameType _scope = GameType.Genshin;
     private readonly Microsoft.UI.Dispatching.DispatcherQueue? _dispatcher;
-    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _saveTimer;
-    private readonly HashSet<ProfileEditorViewModel> _pending = new();
+    private readonly IGameFinderEnvironment _finderEnvironment;
 
-    /// <summary>编辑后等多久再落盘：连续输入/点按只写一次。</summary>
-    private static readonly TimeSpan AutoSaveDelay = TimeSpan.FromMilliseconds(500);
-
-    public ProfileManagerViewModel(DesktopDataService data)
+    public ProfileManagerViewModel(DesktopDataService data, IGameFinderEnvironment? finderEnvironment = null)
     {
         _data = data;
+        _finderEnvironment = finderEnvironment ?? new SystemGameFinderEnvironment();
         Profiles = new ObservableCollection<ProfileEditorViewModel>();
         Profiles.CollectionChanged += (_, _) =>
         {
@@ -136,7 +133,7 @@ public sealed class ProfileManagerViewModel : ObservableObject
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _clearTimer;
 
     /// <summary>保存成功的轻提示，2 秒后自动消失；错误提示保留到下次保存成功。</summary>
-    private void ReportSuccess(string message)
+    private void ReportSuccess(string message, TimeSpan? duration = null)
     {
         StatusSeverity = InfoBarSeverity.Success;
         StatusMessage = message;
@@ -147,7 +144,7 @@ public sealed class ProfileManagerViewModel : ObservableObject
 
         _clearTimer ??= _dispatcher.CreateTimer();
         _clearTimer.Stop();
-        _clearTimer.Interval = TimeSpan.FromSeconds(2);
+        _clearTimer.Interval = duration ?? TimeSpan.FromSeconds(2);
         _clearTimer.IsRepeating = false;
         _clearTimer.Tick -= ClearSuccess;
         _clearTimer.Tick += ClearSuccess;
@@ -185,7 +182,8 @@ public sealed class ProfileManagerViewModel : ObservableObject
                 id = $"{game.ToString().ToLowerInvariant()}-{n}";
             }
 
-            _data.AddProfile(new ProfileMutation(Id: id, DisplayName: "默认配置", Game: game));
+            var names = _data.Config.Profiles.Where(item => item.Game == game).Select(item => item.DisplayName);
+            _data.AddProfile(new ProfileMutation(Id: id, DisplayName: ProfileNames.NextDefault(names), Game: game));
             ReportInfo("请先选择游戏 EXE 路径");
         }
         catch (Exception ex)
@@ -236,7 +234,10 @@ public sealed class ProfileManagerViewModel : ObservableObject
         Flush();
         try
         {
-            var created = ProfileEditorViewModel.New(_data.Config.Profiles.Select(profile => profile.Id), _scope);
+            var created = ProfileEditorViewModel.New(
+                _data.Config.Profiles.Select(profile => profile.Id),
+                _scope,
+                _data.Config.Profiles.Where(profile => profile.Game == _scope).Select(profile => profile.DisplayName));
             var saved = _data.AddProfile(created.ToMutation());
             StatusMessage = string.Empty;
             _selectedProfile = null;
@@ -249,6 +250,85 @@ public sealed class ProfileManagerViewModel : ObservableObject
             ReportError(Describe(ex, "添加配置失败"));
             DesktopLog.Write("添加配置失败", ex);
         }
+    }
+
+    /// <summary>
+    /// 自动查找当前游戏的 EXE 路径：来源是米哈游启动器登记的安装路径、启动器安装目录、最近运行记录、正在运行的游戏。
+    /// 候选里跳过已经被现有配置使用的路径，按国服优先排序：
+    /// 只有一个就直接填入；有多个就把它们交给界面弹窗让用户选（<see cref="ApplyAutoFindChoice"/>）；一个都没有就提示。
+    /// </summary>
+    public async Task<AutoFindOutcome> AutoFindExecutableAsync()
+    {
+        if (SelectedProfile is not { } editing)
+        {
+            return new AutoFindOutcome([], "请先选择一个配置");
+        }
+
+        var game = editing.Game;
+        IReadOnlyList<GameExecutableCandidate> candidates;
+        try
+        {
+            candidates = await Task.Run(() => GameExecutableFinder.Find(game, _finderEnvironment)).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            DesktopLog.Write("自动查找游戏路径失败", ex);
+            return Report(new AutoFindOutcome([], $"自动查找失败：{ex.Message}"), found: false);
+        }
+
+        // “已经加到配置里”：所有配置已保存的路径、界面里各套配置当前的路径（含当前这套）都不再推荐。
+        var used = _data.Config.Profiles.Select(profile => profile.ExecutablePath)
+            .Concat(Profiles.Select(profile => profile.ExecutablePath))
+            .Append(editing.ExecutablePath)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => path.Replace('/', '\\').TrimEnd('\\'))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var choices = candidates
+            .Where(candidate => !used.Contains(candidate.Path.TrimEnd('\\')))
+            .OrderBy(candidate => candidate.Priority)
+            .ToList();
+
+        if (choices.Count == 0)
+        {
+            return Report(
+                new AutoFindOutcome([], candidates.Count == 0
+                    ? $"没有找到 {GameNames.Display(game)}。请点“浏览…”手动选择 EXE"
+                    : $"没有找到新的 {GameNames.Display(game)}：找到的 {candidates.Count} 个安装都已经添加到配置里了"),
+                found: false);
+        }
+
+        if (choices.Count == 1)
+        {
+            return ApplyAutoFindChoice(choices[0]);
+        }
+
+        return new AutoFindOutcome(choices, $"找到 {choices.Count} 个安装，请选择一个");
+    }
+
+    /// <summary>把用户在弹窗里选的（或唯一的）候选填入当前配置并保存。</summary>
+    public AutoFindOutcome ApplyAutoFindChoice(GameExecutableCandidate choice)
+    {
+        if (SelectedProfile is not { } editing)
+        {
+            return new AutoFindOutcome([], "请先选择一个配置");
+        }
+
+        editing.ExecutablePath = choice.Path;
+        return Report(new AutoFindOutcome([], $"已填入：{choice.Path}（{choice.Source}）"), found: true);
+    }
+
+    private AutoFindOutcome Report(AutoFindOutcome outcome, bool found)
+    {
+        if (found)
+        {
+            ReportSuccess(outcome.Message, TimeSpan.FromSeconds(5));
+        }
+        else
+        {
+            ReportInfo(outcome.Message);
+        }
+
+        return outcome;
     }
 
     /// <summary>复制当前配置（路径与全部设置）为一套新配置并立即保存，名称加“副本”。</summary>
@@ -295,51 +375,30 @@ public sealed class ProfileManagerViewModel : ObservableObject
             return;
         }
 
-        _pending.Add(editor);
-        if (_dispatcher is null)
-        {
-            Flush();
-            return;
-        }
-
-        _saveTimer ??= CreateSaveTimer();
-        _saveTimer.Stop();
-        _saveTimer.Start();
+        SaveEditor(editor);
     }
 
-    private Microsoft.UI.Dispatching.DispatcherQueueTimer CreateSaveTimer()
+    /// <summary>
+    /// 把一套配置的当前编辑写入 config.json。不再有延迟：文本框只在“编辑完成”（失焦 / 回车）时才改属性，
+    /// 开关、复选框、下拉框、数值框的值提交本来就是离散的，所以每次属性变化就是一次提交，直接保存。
+    /// </summary>
+    private void SaveEditor(ProfileEditorViewModel editing)
     {
-        var timer = _dispatcher!.CreateTimer();
-        timer.Interval = AutoSaveDelay;
-        timer.IsRepeating = false;
-        timer.Tick += (_, _) => Flush();
-        return timer;
+        try
+        {
+            _data.UpdateProfile(editing.Id, editing.ToMutation());
+            ReportSuccess("修改已保存");
+        }
+        catch (Exception ex)
+        {
+            ReportError(Describe(ex, "自动保存失败"));
+            DesktopLog.Write($"自动保存配置失败（id={editing.Id}）", ex);
+        }
     }
 
-    /// <summary>立即保存所有已修改但尚未落盘的配置；失败时只报错，不打断编辑。</summary>
+    /// <summary>保留给调用方（切游戏、返回主页、关闭窗口前）；编辑已经是立即保存，这里没有待写入的内容。</summary>
     public void Flush()
     {
-        _saveTimer?.Stop();
-        if (_pending.Count == 0)
-        {
-            return;
-        }
-
-        var targets = _pending.ToList();
-        _pending.Clear();
-        foreach (var editing in targets)
-        {
-            try
-            {
-                _data.UpdateProfile(editing.Id, editing.ToMutation());
-                ReportSuccess("修改已保存");
-            }
-            catch (Exception ex)
-            {
-                ReportError(Describe(ex, "自动保存失败"));
-                DesktopLog.Write($"自动保存配置失败（id={editing.Id}）", ex);
-            }
-        }
     }
 
     /// <summary>名称只在有多套配置时展示，用来区分各套配置。</summary>
@@ -354,7 +413,6 @@ public sealed class ProfileManagerViewModel : ObservableObject
 
         try
         {
-            _pending.Remove(editing);
             _data.RemoveProfile(editing.Id);
             _selectedProfile = null;
             StatusMessage = string.Empty;
@@ -637,7 +695,7 @@ public sealed class ProfileEditorViewModel : ObservableObject
     public bool IsGenshin => Game == GameType.Genshin;
 
     /// <summary>新建编辑项。ID 与名称预填可用默认值，立即保存即可用。</summary>
-    public static ProfileEditorViewModel New(IEnumerable<string> existingIds, GameType game)
+    public static ProfileEditorViewModel New(IEnumerable<string> existingIds, GameType game, IEnumerable<string>? existingNames = null)
     {
         var taken = new HashSet<string>(existingIds, StringComparer.Ordinal);
         var suffix = 1;
@@ -653,7 +711,8 @@ public sealed class ProfileEditorViewModel : ObservableObject
             IsNew = true,
             Game = game,
             Id = id,
-            DisplayName = suffix == 1 ? "新配置" : $"新配置 {suffix}",
+            // 默认叫 国服 / 国际服 / Steam / B 服（取同一游戏里还没用过的第一个）。
+            DisplayName = ProfileNames.NextDefault(existingNames ?? []),
         };
     }
 
@@ -706,3 +765,6 @@ public sealed class ProfileEditorViewModel : ObservableObject
     private static int ToFps(double value, int fallback) =>
         double.IsNaN(value) || double.IsInfinity(value) ? fallback : Convert.ToInt32(value);
 }
+
+/// <summary>自动查找的结果：<see cref="Choices"/> 非空表示有多个候选等用户选择；否则 <see cref="Message"/> 就是给用户看的结果。</summary>
+public sealed record AutoFindOutcome(IReadOnlyList<GameExecutableCandidate> Choices, string Message);

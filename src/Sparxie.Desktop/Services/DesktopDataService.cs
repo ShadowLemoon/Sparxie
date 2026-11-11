@@ -59,7 +59,7 @@ public sealed class DesktopDataService
 
         return AddProfile(new ProfileMutation(
             Id: "default",
-            DisplayName: "默认配置",
+            DisplayName: ProfileNames.NextDefault(Config.Profiles.Where(item => item.Game == game).Select(item => item.DisplayName)),
             Game: game));
     }
 

@@ -37,7 +37,7 @@
             </StackPanel>
 
             <TextBox Header="附加启动参数" PlaceholderText="例如 -window-mode exclusive" MinHeight="48" Margin="0,16,0,0"
-                     Text="{Binding ExtraArguments, Mode=TwoWay}" />
+                     Text="{Binding ExtraArguments, Mode=TwoWay}" KeyDown="CommitOnEnter" />
             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,4,0,0"
                        Text="{Binding CommandLinePreview}" />
         </StackPanel>

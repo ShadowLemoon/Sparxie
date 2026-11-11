@@ -50,7 +50,7 @@
                 </Button>
                 <TextBlock Text="{Binding Profiles.ScopeTitle}" Style="{StaticResource PageTitle}" VerticalAlignment="Center" />
             </StackPanel>
-            <ListView Grid.Column="1" SelectionMode="Single" VerticalAlignment="Center" MinHeight="48"
+            <ListView x:Name="ProfileTabs" Grid.Column="1" SelectionMode="Single" VerticalAlignment="Center" MinHeight="48"
                       ItemsSource="{Binding Profiles.Profiles}"
                       SelectedItem="{Binding Profiles.SelectedProfile, Mode=TwoWay}"
                       ScrollViewer.HorizontalScrollMode="Enabled"
@@ -129,21 +129,34 @@
                                 <Border Style="{StaticResource GlassCard}">
                                     <StackPanel Spacing="16">
                                         <TextBlock Text="游戏" Style="{StaticResource SectionHeading}" />
-                                        <TextBox Header="名称" MinHeight="48" Text="{Binding DisplayName, Mode=TwoWay}"
+                                        <TextBox Header="名称" MinHeight="48" Text="{Binding DisplayName, Mode=TwoWay}" KeyDown="CommitOnEnter"
                                                  Visibility="{Binding DataContext.Profiles.ShowProfileName, ElementName=ProfileRoot, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                        <Grid ColumnSpacing="8">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBox Header="游戏 EXE" MinHeight="48" Text="{Binding ExecutablePath, Mode=TwoWay}" />
-                                            <Button Grid.Column="1" Width="48" Height="48" Padding="0" VerticalAlignment="Bottom"
-                                                    Click="BrowseExecutableClick"
-                                                    AutomationProperties.Name="浏览游戏 EXE 路径"
-                                                    ToolTipService.ToolTip="选择游戏 EXE 文件">
-                                                <FontIcon Glyph="&#xE8B7;" FontSize="16" />
-                                            </Button>
-                                        </Grid>
+                                        <!-- 路径很长：输入框独占一整行并自动换行显示全（悬停也能看到完整路径），按钮放到下面一行。 -->
+                                        <StackPanel Spacing="8">
+                                            <TextBox Header="游戏 EXE" MinHeight="48" TextWrapping="Wrap" AcceptsReturn="False"
+                                                     Text="{Binding ExecutablePath, Mode=TwoWay}" KeyDown="CommitOnEnter"
+                                                     ToolTipService.ToolTip="{Binding ExecutablePath}" />
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Button MinHeight="40" Padding="14,0"
+                                                        Click="AutoFindExecutableClick"
+                                                        AutomationProperties.Name="自动查找游戏 EXE 路径"
+                                                        ToolTipService.ToolTip="自动查找：读取米哈游启动器登记的安装路径，优先国服、跳过已添加的">
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <FontIcon Glyph="&#xE721;" FontSize="14" />
+                                                        <TextBlock Text="自动查找" />
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button MinHeight="40" Padding="14,0"
+                                                        Click="BrowseExecutableClick"
+                                                        AutomationProperties.Name="浏览游戏 EXE 路径"
+                                                        ToolTipService.ToolTip="选择游戏 EXE 文件">
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <FontIcon Glyph="&#xE8B7;" FontSize="14" />
+                                                        <TextBlock Text="浏览…" />
+                                                    </StackPanel>
+                                                </Button>
+                                            </StackPanel>
+                                        </StackPanel>
                                         <TextBlock Text="{Binding PathHint}" Style="{StaticResource CaptionText}" TextWrapping="Wrap"
                                                    Foreground="{ThemeResource SystemFillColorCautionBrush}" Margin="0,-8,0,0"
                                                    Visibility="{Binding HasPathHint, Converter={StaticResource BoolToVisibilityConverter}}" />
@@ -275,21 +288,34 @@
                         <Border Style="{StaticResource GlassCard}">
                             <StackPanel Spacing="16">
                                 <TextBlock Text="游戏" Style="{StaticResource SectionHeading}" />
-                                <TextBox Header="名称" Text="{Binding DisplayName, Mode=TwoWay}"
+                                <TextBox Header="名称" Text="{Binding DisplayName, Mode=TwoWay}" KeyDown="CommitOnEnter"
                                          Visibility="{Binding DataContext.Profiles.ShowProfileName, ElementName=ProfileRoot, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                <Grid ColumnSpacing="8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBox Header="游戏 EXE" Text="{Binding ExecutablePath, Mode=TwoWay}" />
-                                    <Button Grid.Column="1" Width="48" Height="48" Padding="0" VerticalAlignment="Bottom"
-                                            Click="BrowseExecutableClick"
-                                            AutomationProperties.Name="浏览游戏 EXE 路径"
-                                            ToolTipService.ToolTip="选择游戏 EXE 文件">
-                                        <FontIcon Glyph="&#xE8B7;" FontSize="16" />
-                                    </Button>
-                                </Grid>
+                                <!-- 路径很长：输入框独占一整行并自动换行显示全（悬停也能看到完整路径），按钮放到下面一行。 -->
+                                <StackPanel Spacing="8">
+                                    <TextBox Header="游戏 EXE" MinHeight="48" TextWrapping="Wrap" AcceptsReturn="False"
+                                             Text="{Binding ExecutablePath, Mode=TwoWay}" KeyDown="CommitOnEnter"
+                                             ToolTipService.ToolTip="{Binding ExecutablePath}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Button MinHeight="40" Padding="14,0"
+                                                Click="AutoFindExecutableClick"
+                                                AutomationProperties.Name="自动查找游戏 EXE 路径"
+                                                ToolTipService.ToolTip="自动查找：读取米哈游启动器登记的安装路径，优先国服、跳过已添加的">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <FontIcon Glyph="&#xE721;" FontSize="14" />
+                                                <TextBlock Text="自动查找" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button MinHeight="40" Padding="14,0"
+                                                Click="BrowseExecutableClick"
+                                                AutomationProperties.Name="浏览游戏 EXE 路径"
+                                                ToolTipService.ToolTip="选择游戏 EXE 文件">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <FontIcon Glyph="&#xE8B7;" FontSize="14" />
+                                                <TextBlock Text="浏览…" />
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </StackPanel>
                                 <TextBlock Text="{Binding PathHint}" Style="{StaticResource CaptionText}" TextWrapping="Wrap"
                                            Foreground="{ThemeResource SystemFillColorCautionBrush}" Margin="0,-8,0,0"
                                            Visibility="{Binding HasPathHint, Converter={StaticResource BoolToVisibilityConverter}}" />
@@ -304,7 +330,14 @@
                     <InfoBar VerticalAlignment="Bottom" Margin="12" IsClosable="False"
                              IsOpen="{Binding Profiles.HasStatus}"
                              Severity="{Binding Profiles.StatusSeverity}"
-                             Message="{Binding Profiles.StatusMessage}" />
+                             Message="{Binding Profiles.StatusMessage}">
+                        <InfoBar.Resources>
+                            <SolidColorBrush x:Key="InfoBarInformationalSeverityBackgroundBrush" Color="#FF2A2F38" />
+                            <SolidColorBrush x:Key="InfoBarSuccessSeverityBackgroundBrush" Color="#FF1F3A2B" />
+                            <SolidColorBrush x:Key="InfoBarWarningSeverityBackgroundBrush" Color="#FF4A3B1F" />
+                            <SolidColorBrush x:Key="InfoBarErrorSeverityBackgroundBrush" Color="#FF4A2326" />
+                        </InfoBar.Resources>
+                    </InfoBar>
                 </Grid>
             </Border>
         </Grid>

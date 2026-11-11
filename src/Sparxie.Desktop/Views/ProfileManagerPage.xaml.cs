@@ -8,7 +8,17 @@ namespace Sparxie.Desktop.Views;
 
 public sealed partial class ProfileManagerPage : Page
 {
-    public ProfileManagerPage() => InitializeComponent();
+    public ProfileManagerPage()
+    {
+        InitializeComponent();
+
+        // 输入框默认在“失去焦点”时才把文字写回；直接点配置标签时，选中项会先于失焦变化，
+        // 输入框里还没提交的文字就丢了（路径尤其明显）。标签按下的瞬间先把焦点移到标签栏上，让输入框先提交。
+        ProfileTabs.AddHandler(PointerPressedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler(OnTabsPointerPressed), true);
+    }
+
+    private void OnTabsPointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e) =>
+        ProfileTabs.Focus(FocusState.Pointer);
 
     private ProfileManagerViewModel? Profiles => (DataContext as MainWindowViewModel)?.Profiles;
 
@@ -55,6 +65,94 @@ public sealed partial class ProfileManagerPage : Page
         }
 
         profiles.DeleteCommand.Execute(null);
+    }
+
+    /// <summary>按回车 = 编辑完成：把焦点移走，文本框随之把文字写回（WinUI 的文本框没有 editingFinished，失焦就是它）。</summary>
+    private void CommitOnEnter(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Enter)
+        {
+            Microsoft.UI.Xaml.Input.FocusManager.TryMoveFocus(Microsoft.UI.Xaml.Input.FocusNavigationDirection.Next);
+            e.Handled = true;
+        }
+    }
+
+    private async void AutoFindExecutableClick(object sender, RoutedEventArgs e)
+    {
+        if (Profiles is not { } profiles)
+        {
+            return;
+        }
+
+        var button = sender as Button;
+        if (button is not null)
+        {
+            button.IsEnabled = false; // 查找要读注册表和扫目录，期间防止重复点击
+        }
+
+        try
+        {
+            var outcome = await profiles.AutoFindExecutableAsync();
+            if (outcome.Choices.Count > 1 && await ChooseExecutableAsync(outcome.Choices) is { } chosen)
+            {
+                profiles.ApplyAutoFindChoice(chosen);
+            }
+        }
+        finally
+        {
+            if (button is not null)
+            {
+                button.IsEnabled = true;
+            }
+        }
+    }
+
+    /// <summary>找到多个安装时弹窗让用户选一个（默认选中排在最前的，国服优先）；取消返回 null。</summary>
+    private async Task<Sparxie.Infrastructure.Processes.GameExecutableCandidate?> ChooseExecutableAsync(
+        IReadOnlyList<Sparxie.Infrastructure.Processes.GameExecutableCandidate> choices)
+    {
+        var list = new ListView { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 360 };
+        foreach (var choice in choices)
+        {
+            list.Items.Add(new ListViewItem
+            {
+                Tag = choice,
+                Content = new StackPanel
+                {
+                    Spacing = 2,
+                    Padding = new Thickness(0, 6, 0, 6),
+                    Children =
+                    {
+                        new TextBlock { Text = choice.Path, TextWrapping = TextWrapping.Wrap },
+                        new TextBlock
+                        {
+                            Text = choice.Source,
+                            FontSize = 12,
+                            Opacity = 0.7,
+                            TextWrapping = TextWrapping.Wrap,
+                        },
+                    },
+                },
+            });
+        }
+
+        list.SelectedIndex = 0;
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "找到多个安装，选择一个",
+            Content = list,
+            PrimaryButtonText = "使用所选",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Primary,
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return null;
+        }
+
+        return (list.SelectedItem as ListViewItem)?.Tag as Sparxie.Infrastructure.Processes.GameExecutableCandidate;
     }
 
     private async void BrowseExecutableClick(object sender, RoutedEventArgs e)
