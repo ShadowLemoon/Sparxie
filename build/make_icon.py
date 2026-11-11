@@ -1,7 +1,7 @@
 """生成 sparxie.ico。
 
 - 48 / 64 / 128 / 256：完整图（留约 3% 边距）；
-- 16 / 20 / 24 / 32：最简图——保留帽子、兔耳和头发，去掉五官与红黑色细节，4 色（深紫 / 白发 / 深紫灰发丝 / 浅肤色脸）；
+- 16 / 20 / 24 / 32：最简图——保留帽子、兔耳和头发，去掉五官与红黑色细节，5 色（深紫帽子 / 白发 / 深紫灰发丝 / 浅肤色脸 / 紫灰描边）；
 
 用法：python build/make_icon.py full.png small-c.png small-h.png assets/sparxie.ico
 三张 png 是 Edge 无头渲染 sparxie-mark.svg / smallC.svg / smallH.svg 得到的 1024x1024 透明底位图（见 assets/README.md）。
@@ -42,14 +42,23 @@ def tiny_version(c_img, h_img):
             mask[col.max():target, x] = 255
     body = mask > 0
 
-    # 以去掉五官的 C 版为底，按颜色分成 4 类：深（轮廓/帽子）、白（头发）、灰（发丝阴影）、肤色。
+    # 以去掉五官的 C 版为底，按颜色分成 5 类：深（帽子）、白（头发）、灰（发丝阴影）、肤色、描边。
     # 头发轮廓内部的“深色”（遮脸卡片留下的）改成肤色，这样脸和头发是两种不同的颜色，发丝仍然看得清。
     arr = np.array(c_img).astype(np.float32)
     src = np.array([[0x3A, 0x31, 0x48], [0xFF, 0xF9, 0xF9], [0xEB, 0xE2, 0xE8], [0xFF, 0xE9, 0xE1]], dtype=np.float32)
     cls = ((arr[..., None, :3] - src[None, None]) ** 2).sum(-1).argmin(-1)
     cls[body & (cls == 0)] = 3
-    # 显示颜色：灰阴影加深、肤色略偏暖，拉开与白发的对比
-    dst = np.array([[0x3A, 0x31, 0x48], [0xFF, 0xFA, 0xFA], [0x5A, 0x4B, 0x69], [0xF0, 0xC4, 0xBA]], dtype=np.uint8)
+
+    # 小尺寸下原图的深色描边 + 发丝缝里的深色会连成一团，显得描边太重：
+    # 只有帽子保留深色（帽子 = 深色里的“大块”，在 256 画布上做开运算去掉细的描边与发丝缝），其余深色改用较浅的描边色。
+    dark = Image.fromarray(((cls == 0) * 255).astype(np.uint8)).resize((256, 256), Image.Resampling.BOX)
+    dark = dark.point(lambda v: 255 if v > 127 else 0)
+    opened = dark.filter(ImageFilter.MinFilter(21)).filter(ImageFilter.MaxFilter(21))
+    hat = np.array(opened.resize(c_img.size, Image.Resampling.NEAREST).filter(ImageFilter.MaxFilter(45))) > 0
+    cls[(cls == 0) & ~hat] = 4
+
+    # 显示颜色：灰阴影加深、肤色略偏暖，拉开与白发的对比；描边用中等深度的紫灰，不抢眼。
+    dst = np.array([[0x3A, 0x31, 0x48], [0xFF, 0xFA, 0xFA], [0x5A, 0x4B, 0x69], [0xF0, 0xC4, 0xBA], [0x7C, 0x6C, 0x8C]], dtype=np.uint8)
     flat = np.dstack([dst[cls], arr[..., 3].astype(np.uint8)])
     return square(Image.fromarray(flat), 0.0)
 
