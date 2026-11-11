@@ -107,6 +107,9 @@ public sealed partial class ProfileManagerPage : Page
         }
     }
 
+    private string? ServerLabelFor(string path) =>
+        Profiles is { SelectedProfile: { } editing } ? ServerLabelDetector.Detect(editing.Game, path, new CurrentUserGameRegistry()) : null;
+
     /// <summary>找到多个安装时弹窗让用户选一个（默认选中排在最前的，国服优先）；取消返回 null。</summary>
     private async Task<Sparxie.Infrastructure.Processes.GameExecutableCandidate?> ChooseExecutableAsync(
         IReadOnlyList<Sparxie.Infrastructure.Processes.GameExecutableCandidate> choices)
@@ -123,7 +126,11 @@ public sealed partial class ProfileManagerPage : Page
                     Padding = new Thickness(0, 6, 0, 6),
                     Children =
                     {
-                        new TextBlock { Text = choice.Path, TextWrapping = TextWrapping.Wrap },
+                        new TextBlock
+                        {
+                            Text = ServerLabelFor(choice.Path) is { } server ? $"{server} · {choice.Path}" : choice.Path,
+                            TextWrapping = TextWrapping.Wrap,
+                        },
                         new TextBlock
                         {
                             Text = choice.Source,

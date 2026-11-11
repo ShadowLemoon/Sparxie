@@ -17,11 +17,13 @@ public sealed class ProfileManagerViewModel : ObservableObject
     private GameType _scope = GameType.Genshin;
     private readonly Microsoft.UI.Dispatching.DispatcherQueue? _dispatcher;
     private readonly IGameFinderEnvironment _finderEnvironment;
+    private readonly IGameRegistry? _registry;
 
-    public ProfileManagerViewModel(DesktopDataService data, IGameFinderEnvironment? finderEnvironment = null)
+    public ProfileManagerViewModel(DesktopDataService data, IGameFinderEnvironment? finderEnvironment = null, IGameRegistry? registry = null)
     {
         _data = data;
         _finderEnvironment = finderEnvironment ?? new SystemGameFinderEnvironment();
+        _registry = registry ?? (finderEnvironment is null ? new CurrentUserGameRegistry() : null);
         Profiles = new ObservableCollection<ProfileEditorViewModel>();
         Profiles.CollectionChanged += (_, _) =>
         {
@@ -375,7 +377,25 @@ public sealed class ProfileManagerViewModel : ObservableObject
             return;
         }
 
+        if (e.PropertyName == nameof(ProfileEditorViewModel.ExecutablePath))
+        {
+            RenameByDetectedServer(editor);
+        }
+
         SaveEditor(editor);
+    }
+
+    /// <summary>路径变了且名称还是自动生成的：按识别到的区服改名；用户自己起的名字不动，认不出区服也不动。</summary>
+    private void RenameByDetectedServer(ProfileEditorViewModel editor)
+    {
+        if (!ProfileNames.IsAuto(editor.DisplayName)
+            || ServerLabelDetector.Detect(editor.Game, editor.ExecutablePath, _registry) is not { } label)
+        {
+            return;
+        }
+
+        var others = Profiles.Where(item => !ReferenceEquals(item, editor) && item.Game == editor.Game).Select(item => item.DisplayName);
+        editor.DisplayName = ProfileNames.Unique(label, others);
     }
 
     /// <summary>
@@ -711,7 +731,7 @@ public sealed class ProfileEditorViewModel : ObservableObject
             IsNew = true,
             Game = game,
             Id = id,
-            // 默认叫 国服 / 国际服 / Steam / B 服（取同一游戏里还没用过的第一个）。
+            // 中性的“配置 N”；填入路径后按识别到的区服改名。
             DisplayName = ProfileNames.NextDefault(existingNames ?? []),
         };
     }
