@@ -40,15 +40,18 @@ public sealed class LaunchSettingsEditorTests : IDisposable
     }
 
     [Fact]
-    public void 分辨率下拉按主显示器过滤并包含主显示器()
+    public void 分辨率下拉包含主显示器且始终钉上4K_2K_1080p()
     {
         var list = ProfileEditorViewModel.BuildResolutionList((1920, 1200));
 
-        Assert.Equal((1920, 1200), list[0]);
-        Assert.DoesNotContain((2560, 1440), list);
+        Assert.Contains((1920, 1200), list);          // 主显示器本身
+        Assert.Contains((3840, 2160), list);          // 钉住的 4K / 2K / 1080p，不管显示器多小
+        Assert.Contains((2560, 1440), list);
         Assert.Contains((1920, 1080), list);
+        Assert.DoesNotContain((2560, 1600), list);    // 其余超过显示器的仍然过滤
         Assert.Contains((640, 480), list);
         Assert.Equal(list.OrderByDescending(i => i.Width).ThenByDescending(i => i.Height), list);
+        Assert.Equal(list.Length, list.Distinct().Count());
     }
 
     [Fact]

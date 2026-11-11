@@ -545,7 +545,10 @@ public sealed class ProfileEditorViewModel : ObservableObject
         (1024, 768), (800, 600), (640, 480),
     ];
 
-    /// <summary>分辨率下拉的项：常用分辨率中不超过主显示器的，加上主显示器本身（同 Starward），从大到小。</summary>
+    /// <summary>始终出现在分辨率下拉里的三项：4K、2K、1080p。</summary>
+    private static readonly (int Width, int Height)[] PinnedResolutions = [(3840, 2160), (2560, 1440), (1920, 1080)];
+
+    /// <summary>分辨率下拉的项：常用分辨率中不超过主显示器的，加上主显示器本身（同 Starward），再固定钉上 4K / 2K / 1080p（不管显示器多大都在），从大到小。</summary>
     public static (int Width, int Height)[] ResolutionList { get; } = BuildResolutionList(GetPrimaryScreenSize());
 
     public static string[] ResolutionOptions { get; } = ResolutionList.Select(item => $"{item.Width} × {item.Height}").ToArray();
@@ -553,6 +556,14 @@ public sealed class ProfileEditorViewModel : ObservableObject
     public static (int Width, int Height)[] BuildResolutionList((int Width, int Height) screen)
     {
         var list = CommonResolutions.Where(item => item.Width <= screen.Width && item.Height <= screen.Height).ToList();
+        foreach (var pinned in PinnedResolutions)
+        {
+            if (!list.Contains(pinned))
+            {
+                list.Add(pinned);
+            }
+        }
+
         if (screen.Width > 0 && screen.Height > 0 && !list.Contains(screen))
         {
             list.Add(screen);
