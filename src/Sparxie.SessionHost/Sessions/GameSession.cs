@@ -53,6 +53,9 @@ public sealed class GameSession : IAsyncDisposable
                 return;
             }
 
+            // 启动设置：分辨率 / 窗口模式写入游戏自己的注册表设置（尽力而为，失败不阻止启动）。
+            var launchNote = ApplyGameRegistrySettings();
+
             // 启动游戏进程前的 Runtime 准备（ZZZ：备份 PC 配置并写入触屏配置）
             await _controller.PrepareLaunchAsync(_options.Profile, cancellationToken).ConfigureAwait(false);
 
@@ -65,7 +68,7 @@ public sealed class GameSession : IAsyncDisposable
                 _job.Assign(_gameProcess.SafeHandle);
             }
 
-            await EmitAsync(SessionStates.Starting, StageCode.CreateProcess, ErrorCode.None, null, cancellationToken).ConfigureAwait(false);
+            await EmitAsync(SessionStates.Starting, StageCode.CreateProcess, ErrorCode.None, launchNote, cancellationToken).ConfigureAwait(false);
 
             // Runtime 安装/注入：全部成功才进入 Running
             await _controller.InstallAsync(_gameProcess, _job.JobHandle, _options.Profile.Hoyo.ToModel(), cancellationToken).ConfigureAwait(false);
@@ -208,6 +211,27 @@ public sealed class GameSession : IAsyncDisposable
         return true;
     }
 
+    /// <summary>把分辨率 / 窗口模式写入游戏注册表设置；返回给 Starting 事件的说明（没有设置返回 null）。</summary>
+    private string? ApplyGameRegistrySettings()
+    {
+        var launch = _options.Profile.Launch.ToModel();
+        if (launch is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var result = GameRegistrySettings.Apply(
+                _options.Profile.ToGameType(), _options.Profile.ExecutablePath, launch, new CurrentUserGameRegistry());
+            return result.Note ?? (result.Applied ? $"已写入游戏设置（{result.WrittenKeys.Count} 处）" : null);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
+        {
+            return $"写入游戏设置失败：{ex.Message}";
+        }
+    }
+
     private Process StartGameProcess()
     {
         var psi = new ProcessStartInfo
@@ -215,6 +239,8 @@ public sealed class GameSession : IAsyncDisposable
             FileName = _options.Profile.ExecutablePath,
             UseShellExecute = false,
             WorkingDirectory = Path.GetDirectoryName(_options.Profile.ExecutablePath) ?? string.Empty,
+            // 自动注入的无边框参数 + 用户附加参数（Hoyo 由 native bootstrap 创建进程，参数经 C ABI 传入）。
+            Arguments = LaunchArguments.Build(_options.Profile.Launch.ToModel()),
         };
 
         var process = Process.Start(psi)
@@ -289,6 +315,25 @@ internal static class ProfileSnapshotExtensions
         "zenlessZoneZero" => GameType.ZenlessZoneZero,
         _ => throw new InvalidOperationException($"未知 game: {profile.Game}"),
     };
+
+    /// <summary>快照里的 launch（0 / 空串表示“不修改”）→ 模型；没有任何设置返回 null。</summary>
+    public static Sparxie.Contracts.Models.LaunchSettings? ToModel(this Sparxie.Contracts.Rpc.LaunchSettings? launch)
+    {
+        if (launch is null)
+        {
+            return null;
+        }
+
+        var model = new Sparxie.Contracts.Models.LaunchSettings
+        {
+            Width = launch.Width > 0 ? launch.Width : null,
+            Height = launch.Height > 0 ? launch.Height : null,
+            Fullscreen = launch.Fullscreen switch { 1 => true, 2 => false, _ => null },
+            Borderless = launch.Borderless,
+            ExtraArguments = string.IsNullOrWhiteSpace(launch.ExtraArguments) ? null : launch.ExtraArguments,
+        };
+        return model.IsEmpty ? null : model;
+    }
 
     public static HoyoProfileSettings? ToModel(this HoyoSettings? hoyo)
     {

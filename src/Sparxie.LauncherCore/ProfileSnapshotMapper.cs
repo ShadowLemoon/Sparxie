@@ -24,6 +24,16 @@ public static class ProfileSnapshotMapper
                     $"不支持的游戏类型: {profile.Game}"),
             },
             ExecutablePath = profile.ExecutablePath,
+            Launch = profile.Launch is null || profile.Launch.IsEmpty
+                ? null
+                : new Sparxie.Contracts.Rpc.LaunchSettings
+                {
+                    Width = profile.Launch.Width ?? 0,
+                    Height = profile.Launch.Height ?? 0,
+                    Fullscreen = profile.Launch.Fullscreen switch { true => 1, false => 2, _ => 0 },
+                    Borderless = profile.Launch.Borderless,
+                    ExtraArguments = profile.Launch.ExtraArguments?.Trim() ?? string.Empty,
+                },
             Hoyo = profile.Hoyo is null
                 ? null
                 : new HoyoSettings

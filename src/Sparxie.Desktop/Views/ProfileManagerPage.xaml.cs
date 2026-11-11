@@ -12,6 +12,19 @@ public sealed partial class ProfileManagerPage : Page
 
     private ProfileManagerViewModel? Profiles => (DataContext as MainWindowViewModel)?.Profiles;
 
+    /// <summary>两栏所需的最小面板宽度：左栏 380 + 间距 16 + 右栏（帧率档位映射一行最宽）约 540 + 左右内边距 40。</summary>
+    private const double TwoColumnMinWidth = 980;
+
+    /// <summary>原神 / 星铁设置页的响应式布局：够宽时 380 | * 两栏，窄了右栏（帧率、触控 UI 缩放）折到左栏下面。</summary>
+    private void HoyoGridSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var wide = e.NewSize.Width >= TwoColumnMinWidth;
+        HoyoLeftColumnDefinition.Width = wide ? new GridLength(380) : new GridLength(1, GridUnitType.Star);
+        HoyoRightColumnDefinition.Width = wide ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        Grid.SetColumn(HoyoRightColumn, wide ? 1 : 0);
+        Grid.SetRow(HoyoRightColumn, wide ? 0 : 1);
+    }
+
     private void AddProfileClick(object sender, RoutedEventArgs e) => Profiles?.NewCommand.Execute(null);
 
     private void CopyProfileClick(object sender, RoutedEventArgs e) => Profiles?.CopyCommand.Execute(null);

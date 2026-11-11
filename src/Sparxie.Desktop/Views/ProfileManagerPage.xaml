@@ -4,7 +4,8 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:Sparxie.Desktop.ViewModels"
-    xmlns:controls="using:Sparxie.Desktop.Controls">
+    xmlns:controls="using:Sparxie.Desktop.Controls"
+    xmlns:views="using:Sparxie.Desktop.Views">
     <Page.Resources>
         <!-- 输入控件：字号放大并垂直居中（默认文字贴在左上）。 -->
         <Style TargetType="TextBox" BasedOn="{StaticResource DefaultTextBoxStyle}">
@@ -111,12 +112,17 @@
                                   HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled"
                                   Visibility="{Binding Profiles.HasSelection, Converter={StaticResource BoolToVisibilityConverter}}">
                         <Grid DataContext="{Binding Profiles.SelectedProfile}">
-                        <Grid ColumnSpacing="16" Padding="20,20,20,96"
+                        <!-- 响应式：按面板实际宽度切换（代码在 ProfileManagerPage.xaml.cs 的 HoyoGridSizeChanged）：够宽两栏（380 | *），不够宽折成单列（右栏接到左栏下面）。窗口宽度的 AdaptiveTrigger 受 DPI 影响，不如直接量面板。 -->
+                        <Grid x:Name="HoyoGrid" ColumnSpacing="16" RowSpacing="16" Padding="20,20,20,96" SizeChanged="HoyoGridSizeChanged"
                               Visibility="{Binding IsHoyoGame, Converter={StaticResource BoolToVisibilityConverter}}">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="380" />
-                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition x:Name="HoyoLeftColumnDefinition" Width="*" />
+                                <ColumnDefinition x:Name="HoyoRightColumnDefinition" Width="0" />
                             </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
 
                             <!-- 左栏：游戏在哪、怎么启动 -->
                             <StackPanel Spacing="16" VerticalAlignment="Top">
@@ -154,35 +160,12 @@
                                     </StackPanel>
                                 </Border>
 
-                                <Border Style="{StaticResource GlassCard}"
-                                        Visibility="{Binding IsGenshin, Converter={StaticResource BoolToVisibilityConverter}}">
-                                    <Grid ColumnSpacing="12" MinHeight="72">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel VerticalAlignment="Center" Spacing="2">
-                                            <TextBlock Text="触控 UI 缩放" />
-                                            <TextBlock Text="覆盖游戏内缩放，100–500%" Style="{StaticResource CaptionText}" />
-                                        </StackPanel>
-                                        <ToggleSwitch Grid.Column="1" MinWidth="0" OnContent="" OffContent=""
-                                                      VerticalAlignment="Center"
-                                                      IsOn="{Binding GenshinTouchUiScaleOverrideEnabled, Mode=TwoWay}"
-                                                      AutomationProperties.Name="启用触控 UI 缩放覆盖" />
-                                        <controls:NumberStepper Grid.Row="1" Grid.ColumnSpan="2" HorizontalAlignment="Right"
-                                                                Margin="0,8,0,0" Minimum="100" Maximum="500" Step="5"
-                                                                IsEnabled="{Binding GenshinTouchUiScaleOverrideEnabled}"
-                                                                Value="{Binding GenshinTouchUiScalePercent, Mode=TwoWay}" />
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                        </Grid.RowDefinitions>
-                                    </Grid>
-                                </Border>
+                                <views:LaunchSettingsCard />
                             </StackPanel>
 
-                            <!-- 右栏：帧率。开关与数值合成一行；关闭时只禁用数值，不改变尺寸。 -->
-                            <Border Grid.Column="1" Style="{StaticResource GlassCard}" Padding="20,12" VerticalAlignment="Top"
+                            <!-- 右栏：帧率 + 原神的触控 UI 缩放。开关与数值合成一行；关闭时只禁用数值，不改变尺寸。 -->
+                            <StackPanel x:Name="HoyoRightColumn" Grid.Column="0" Grid.Row="1" Spacing="16" VerticalAlignment="Top">
+                            <Border Style="{StaticResource GlassCard}" Padding="20,12"
                                     Visibility="{Binding IsHoyoGame, Converter={StaticResource BoolToVisibilityConverter}}">
                                 <StackPanel>
                                     <TextBlock Text="帧率" Style="{StaticResource SectionHeading}" Margin="0,4,0,8" />
@@ -258,11 +241,38 @@
                                     </StackPanel>
                                 </StackPanel>
                             </Border>
+                                <Border Style="{StaticResource GlassCard}"
+                                        Visibility="{Binding IsGenshin, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <Grid ColumnSpacing="12" MinHeight="72">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                                            <TextBlock Text="触控 UI 缩放" />
+                                            <TextBlock Text="覆盖游戏内缩放，100–500%" Style="{StaticResource CaptionText}" />
+                                        </StackPanel>
+                                        <ToggleSwitch Grid.Column="1" MinWidth="0" OnContent="" OffContent=""
+                                                      VerticalAlignment="Center"
+                                                      IsOn="{Binding GenshinTouchUiScaleOverrideEnabled, Mode=TwoWay}"
+                                                      AutomationProperties.Name="启用触控 UI 缩放覆盖" />
+                                        <controls:NumberStepper Grid.Row="1" Grid.ColumnSpan="2" HorizontalAlignment="Right"
+                                                                Margin="0,8,0,0" Minimum="100" Maximum="500" Step="5"
+                                                                IsEnabled="{Binding GenshinTouchUiScaleOverrideEnabled}"
+                                                                Value="{Binding GenshinTouchUiScalePercent, Mode=TwoWay}" />
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
                         </Grid>
 
                         <!-- 无帧率参数的游戏（绝区零）：单张卡铺满，名称与路径并排，不留右半空白。 -->
-                        <Border Style="{StaticResource GlassCard}" Margin="20,20,20,96" VerticalAlignment="Top"
-                                Visibility="{Binding IsHoyoGame, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                        <StackPanel Margin="20,20,20,96" Spacing="16" VerticalAlignment="Top"
+                                    Visibility="{Binding IsHoyoGame, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                        <Border Style="{StaticResource GlassCard}">
                             <StackPanel Spacing="16">
                                 <TextBlock Text="游戏" Style="{StaticResource SectionHeading}" />
                                 <TextBox Header="名称" Text="{Binding DisplayName, Mode=TwoWay}"
@@ -285,6 +295,8 @@
                                            Visibility="{Binding HasPathHint, Converter={StaticResource BoolToVisibilityConverter}}" />
                             </StackPanel>
                         </Border>
+                        <views:LaunchSettingsCard />
+                        </StackPanel>
                     </Grid>
                     </ScrollViewer>
 

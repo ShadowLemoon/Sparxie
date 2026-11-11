@@ -120,4 +120,33 @@ public class ProfileSnapshotValidatorTests
         profile.ExecutablePath = path;
         Assert.NotNull(ProfileSnapshotValidator.Validate(profile));
     }
+
+    [Fact]
+    public void 合法启动设置通过()
+    {
+        var profile = Valid();
+        profile.Launch = new LaunchSettings { Width = 1920, Height = 1080, Fullscreen = 1, Borderless = true, ExtraArguments = "-x" };
+        Assert.Null(ProfileSnapshotValidator.Validate(profile));
+    }
+
+    [Fact]
+    public void 全部不修改的启动设置通过()
+    {
+        var profile = Valid();
+        profile.Launch = new LaunchSettings();
+        Assert.Null(ProfileSnapshotValidator.Validate(profile));
+    }
+
+    [Theory]
+    [InlineData(1920, 0, 0, "")]
+    [InlineData(100, 100, 0, "")]
+    [InlineData(0, 0, 3, "")]
+    [InlineData(0, 0, -1, "")]
+    [InlineData(0, 0, 0, "-a\r\n-b")]
+    public void 非法启动设置被拒绝(int width, int height, int fullscreen, string extra)
+    {
+        var profile = Valid();
+        profile.Launch = new LaunchSettings { Width = width, Height = height, Fullscreen = fullscreen, ExtraArguments = extra };
+        Assert.NotNull(ProfileSnapshotValidator.Validate(profile));
+    }
 }

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Microsoft.UI.Xaml.Controls;
 using Sparxie.Contracts.Models;
 using Sparxie.Desktop.Services;
+using Sparxie.Infrastructure.Processes;
 using Sparxie.LauncherCore;
 
 namespace Sparxie.Desktop.ViewModels;
@@ -287,7 +288,9 @@ public sealed class ProfileManagerViewModel : ObservableObject
     {
         if (sender is not ProfileEditorViewModel editor
             || e.PropertyName is nameof(ProfileEditorViewModel.IsHoyoGame) or nameof(ProfileEditorViewModel.IsGenshin)
-                or nameof(ProfileEditorViewModel.PathHint) or nameof(ProfileEditorViewModel.HasPathHint))
+                or nameof(ProfileEditorViewModel.PathHint) or nameof(ProfileEditorViewModel.HasPathHint)
+                or nameof(ProfileEditorViewModel.CommandLinePreview) or nameof(ProfileEditorViewModel.ResolutionControlsEnabled)
+                or nameof(ProfileEditorViewModel.PresetEnabled) or nameof(ProfileEditorViewModel.CustomEnabled))
         {
             return;
         }
@@ -389,6 +392,14 @@ public sealed class ProfileEditorViewModel : ObservableObject
     private double _genshinPreset60Fps = 1000;
     private bool _genshinTouchUiScaleOverrideEnabled;
     private double _genshinTouchUiScalePercent = 400;
+    private bool _overrideResolution;
+    private bool _fullscreen = true;
+    private bool _borderless;
+    private bool _customResolution;
+    private int _resolutionIndex;
+    private double _customWidth = 1920;
+    private double _customHeight = 1080;
+    private string _extraArguments = string.Empty;
 
     /// <summary>仅用于 <see cref="New"/> 生成的待创建编辑项：转 mutation 时带上 ID。</summary>
     private bool IsNew { get; init; }
@@ -445,6 +456,183 @@ public sealed class ProfileEditorViewModel : ObservableObject
     public double GenshinPreset60Fps { get => _genshinPreset60Fps; set => SetProperty(ref _genshinPreset60Fps, value); }
     public bool GenshinTouchUiScaleOverrideEnabled { get => _genshinTouchUiScaleOverrideEnabled; set => SetProperty(ref _genshinTouchUiScaleOverrideEnabled, value); }
     public double GenshinTouchUiScalePercent { get => _genshinTouchUiScalePercent; set => SetProperty(ref _genshinTouchUiScalePercent, value); }
+    // ---- 启动设置（对齐 Starward 的“分辨率”区）：
+    // 全屏 / 自定义分辨率 / 分辨率下拉 / 宽 × 高，启动前写入游戏注册表；“使用无边框窗口”自动加 -popupwindow；另有附加参数。
+    // 与 Starward 不同的一点：多一个总开关，关闭时完全不碰游戏自己的分辨率与全屏设置。
+
+    private static readonly (int Width, int Height)[] CommonResolutions =
+    [
+        (3840, 2160), (2560, 1600), (2560, 1440), (2048, 1536), (1920, 1440), (1920, 1200), (1920, 1080),
+        (1680, 1050), (1600, 1200), (1440, 900), (1280, 960), (1280, 800), (1280, 720), (1152, 864),
+        (1024, 768), (800, 600), (640, 480),
+    ];
+
+    /// <summary>分辨率下拉的项：常用分辨率中不超过主显示器的，加上主显示器本身（同 Starward），从大到小。</summary>
+    public static (int Width, int Height)[] ResolutionList { get; } = BuildResolutionList(GetPrimaryScreenSize());
+
+    public static string[] ResolutionOptions { get; } = ResolutionList.Select(item => $"{item.Width} × {item.Height}").ToArray();
+
+    public static (int Width, int Height)[] BuildResolutionList((int Width, int Height) screen)
+    {
+        var list = CommonResolutions.Where(item => item.Width <= screen.Width && item.Height <= screen.Height).ToList();
+        if (screen.Width > 0 && screen.Height > 0 && !list.Contains(screen))
+        {
+            list.Add(screen);
+        }
+
+        if (list.Count == 0)
+        {
+            list.Add(CommonResolutions[^1]);
+        }
+
+        return list.OrderByDescending(item => item.Width).ThenByDescending(item => item.Height).ToArray();
+    }
+
+    private static (int Width, int Height) GetPrimaryScreenSize() => (GetSystemMetrics(0), GetSystemMetrics(1));
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
+
+    /// <summary>总开关：开启才会在启动前写入分辨率与全屏设置；关闭时不修改游戏自己的设置。</summary>
+    public bool OverrideResolution
+    {
+        get => _overrideResolution;
+        set
+        {
+            if (SetProperty(ref _overrideResolution, value))
+            {
+                OnPropertyChanged(nameof(ResolutionControlsEnabled));
+                OnPropertyChanged(nameof(PresetEnabled));
+                OnPropertyChanged(nameof(CustomEnabled));
+            }
+        }
+    }
+
+    public bool Fullscreen { get => _fullscreen; set => SetProperty(ref _fullscreen, value); }
+
+    /// <summary>使用无边框窗口：自动注入 -popupwindow，与总开关、是否全屏都无关。</summary>
+    public bool Borderless
+    {
+        get => _borderless;
+        set
+        {
+            if (SetProperty(ref _borderless, value))
+            {
+                OnPropertyChanged(nameof(CommandLinePreview));
+            }
+        }
+    }
+
+    public bool CustomResolution
+    {
+        get => _customResolution;
+        set
+        {
+            if (SetProperty(ref _customResolution, value))
+            {
+                OnPropertyChanged(nameof(PresetEnabled));
+                OnPropertyChanged(nameof(CustomEnabled));
+            }
+        }
+    }
+
+    public int ResolutionIndex
+    {
+        get => _resolutionIndex;
+        set
+        {
+            // ComboBox 重建时会回写 -1，忽略。
+            if (value >= 0 && value < ResolutionOptions.Length)
+            {
+                SetProperty(ref _resolutionIndex, value);
+            }
+        }
+    }
+
+    public double CustomWidth { get => _customWidth; set => SetProperty(ref _customWidth, value); }
+
+    public double CustomHeight { get => _customHeight; set => SetProperty(ref _customHeight, value); }
+
+    public bool ResolutionControlsEnabled => _overrideResolution;
+
+    public bool PresetEnabled => _overrideResolution && !_customResolution;
+
+    public bool CustomEnabled => _overrideResolution && _customResolution;
+
+    public string ExtraArguments
+    {
+        get => _extraArguments;
+        set
+        {
+            if (SetProperty(ref _extraArguments, value ?? string.Empty))
+            {
+                OnPropertyChanged(nameof(CommandLinePreview));
+            }
+        }
+    }
+
+    /// <summary>最终传给游戏的命令行参数（自动注入的无边框 + 附加参数），便于排错。</summary>
+    public string CommandLinePreview
+    {
+        get
+        {
+            var text = LaunchArguments.Build(_borderless, _extraArguments);
+            return text.Length == 0 ? "没有附加的命令行参数" : text;
+        }
+    }
+
+    private LaunchSettings BuildLaunch()
+    {
+        int? width = null, height = null;
+        bool? fullscreen = null;
+        if (_overrideResolution)
+        {
+            fullscreen = _fullscreen;
+            if (_customResolution)
+            {
+                if (!double.IsNaN(_customWidth) && !double.IsNaN(_customHeight))
+                {
+                    width = Convert.ToInt32(_customWidth);
+                    height = Convert.ToInt32(_customHeight);
+                }
+            }
+            else if (_resolutionIndex >= 0 && _resolutionIndex < ResolutionList.Length)
+            {
+                (width, height) = ResolutionList[_resolutionIndex];
+            }
+        }
+
+        return new LaunchSettings
+        {
+            Width = width,
+            Height = height,
+            Fullscreen = fullscreen,
+            Borderless = _borderless,
+            ExtraArguments = string.IsNullOrWhiteSpace(_extraArguments) ? null : _extraArguments.Trim(),
+        };
+    }
+
+    private void ApplyLaunch(LaunchSettings? launch)
+    {
+        _borderless = launch?.Borderless ?? false;
+        _extraArguments = launch?.ExtraArguments ?? string.Empty;
+        _overrideResolution = launch is { Fullscreen: not null } || launch is { Width: not null };
+        _fullscreen = launch?.Fullscreen ?? true;
+        if (launch?.Width is { } width && launch.Height is { } height)
+        {
+            var preset = Array.FindIndex(ResolutionList, item => item.Width == width && item.Height == height);
+            _customResolution = preset < 0;
+            _resolutionIndex = preset >= 0 ? preset : 0;
+            _customWidth = width;
+            _customHeight = height;
+        }
+        else
+        {
+            _customResolution = false;
+            _resolutionIndex = Math.Max(0, Array.FindIndex(ResolutionList, item => item.Width == 1920 && item.Height == 1080));
+        }
+    }
+
     public bool IsHoyoGame => Game != GameType.ZenlessZoneZero;
     public bool IsGenshin => Game == GameType.Genshin;
 
@@ -469,7 +657,7 @@ public sealed class ProfileEditorViewModel : ObservableObject
         };
     }
 
-    public static ProfileEditorViewModel From(GameProfile profile) => new()
+    public static ProfileEditorViewModel From(GameProfile profile) => new ProfileEditorViewModel
     {
         Id = profile.Id,
         DisplayName = profile.DisplayName,
@@ -485,7 +673,13 @@ public sealed class ProfileEditorViewModel : ObservableObject
         GenshinPreset60Fps = profile.Hoyo?.GenshinPreset60Fps ?? 1000,
         GenshinTouchUiScaleOverrideEnabled = profile.Hoyo?.GenshinTouchUiScaleOverrideEnabled ?? false,
         GenshinTouchUiScalePercent = profile.Hoyo?.GenshinTouchUiScalePercent ?? 400,
-    };
+    }.WithLaunch(profile.Launch);
+
+    private ProfileEditorViewModel WithLaunch(LaunchSettings? launch)
+    {
+        ApplyLaunch(launch);
+        return this;
+    }
 
     /// <summary>
     /// 转为域层 mutation。空白路径必须传 null 而非空串：域层用 null 表达「本次不修改该字段」，
@@ -505,7 +699,8 @@ public sealed class ProfileEditorViewModel : ObservableObject
         GenshinPreset30Fps: IsGenshin ? ToFps(GenshinPreset30Fps, 60) : null,
         GenshinPreset60Fps: IsGenshin ? ToFps(GenshinPreset60Fps, 1000) : null,
         GenshinTouchUiScaleOverrideEnabled: IsGenshin ? GenshinTouchUiScaleOverrideEnabled : null,
-        GenshinTouchUiScalePercent: IsGenshin ? ToFps(GenshinTouchUiScalePercent, 400) : null);
+        GenshinTouchUiScalePercent: IsGenshin ? ToFps(GenshinTouchUiScalePercent, 400) : null,
+        Launch: BuildLaunch());
 
     /// <summary>NumberBox 被清空时值为 NaN，直接 Convert.ToInt32 会抛 OverflowException。</summary>
     private static int ToFps(double value, int fallback) =>

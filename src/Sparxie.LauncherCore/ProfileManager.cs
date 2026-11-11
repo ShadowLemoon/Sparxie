@@ -36,6 +36,7 @@ public static class ProfileManager
         };
 
         ApplySettings(profile, mutation);
+        ApplyLaunch(profile, mutation);
         ValidateProfile(profile);
 
         config.Profiles.Add(profile);
@@ -85,6 +86,7 @@ public static class ProfileManager
         }
 
         ApplySettings(updated, mutation);
+        ApplyLaunch(updated, mutation);
         ValidateProfile(updated);
 
         var index = config.Profiles.IndexOf(current);
@@ -119,6 +121,26 @@ public static class ProfileManager
 
         return profile;
     }
+
+    /// <summary>启动设置整体替换；全部“不修改”时清除，避免配置里留下空壳。</summary>
+    private static void ApplyLaunch(GameProfile profile, ProfileMutation mutation)
+    {
+        if (mutation.Launch is not { } launch)
+        {
+            return;
+        }
+
+        profile.Launch = launch.IsEmpty ? null : CloneLaunch(launch);
+    }
+
+    private static LaunchSettings CloneLaunch(LaunchSettings source) => new()
+    {
+        Width = source.Width,
+        Height = source.Height,
+        Fullscreen = source.Fullscreen,
+        Borderless = source.Borderless,
+        ExtraArguments = string.IsNullOrWhiteSpace(source.ExtraArguments) ? null : source.ExtraArguments.Trim(),
+    };
 
     private static void ApplySettings(GameProfile profile, ProfileMutation mutation)
     {
@@ -249,6 +271,7 @@ public static class ProfileManager
         DisplayName = source.DisplayName,
         Game = source.Game,
         ExecutablePath = source.ExecutablePath,
+        Launch = source.Launch is null ? null : CloneLaunch(source.Launch),
         Hoyo = source.Hoyo is null
             ? null
             : new HoyoProfileSettings

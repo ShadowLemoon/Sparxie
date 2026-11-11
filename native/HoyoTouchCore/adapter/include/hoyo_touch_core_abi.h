@@ -28,7 +28,7 @@ extern "C" {
 #define HOYO_API
 #endif
 
-#define HOYO_ABI_VERSION 1u
+#define HOYO_ABI_VERSION 2u
 #define HOYO_ABI_NAME "SparxieHoyoTouchCore"
 
 // ---- 错误码（稳定，跨版本不变）----
@@ -74,6 +74,8 @@ typedef struct HoyoLaunchRequest
     int32_t genshin_touch_ui_scale_percent;          // 100–500，仅原神
     const wchar_t* game_executable_path;    // UTF-16，NUL 结尾
     uint32_t game_executable_path_chars;    // 不含 NUL
+    const wchar_t* game_arguments;          // UTF-16, NUL-terminated; NULL or empty = no extra command line (ABI v2)
+    uint32_t game_arguments_chars;          // excluding NUL
 } HoyoLaunchRequest;
 
 // ---- 结果结构 ----

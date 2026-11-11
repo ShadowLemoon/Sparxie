@@ -1,0 +1,45 @@
+<UserControl
+    x:Class="Sparxie.Desktop.Views.LaunchSettingsCard"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:Sparxie.Desktop.ViewModels"
+    HorizontalContentAlignment="Stretch">
+    <!-- 数据上下文是 ProfileEditorViewModel（继承自设置页表单）。布局对齐 Starward 的“分辨率”区：
+         全屏 / 使用无边框窗口 / 自定义分辨率 复选框，分辨率下拉，宽 × 高输入框（没有加减按钮）。 -->
+    <Border Style="{StaticResource GlassCard}">
+        <StackPanel Spacing="4">
+            <TextBlock Text="分辨率" Style="{StaticResource SectionHeading}" Margin="0,0,0,8" />
+
+            <ToggleSwitch Header="启动时写入游戏的分辨率与全屏设置" OnContent="开" OffContent="关"
+                          IsOn="{Binding OverrideResolution, Mode=TwoWay}" />
+            <TextBlock Text="关闭时不修改游戏自己的分辨率与全屏设置；游戏需要至少运行过一次。星铁、绝区零的国服与国际服 EXE 同名：先按米哈游启动器登记的安装路径认出服务器，认不出（手动解压的安装）时，本机已有哪几个服的设置就一起写入。"
+                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+
+            <CheckBox Content="全屏" IsChecked="{Binding Fullscreen, Mode=TwoWay}"
+                      IsEnabled="{Binding ResolutionControlsEnabled}" />
+            <CheckBox Content="使用无边框窗口" IsChecked="{Binding Borderless, Mode=TwoWay}" />
+            <CheckBox Content="自定义分辨率" IsChecked="{Binding CustomResolution, Mode=TwoWay}"
+                      IsEnabled="{Binding ResolutionControlsEnabled}" />
+
+            <ComboBox Width="160" Margin="0,8,0,0"
+                      ItemsSource="{x:Bind vm:ProfileEditorViewModel.ResolutionOptions}"
+                      SelectedIndex="{Binding ResolutionIndex, Mode=TwoWay}"
+                      IsEnabled="{Binding PresetEnabled}" />
+
+            <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,12,0,0">
+                <NumberBox Width="120" Minimum="640" Maximum="16384" SpinButtonPlacementMode="Hidden"
+                           Value="{Binding CustomWidth, Mode=TwoWay}"
+                           IsEnabled="{Binding CustomEnabled}" />
+                <TextBlock Text="×" FontSize="20" VerticalAlignment="Center" Opacity="0.7" />
+                <NumberBox Width="120" Minimum="480" Maximum="16384" SpinButtonPlacementMode="Hidden"
+                           Value="{Binding CustomHeight, Mode=TwoWay}"
+                           IsEnabled="{Binding CustomEnabled}" />
+            </StackPanel>
+
+            <TextBox Header="附加启动参数" PlaceholderText="例如 -window-mode exclusive" MinHeight="48" Margin="0,16,0,0"
+                     Text="{Binding ExtraArguments, Mode=TwoWay}" />
+            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,4,0,0"
+                       Text="{Binding CommandLinePreview}" />
+        </StackPanel>
+    </Border>
+</UserControl>

@@ -60,6 +60,11 @@ public static class AppConfigValidator
                 errors.Add($"profile {profile.Id} 的 EXE 名称不在白名单: {Path.GetFileName(profile.ExecutablePath)}");
             }
 
+            if (LaunchSettingsRules.Validate(profile.Launch) is { } launchError)
+            {
+                errors.Add($"profile {profile.Id} 的启动设置不合法：{launchError}");
+            }
+
             if (profile.Game == GameType.ZenlessZoneZero)
             {
                 if (profile.Hoyo is not null)

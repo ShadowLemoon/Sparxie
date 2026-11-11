@@ -46,6 +46,7 @@ struct CsLock
 // upstream 导出：sparxie_hoyo_bootstrap（追加于 main.cpp）
 extern "C" int __stdcall sparxie_hoyo_bootstrap(
     const wchar_t* game_executable_path,
+    const wchar_t* game_arguments,
     int32_t game_type,
     int32_t fps_unlock_enabled,
     int32_t target_fps,
@@ -106,6 +107,13 @@ HoyoTouchError hoyo_create_session(
         result->error_code = HOYO_ERR_INVALID_ARGUMENT;
         result->message = L"game_executable_path 为空";
         result->message_chars = 22;
+        return HOYO_ERR_INVALID_ARGUMENT;
+    }
+    if (request->game_arguments_chars > 0 && request->game_arguments == nullptr)
+    {
+        result->error_code = HOYO_ERR_INVALID_ARGUMENT;
+        result->message = L"game_arguments 为空但长度非 0";
+        result->message_chars = 27;
         return HOYO_ERR_INVALID_ARGUMENT;
     }
     if (request->target_fps < 10 || request->target_fps > 1000)
@@ -220,6 +228,7 @@ HoyoTouchError hoyo_launch(void* session_handle, uint32_t game_pid, HoyoResult* 
 
     const int rc = sparxie_hoyo_bootstrap(
         r.game_executable_path,
+        r.game_arguments,
         r.game_type,
         r.fps_unlock_enabled,
         r.target_fps,

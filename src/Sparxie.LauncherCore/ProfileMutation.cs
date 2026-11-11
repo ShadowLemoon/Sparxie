@@ -3,7 +3,10 @@ using Sparxie.Infrastructure.Configuration;
 
 namespace Sparxie.LauncherCore;
 
-/// <summary>调用方传入的 Profile 创建/修改字段；null 表示该字段未指定。</summary>
+/// <summary>
+/// 调用方传入的 Profile 创建/修改字段；null 表示该字段未指定。
+/// <see cref="Launch"/> 非 null 时整体替换该配置的启动设置（所有字段都是“不修改”则清除这一段）。
+/// </summary>
 public sealed record ProfileMutation(
     string? Id = null,
     string? DisplayName = null,
@@ -18,7 +21,8 @@ public sealed record ProfileMutation(
     int? GenshinPreset30Fps = null,
     int? GenshinPreset60Fps = null,
     bool? GenshinTouchUiScaleOverrideEnabled = null,
-    int? GenshinTouchUiScalePercent = null)
+    int? GenshinTouchUiScalePercent = null,
+    LaunchSettings? Launch = null)
 {
     public bool HasHoyoSettings =>
         FpsUnlockEnabled.HasValue
@@ -39,5 +43,6 @@ public sealed record ProfileMutation(
         || !string.IsNullOrWhiteSpace(ExecutablePath)
         || Game.HasValue
         || HasHoyoSettings
-        || HasGenshinSettings;
+        || HasGenshinSettings
+        || Launch is not null;
 }

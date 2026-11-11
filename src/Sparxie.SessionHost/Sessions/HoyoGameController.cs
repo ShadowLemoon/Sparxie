@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Sparxie.Contracts.Models;
 using Sparxie.Contracts.Rpc;
+using Sparxie.Infrastructure.Processes;
 
 namespace Sparxie.SessionHost.Sessions;
 
@@ -13,11 +14,12 @@ public sealed class HoyoGameController : IGameController
 {
     public bool CreatesProcess => true;
 
-    private const uint ABI_VERSION = 1;
+    private const uint ABI_VERSION = 2;
     private const int HOYO_OK = 0;
 
     private IntPtr _session;
     private string? _launchPath;
+    private string _launchArguments = string.Empty;
     private string _gameType = "genshin";
     private bool _disposed;
 
@@ -25,6 +27,7 @@ public sealed class HoyoGameController : IGameController
     {
         // Hoyo 无启动前配置切换；记录 EXE 路径与游戏类型供 bootstrap 使用。
         _launchPath = profile.ExecutablePath;
+        _launchArguments = LaunchArguments.Build(profile.Launch.ToModel());
         _gameType = profile.Game;
         await Task.CompletedTask.ConfigureAwait(false);
     }
@@ -79,6 +82,10 @@ public sealed class HoyoGameController : IGameController
         finally
         {
             Marshal.FreeHGlobal(request.GameExecutablePath);
+            if (request.GameArguments != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(request.GameArguments);
+            }
         }
 
         await Task.CompletedTask.ConfigureAwait(false);
@@ -182,6 +189,9 @@ public sealed class HoyoGameController : IGameController
             GenshinTouchUiScalePercent = settings.GenshinTouchUiScalePercent,
             GameExecutablePath = Marshal.StringToHGlobalUni(path),
             GameExecutablePathChars = (uint)path.Length,
+            // 空串时不分配，native 侧按 NULL 处理（命令行为空）。
+            GameArguments = _launchArguments.Length == 0 ? IntPtr.Zero : Marshal.StringToHGlobalUni(_launchArguments),
+            GameArgumentsChars = (uint)_launchArguments.Length,
         };
     }
 
@@ -203,6 +213,8 @@ public sealed class HoyoGameController : IGameController
         public int GenshinTouchUiScalePercent;
         public IntPtr GameExecutablePath;
         public uint GameExecutablePathChars;
+        public IntPtr GameArguments;
+        public uint GameArgumentsChars;
     }
 
     [StructLayout(LayoutKind.Sequential)]

@@ -29,12 +29,22 @@ message HoyoSettings {
   int32 genshin_touch_ui_scale_percent = 10;
 }
 
+// 启动设置：width/height 为 0 表示不修改；fullscreen 0 不修改 / 1 全屏 / 2 窗口；borderless 为 true 时自动加 -popupwindow。
+message LaunchSettings {
+  int32 width = 1;
+  int32 height = 2;
+  int32 fullscreen = 3;
+  string extra_arguments = 4;
+  bool borderless = 5;
+}
+
 message ProfileSnapshot {
   string profile_id = 1;
   string display_name = 2;
   string game = 3;
   string executable_path = 4;
   HoyoSettings hoyo = 5;
+  LaunchSettings launch = 6;
 }
 
 message StartSessionRequest {

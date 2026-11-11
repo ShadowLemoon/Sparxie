@@ -2544,6 +2544,7 @@ __Continue:
 
 static int __stdcall sparxie_hoyo_bootstrap_impl(
     const wchar_t* game_executable_path,
+    const wchar_t* game_arguments, // 附加命令行参数（可为 NULL/空）；Sparxie 自动注入的无边框与用户参数
     int32_t game_type,             // 0 = genshin, 1 = starRail
     int32_t fps_unlock_enabled,    // 0/1
     int32_t target_fps,            // 10-1000
@@ -2613,8 +2614,13 @@ static int __stdcall sparxie_hoyo_bootstrap_impl(
     memset(boot_info, 0, bootsize);
 
     // Game_Arg：透传调用方构造的启动参数；此处为空（SessionHost 负责游戏参数）
+    std::wstring sparxieCommandLine;
+    if (game_arguments && game_arguments[0] != L'\0')
+    {
+        sparxieCommandLine = L"\"" + gamePath + L"\" " + game_arguments;
+    }
     if (!((CreateProcessW_pWin64)~(DWORD64)CreateProcessW_p)(
-            gamePath.c_str(), NULL, NULL, NULL, FALSE,
+            gamePath.c_str(), sparxieCommandLine.empty() ? NULL : &sparxieCommandLine[0], NULL, NULL, FALSE,
             CREATE_SUSPENDED | GamePriorityClass, NULL, processDir.c_str(), si, pi))
     {
         free(boot_info);
@@ -2957,6 +2963,7 @@ static int __stdcall sparxie_hoyo_bootstrap_impl(
 
 extern "C" __declspec(dllexport) int __stdcall sparxie_hoyo_bootstrap(
     const wchar_t* game_executable_path,
+    const wchar_t* game_arguments,
     int32_t game_type,
     int32_t fps_unlock_enabled,
     int32_t target_fps,
@@ -2975,7 +2982,7 @@ extern "C" __declspec(dllexport) int __stdcall sparxie_hoyo_bootstrap(
     __try
     {
         return sparxie_hoyo_bootstrap_impl(
-            game_executable_path, game_type, fps_unlock_enabled, target_fps,
+            game_executable_path, game_arguments, game_type, fps_unlock_enabled, target_fps,
             background_fps_limit_enabled, background_fps, priority_class,
             genshin_follow_in_game_preset, genshin_preset_30_fps, genshin_preset_60_fps,
             genshin_touch_ui_scale_override_enabled, genshin_touch_ui_scale_percent,

@@ -68,6 +68,22 @@ public static class ProfileSnapshotValidator
             return (ErrorCode.InvalidArgument, $"executablePath 不在 {profile.Game} 白名单: {Path.GetFileName(profile.ExecutablePath)}");
         }
 
+        if (profile.Launch is { } launch)
+        {
+            if (LaunchSettingsRules.Validate(
+                    launch.Width == 0 ? null : launch.Width,
+                    launch.Height == 0 ? null : launch.Height,
+                    launch.ExtraArguments) is { } launchError)
+            {
+                return (ErrorCode.InvalidArgument, $"launch 非法: {launchError}");
+            }
+
+            if (launch.Fullscreen is < 0 or > 2)
+            {
+                return (ErrorCode.InvalidArgument, $"launch.fullscreen 非法: {launch.Fullscreen}");
+            }
+        }
+
         if (profile.Hoyo is { } hoyo)
         {
             if (hoyo.TargetFps is < MinFps or > MaxFps)
