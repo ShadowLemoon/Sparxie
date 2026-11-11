@@ -31,7 +31,9 @@
             <SolidColorBrush x:Key="StartButtonHoverBrush" Color="#FFE8C96A" />
             <SolidColorBrush x:Key="StartButtonPressedBrush" Color="#FFD6B552" />
             <SolidColorBrush x:Key="StartButtonForegroundBrush" Color="#FF2B2118" />
-            <AcrylicBrush x:Key="GlassAcrylicBrush" TintColor="#FF0B0E14" TintOpacity="0.45" TintLuminosityOpacity="0.55" FallbackColor="#CC0B0E14" />
+            <!-- 游戏卡 / 提示条 / 设置按钮的底：半透明深色。不用 AcrylicBrush —— 动态背景的视频是交换链渲染，
+                 应用内亚克力采样不到它，会退化成纯黑。 -->
+            <SolidColorBrush x:Key="GlassAcrylicBrush" Color="#8C0B0E14" />
             <SolidColorBrush x:Key="LaunchAccentPressedBrush" Color="#FF4D75CC" />
             <CornerRadius x:Key="PanelRadius">20</CornerRadius>
             <CornerRadius x:Key="CardRadius">14</CornerRadius>

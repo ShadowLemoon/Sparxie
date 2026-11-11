@@ -9,6 +9,52 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
+        <!-- 背景切换（布局同 Starward）：贴窗口底边的一条渐变带，鼠标移到底部才淡入，滚轮也能切；
+             中间是圆点，动态背景旁边带暂停 / 播放键。放在主页内容之前，不挡游戏卡和启动按钮。 -->
+        <Grid Grid.RowSpan="2"
+              Visibility="{Binding IsHomeChromeVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+            <Border x:Name="BackgroundSwitchStrip" Height="60" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Opacity="0"
+                    PointerEntered="BackgroundStripPointerEntered" PointerExited="BackgroundStripPointerExited"
+                    PointerWheelChanged="BackgroundStripWheelChanged"
+                    Visibility="{Binding Home.ShowBackgroundControls, Converter={StaticResource BoolToVisibilityConverter}}">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Offset="0.0" Color="#00000000" />
+                        <GradientStop Offset="1.0" Color="#88000000" />
+                    </LinearGradientBrush>
+                </Border.Background>
+                <Border.OpacityTransition>
+                    <ScalarTransition />
+                </Border.OpacityTransition>
+                <StackPanel Orientation="Horizontal" Spacing="4" Padding="4" Margin="0,0,0,4"
+                            HorizontalAlignment="Center" VerticalAlignment="Bottom">
+                    <ItemsControl ItemsSource="{Binding Home.BackgroundDots}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Width="24" Height="28" Padding="0" Background="Transparent" BorderThickness="0"
+                                        Tag="{Binding Index}" Click="BackgroundDotClick"
+                                        AutomationProperties.Name="{Binding AutomationName}">
+                                    <Ellipse Width="10" Height="10" Fill="White" Opacity="{Binding DotOpacity}" />
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button Width="28" Height="28" Padding="0" CornerRadius="14" Background="Transparent" BorderThickness="0"
+                            Command="{Binding Home.ToggleBackgroundPauseCommand}"
+                            AutomationProperties.Name="{Binding Home.PauseAutomationName}"
+                            Opacity="{Binding Home.PauseButtonOpacity}" IsHitTestVisible="{Binding Home.HasBackgroundVideo}"
+                            IsTabStop="{Binding Home.HasBackgroundVideo}">
+                        <FontIcon Glyph="{Binding Home.PauseGlyph}" FontSize="14" />
+                    </Button>
+                </StackPanel>
+            </Border>
+        </Grid>
+
         <StackPanel Grid.Row="1" Margin="28,0,28,28"
                     Visibility="{Binding IsHomeChromeVisible, Converter={StaticResource BoolToVisibilityConverter}}">
             <!-- 路径异常：EXE 未设置 / 找不到 / 不属于该游戏时提示，并直达当前游戏设置页。 -->

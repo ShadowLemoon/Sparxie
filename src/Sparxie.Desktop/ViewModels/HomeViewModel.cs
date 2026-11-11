@@ -82,28 +82,189 @@ public sealed class HomeViewModel : ObservableObject
         private set => SetProperty(ref _backgroundPath, value);
     }
 
+    /// <summary>当前游戏所有官方背景的圆点（主页底部居中切换）；只有一张时不显示。</summary>
+    public ObservableCollection<BackgroundDotViewModel> BackgroundDots { get; } = new();
+
+    public bool HasMultipleBackgrounds => BackgroundDots.Count > 1;
+
+    /// <summary>底部切换条有内容可显示：背景不止一张，或当前是动态背景（要暂停键）。</summary>
+    public bool ShowBackgroundControls => HasMultipleBackgrounds || HasBackgroundVideo;
+
+    private IReadOnlyList<GameBackgroundItem> _backgroundItems = [];
+    private int _backgroundIndex = -1;
+    private string? _backgroundVideoPath;
+    private bool _backgroundPaused;
+
+    private string? _backgroundThemePath;
+
+    /// <summary>当前背景的标题叠加图（透明 PNG，游戏标题 / Logo），盖在图片和视频之上；没有则为 null。</summary>
+    public string? BackgroundThemePath
+    {
+        get => _backgroundThemePath;
+        private set => SetProperty(ref _backgroundThemePath, value);
+    }
+
+    /// <summary>当前背景的视频（动态背景）本地路径；静态背景或视频未下载好时为 null。</summary>
+    public string? BackgroundVideoPath
+    {
+        get => _backgroundVideoPath;
+        private set
+        {
+            if (SetProperty(ref _backgroundVideoPath, value))
+            {
+                OnPropertyChanged(nameof(HasBackgroundVideo));
+            }
+        }
+    }
+
+    /// <summary>当前背景是动态背景（有视频）：此时才显示暂停键。</summary>
+    public bool HasBackgroundVideo => _backgroundIndex >= 0 && _backgroundIndex < _backgroundItems.Count
+        && _backgroundItems[_backgroundIndex].HasVideo;
+
+    /// <summary>用户暂停了动态背景（停在当前帧）；切换背景后保持这个状态。</summary>
+    public bool IsBackgroundPaused
+    {
+        get => _backgroundPaused;
+        private set
+        {
+            if (SetProperty(ref _backgroundPaused, value))
+            {
+                OnPropertyChanged(nameof(PauseGlyph));
+                OnPropertyChanged(nameof(PauseAutomationName));
+            }
+        }
+    }
+
+    /// <summary>暂停键始终占位（静态背景时透明且点不到），这样在有 / 没有暂停键的背景之间切换，圆点不会被挤动。</summary>
+    public double PauseButtonOpacity => HasBackgroundVideo ? 1 : 0;
+
+    public string PauseGlyph => _backgroundPaused ? "\uE768" : "\uE769"; // 播放 / 暂停
+
+    public string PauseAutomationName => _backgroundPaused ? "播放动态背景" : "暂停动态背景";
+
+    public ParameterRelayCommand SelectBackgroundCommand => _selectBackgroundCommand ??= new ParameterRelayCommand(parameter =>
+    {
+        if (parameter is int index)
+        {
+            SelectBackground(index);
+        }
+        else if (parameter is string text && int.TryParse(text, out var parsed))
+        {
+            SelectBackground(parsed);
+        }
+    });
+
+    private ParameterRelayCommand? _selectBackgroundCommand;
+
+    public RelayCommand ToggleBackgroundPauseCommand => _toggleBackgroundPauseCommand ??= new RelayCommand(() => IsBackgroundPaused = !IsBackgroundPaused);
+
+    private RelayCommand? _toggleBackgroundPauseCommand;
+
     private async Task LoadBackgroundAsync(GameType game)
     {
         try
         {
             // 先立即显示该游戏上次的缓存背景，再后台检查官方是否换图。
-            if (_backgrounds.GetCachedBackgroundPath(game) is { } cached && SelectedGame == game)
+            var cached = _backgrounds.GetCachedBackgrounds(game);
+            if (cached.Count > 0 && SelectedGame == game)
             {
-                BackgroundPath = cached;
+                ApplyBackgrounds(game, cached);
             }
 
-            var path = await _backgrounds.GetBackgroundPathAsync(game).ConfigureAwait(true);
+            var items = await _backgrounds.GetBackgroundsAsync(game).ConfigureAwait(true);
             if (SelectedGame == game)
             {
-                BackgroundPath = path;
+                ApplyBackgrounds(game, items);
             }
         }
         catch
         {
             if (SelectedGame == game)
             {
-                BackgroundPath = null;
+                ApplyBackgrounds(game, []);
             }
+        }
+    }
+
+    private void ApplyBackgrounds(GameType game, IReadOnlyList<GameBackgroundItem> items)
+    {
+        _backgroundItems = items;
+        BackgroundDots.Clear();
+        for (var i = 0; i < items.Count; i++)
+        {
+            BackgroundDots.Add(new BackgroundDotViewModel(i, $"背景 {i + 1}"));
+        }
+
+        OnPropertyChanged(nameof(HasMultipleBackgrounds));
+        OnPropertyChanged(nameof(ShowBackgroundControls));
+        OnPropertyChanged(nameof(PauseButtonOpacity));
+
+        var picked = Services.GameBackgroundService.Pick(items, _backgrounds.GetSelectedId(game));
+        ShowBackground(picked is null ? -1 : items.ToList().IndexOf(picked));
+    }
+
+    private void SelectBackground(int index)
+    {
+        if (index < 0 || index >= _backgroundItems.Count || index == _backgroundIndex)
+        {
+            return;
+        }
+
+        _backgrounds.SetSelectedId(SelectedGame, _backgroundItems[index].Id);
+        ShowBackground(index);
+    }
+
+    private GameBackgroundItem? _shownBackground;
+
+    private void ShowBackground(int index)
+    {
+        _backgroundIndex = index;
+        for (var i = 0; i < BackgroundDots.Count; i++)
+        {
+            BackgroundDots[i].IsSelected = i == index;
+        }
+
+        var item = index >= 0 && index < _backgroundItems.Count ? _backgroundItems[index] : null;
+
+        // 显示的还是同一张（回到主页时会重新取一遍背景列表）：什么都不重置，否则视频会从头重播，画面割裂。
+        if (item is not null && _shownBackground is { } shown && shown.Id == item.Id && shown.ImagePath == item.ImagePath
+            && shown.VideoUrl == item.VideoUrl && shown.ThemePath == item.ThemePath)
+        {
+            _shownBackground = item;
+            OnPropertyChanged(nameof(HasBackgroundVideo));
+            OnPropertyChanged(nameof(ShowBackgroundControls));
+            OnPropertyChanged(nameof(PauseButtonOpacity));
+            return;
+        }
+
+        _shownBackground = item;
+        BackgroundPath = item?.ImagePath;
+        BackgroundThemePath = item?.ThemePath;
+        BackgroundVideoPath = null;
+        OnPropertyChanged(nameof(HasBackgroundVideo));
+        OnPropertyChanged(nameof(ShowBackgroundControls));
+        OnPropertyChanged(nameof(PauseButtonOpacity));
+        if (item is { HasVideo: true })
+        {
+            _ = LoadVideoAsync(item);
+        }
+    }
+
+    /// <summary>视频较大，选中动态背景后在后台下载；下载好之前先显示静态图，期间用户切走就丢弃结果。</summary>
+    private async Task LoadVideoAsync(GameBackgroundItem item)
+    {
+        try
+        {
+            var path = await _backgrounds.EnsureVideoAsync(item).ConfigureAwait(true);
+            if (path is not null && _backgroundIndex >= 0 && _backgroundIndex < _backgroundItems.Count
+                && ReferenceEquals(_backgroundItems[_backgroundIndex], item))
+            {
+                BackgroundVideoPath = path;
+            }
+        }
+        catch
+        {
+            // 视频失败时保留静态图。
         }
     }
 
@@ -452,4 +613,34 @@ public sealed class ProfileListItemViewModel
     public string Details => Profile.Hoyo is { } hoyo
         ? $"{hoyo.TargetFps} FPS · {Profile.ExecutablePath}"
         : Profile.ExecutablePath;
+}
+
+/// <summary>主页底部背景切换的一个圆点。</summary>
+public sealed class BackgroundDotViewModel : ObservableObject
+{
+    private bool _isSelected;
+
+    public BackgroundDotViewModel(int index, string automationName)
+    {
+        Index = index;
+        AutomationName = automationName;
+    }
+
+    public int Index { get; }
+
+    public string AutomationName { get; }
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            if (SetProperty(ref _isSelected, value))
+            {
+                OnPropertyChanged(nameof(DotOpacity));
+            }
+        }
+    }
+
+    public double DotOpacity => _isSelected ? 1.0 : 0.45;
 }

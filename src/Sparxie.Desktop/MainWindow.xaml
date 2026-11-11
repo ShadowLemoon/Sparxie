@@ -9,8 +9,30 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Image x:Name="WindowBackground" Grid.RowSpan="2" Stretch="UniformToFill" Visibility="Collapsed" />
-        <Image x:Name="WindowBackgroundFade" Grid.RowSpan="2" Stretch="UniformToFill" Opacity="0" IsHitTestVisible="False" />
+        <!-- 静态图、视频、标题叠加图放进同一个 16:9 画幅里（都 Fill 到同一矩形），
+             再由 Viewbox 统一按 UniformToFill 居中缩放裁剪：三层用同一个锚点，窗口怎么变位置都一致。
+             官方背景图、叠加图都是 2560x1440，视频同为 16:9。 -->
+        <Viewbox Grid.RowSpan="2" Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Grid Width="1920" Height="1080">
+                <Image x:Name="WindowBackground" Stretch="Fill" Visibility="Collapsed" />
+                <Image x:Name="WindowBackgroundFade" Stretch="Fill" Opacity="0" IsHitTestVisible="False" />
+                <!-- 视频层不做透明度动画：MediaPlayerElement 是交换链渲染，改它的 Opacity 会闪黑。
+                     淡入淡出改由上面的“静态图遮罩”完成：暂停 / 载入 = 遮罩淡入盖住视频，播放 = 遮罩淡出。 -->
+                <MediaPlayerElement x:Name="WindowVideo" Stretch="Fill" AreTransportControlsEnabled="False"
+                                    AutoPlay="False" Visibility="Collapsed" IsHitTestVisible="False" />
+                <Image x:Name="WindowPoster" Stretch="Fill" Opacity="0" IsHitTestVisible="False">
+                    <Image.OpacityTransition>
+                        <ScalarTransition Duration="0:0:0.45" />
+                    </Image.OpacityTransition>
+                </Image>
+                <!-- 标题叠加图：与图片、视频同一矩形，盖在它们上面 -->
+                <Image x:Name="WindowTheme" Stretch="Fill" Opacity="0" IsHitTestVisible="False">
+                    <Image.OpacityTransition>
+                        <ScalarTransition Duration="0:0:0.45" />
+                    </Image.OpacityTransition>
+                </Image>
+            </Grid>
+        </Viewbox>
         <Rectangle Grid.RowSpan="2">
             <Rectangle.Fill>
                 <LinearGradientBrush StartPoint="0,1" EndPoint="0,0">
@@ -52,11 +74,12 @@
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="0,0,176,0"
                         HorizontalAlignment="Right" VerticalAlignment="Center"
                         Visibility="{Binding IsHomeVisible, Converter={StaticResource BoolToVisibilityConverter}}">
-                <Button Width="44" Height="44" Padding="0" CornerRadius="22" Background="{StaticResource GlassOverlayBrush}"
-                        BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1"
+                <!-- 纯图标按钮：不画底和描边（避免和游戏卡抢风格），悬停 / 按下才出现圆角淡底，和系统窗口按钮一个气质 -->
+                <Button Width="44" Height="44" Padding="0" CornerRadius="14" Background="Transparent" BorderThickness="0"
+                        Foreground="White"
                         Command="{Binding ToggleSettingsCommand}"
                         ToolTipService.ToolTip="应用设置" AutomationProperties.Name="应用设置">
-                    <FontIcon Glyph="&#xE713;" FontSize="16" />
+                    <FontIcon Glyph="&#xE713;" FontSize="18" />
                 </Button>
             </StackPanel>
         </Grid>

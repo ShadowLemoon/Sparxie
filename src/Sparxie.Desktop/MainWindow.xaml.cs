@@ -33,6 +33,14 @@ public sealed partial class MainWindow : Window
         TryConfigureWindow();
         TrySetWindowIcon();
         AppWindow.Closing += OnAppWindowClosing;
+        AppWindow.Changed += (_, args) =>
+        {
+            if (args.DidVisibilityChange || args.DidPresenterChange || args.DidSizeChange)
+            {
+                DispatcherQueue.TryEnqueue(UpdateWindowHidden);
+            }
+        };
+        VisibilityChanged += (_, _) => UpdateWindowHidden();
         _viewModel.Settings.Saved += ApplyCloseBehavior;
         ApplyCloseBehavior();
         Activated += OnFirstActivated;
@@ -43,6 +51,12 @@ public sealed partial class MainWindow : Window
         if (_viewModel.Home.BackgroundPath is { } initial)
         {
             UpdateWindowBackground(initial);
+            UpdateWindowTheme();
+        }
+
+        if (_viewModel.Home.BackgroundVideoPath is not null)
+        {
+            UpdateWindowVideo();
         }
         _ = LoadGameIconsAsync();
     }
@@ -75,12 +89,190 @@ public sealed partial class MainWindow : Window
         {
             UpdateWindowBackground(_viewModel.Home.BackgroundPath);
         }
+        else if (e.PropertyName == nameof(HomeViewModel.BackgroundThemePath))
+        {
+            UpdateWindowTheme();
+        }
+        else if (e.PropertyName == nameof(HomeViewModel.BackgroundVideoPath))
+        {
+            UpdateWindowVideo();
+        }
+        else if (e.PropertyName == nameof(HomeViewModel.IsBackgroundPaused))
+        {
+            ApplyVideoPause();
+        }
+    }
+
+    /// <summary>
+    /// 动态背景：静音循环，盖在静态图上。
+    /// 用户暂停 = 切回对应的静态图（视频层隐藏并停止解码）；主窗口完全不可见（最小化 / 隐藏到托盘）时暂停播放，窗口回来再继续。
+    /// 视频打开前和出错时也显示静态图。
+    /// </summary>
+    private async void UpdateWindowVideo()
+    {
+        _videoOpened = false;
+        var version = ++_videoVersion;
+        var path = _viewModel.Home.BackgroundVideoPath;
+        if (string.IsNullOrEmpty(path))
+        {
+            FadeOutAndReleaseVideo();
+            return;
+        }
+
+        // 换成另一个视频（例如两个都是动态背景的游戏之间切换）：先让静态图遮罩淡入完全盖住旧视频，
+        // 再换视频源，新视频打开后遮罩淡出——这样旧视频 → 新海报 → 新视频是连续的淡入淡出，不硬切。
+        WindowPoster.Opacity = 1;
+        WindowVideo.Visibility = Visibility.Visible;
+        await Task.Delay(480);
+        if (version != _videoVersion)
+        {
+            return;
+        }
+
+        try
+        {
+            // 播放器和事件先建好再设视频源，避免“视频打开事件比订阅还早”导致一直不播。
+            var player = EnsureVideoPlayer();
+            player.Source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(path));
+        }
+        catch
+        {
+            WindowVideo.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private Windows.Media.Playback.MediaPlayer EnsureVideoPlayer()
+    {
+        if (_hookedPlayer is { } existing)
+        {
+            return existing;
+        }
+
+        var player = new Windows.Media.Playback.MediaPlayer
+        {
+            IsMuted = true,
+            IsLoopingEnabled = true,
+            AutoPlay = false,
+        };
+        player.MediaOpened += (_, _) => DispatcherQueue.TryEnqueue(() =>
+        {
+            _videoOpened = true;
+            ApplyVideoPause();
+        });
+        player.MediaFailed += (_, _) => DispatcherQueue.TryEnqueue(() =>
+        {
+            _videoOpened = false;
+            WindowPoster.Opacity = 1;
+            WindowVideo.Visibility = Visibility.Collapsed;
+        });
+        WindowVideo.SetMediaPlayer(player);
+        _hookedPlayer = player;
+        return player;
+    }
+
+    private int _videoVersion;
+
+    /// <summary>按“用户是否暂停”和“窗口是否可见”决定视频层显示与播放。</summary>
+    private void ApplyVideoPause()
+    {
+        if (_hookedPlayer is not { } player || !_videoOpened)
+        {
+            return;
+        }
+
+        try
+        {
+            // 暂停 = 静态图遮罩淡入盖住视频；恢复 = 遮罩淡出。视频层本身不动，避免闪黑。
+            var showVideo = !_viewModel.Home.IsBackgroundPaused;
+            WindowVideo.Visibility = Visibility.Visible;
+            WindowPoster.Opacity = showVideo ? 0 : 1;
+            if (showVideo && !_windowHidden)
+            {
+                player.Play();
+            }
+            else
+            {
+                player.Pause();
+            }
+        }
+        catch
+        {
+            // 播放器状态异常时忽略，静态图仍在。
+        }
+    }
+
+    /// <summary>当前背景没有视频了（切到静态背景 / 换游戏）：视频淡出后再释放，避免硬切。</summary>
+    private async void FadeOutAndReleaseVideo()
+    {
+        WindowPoster.Opacity = 1;
+        await Task.Delay(500);
+        if (string.IsNullOrEmpty(_viewModel.Home.BackgroundVideoPath))
+        {
+            WindowVideo.Visibility = Visibility.Collapsed;
+            if (_hookedPlayer is { } player)
+            {
+                player.Pause();
+                player.Source = null;
+            }
+
+            WindowPoster.Opacity = 0; // 遮罩和下面的静态图是同一张，复位不会有可见变化
+        }
+    }
+
+    /// <summary>标题叠加图：换背景时先淡出旧的再淡入新的；没有叠加图就淡出后清掉。</summary>
+    private async void UpdateWindowTheme()
+    {
+        var path = _viewModel.Home.BackgroundThemePath;
+        WindowTheme.Opacity = 0;
+        if (string.IsNullOrEmpty(path))
+        {
+            await Task.Delay(500);
+            if (string.IsNullOrEmpty(_viewModel.Home.BackgroundThemePath))
+            {
+                WindowTheme.Source = null;
+            }
+
+            return;
+        }
+
+        try
+        {
+            await Task.Delay(120); // 让旧叠加图先开始淡出
+            if (_viewModel.Home.BackgroundThemePath != path)
+            {
+                return;
+            }
+
+            WindowTheme.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(path));
+            WindowTheme.Opacity = 1;
+        }
+        catch
+        {
+            WindowTheme.Source = null;
+        }
+    }
+
+    private bool _videoOpened;
+    private bool _windowHidden;
+
+    /// <summary>主窗口完全不可见：被隐藏（托盘）或最小化。</summary>
+    private void UpdateWindowHidden()
+    {
+        var hidden = !AppWindow.IsVisible
+            || (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter { State: Microsoft.UI.Windowing.OverlappedPresenterState.Minimized });
+        if (hidden != _windowHidden)
+        {
+            _windowHidden = hidden;
+            ApplyVideoPause();
+        }
     }
 
     private Storyboard? _fade;
+    private Windows.Media.Playback.MediaPlayer? _hookedPlayer;
 
     private void UpdateWindowBackground(string? path)
     {
+        WindowPoster.Source = string.IsNullOrWhiteSpace(path) ? null : new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(path));
         if (string.IsNullOrWhiteSpace(path))
         {
             WindowBackground.Source = null;
@@ -252,6 +444,8 @@ public sealed partial class MainWindow : Window
 
     private void OnFirstActivated(object sender, WindowActivatedEventArgs args)
     {
+        UpdateWindowHidden();
+        ApplyVideoPause();
         // 系统会在激活时恢复上次保存的窗口摆放，覆盖构造期设置；延迟到恢复完成后再按 DPI 定尺寸。
         if (_sized)
         {
