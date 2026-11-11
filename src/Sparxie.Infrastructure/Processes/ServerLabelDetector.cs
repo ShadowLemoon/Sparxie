@@ -5,6 +5,7 @@ namespace Sparxie.Infrastructure.Processes;
 
 /// <summary>
 /// 根据安装目录推断区服名称（国服 / 国际服 / B 服）。依据按可靠程度依次是：
+/// 0) EXE 目录里有 steam_appid.txt = Steam；
 /// 1) EXE 同级或上一级目录的 config.ini（官方启动器写入：game_biz=hk4e_cn、cps=bilibili、channel=14）；
 /// 2) 米哈游启动器（HYP）登记的安装路径；
 /// 3) 原神 EXE 名（YuanShen = 国服，GenshinImpact = 国际服）与目录名里的 global / bilibili / _cn 提示。
@@ -15,12 +16,19 @@ public static partial class ServerLabelDetector
     public const string Cn = "国服";
     public const string Global = "国际服";
     public const string Bilibili = "B 服";
+    public const string Steam = "Steam";
 
     public static string? Detect(GameType game, string executablePath, IGameRegistry? registry = null)
     {
         if (string.IsNullOrWhiteSpace(executablePath))
         {
             return null;
+        }
+
+        // Steam 安装（目录里有 steam_appid.txt）优先，它的启动方式也和其他区服不同。
+        if (SteamLaunch.IsSteamInstall(executablePath))
+        {
+            return Steam;
         }
 
         var directory = Path.GetDirectoryName(executablePath);

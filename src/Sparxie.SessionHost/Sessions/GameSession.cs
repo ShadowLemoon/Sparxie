@@ -64,7 +64,7 @@ public sealed class GameSession : IAsyncDisposable
             _job = PreRunningJob.Create();
             if (!_controller.CreatesProcess)
             {
-                _gameProcess = StartGameProcess();
+                _gameProcess = await StartGameProcessAsync(cancellationToken).ConfigureAwait(false);
                 _job.Assign(_gameProcess.SafeHandle);
             }
 
@@ -230,6 +230,22 @@ public sealed class GameSession : IAsyncDisposable
         {
             return $"写入游戏设置失败：{ex.Message}";
         }
+    }
+
+    private async Task<Process> StartGameProcessAsync(CancellationToken cancellationToken)
+    {
+        // 绝区零 Steam 版：经 Steam 拉起（目录里有 steam_appid.txt），其余直接运行 EXE。
+        if (_options.Profile.ToGameType() == GameType.ZenlessZoneZero && SteamLaunch.IsSteamInstall(_options.Profile.ExecutablePath))
+        {
+            return await SteamLaunch.StartAsync(
+                SteamLaunch.ZenlessZoneZeroAppId,
+                _options.Profile.ExecutablePath,
+                LaunchArguments.Build(_options.Profile.Launch.ToModel()),
+                TimeSpan.FromMinutes(5),
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        return StartGameProcess();
     }
 
     private Process StartGameProcess()
