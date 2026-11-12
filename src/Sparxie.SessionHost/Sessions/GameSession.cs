@@ -226,7 +226,7 @@ public sealed class GameSession : IAsyncDisposable
     {
         try
         {
-            RestoreGameRegistrySettings(); // 上次异常退出遗留的备份先恢复，免得把我们自己写的值当成“原值”备份
+            RestoreGameRegistrySettings(includeLeftover: true); // 上次异常退出遗留的备份先恢复，免得把我们自己写的值当成“原值”备份
             var registry = new CurrentUserGameRegistry();
             var (result, backup) = GameRegistrySettings.ApplyWithBackup(
                 _options.Profile.ToGameType(), _options.Profile.ExecutablePath, _options.Profile.Launch.ToModel(), registry);
@@ -245,22 +245,29 @@ public sealed class GameSession : IAsyncDisposable
         }
     }
 
-    /// <summary>把备份的值写回注册表。可重复调用；没有本次备份时看磁盘上有没有上次遗留的。</summary>
-    private void RestoreGameRegistrySettings()
+    /// <summary>
+    /// 把本次会话的备份值写回注册表，可重复调用。<paramref name="includeLeftover"/> 为 true 时（只在确认游戏没在运行的启动前）
+    /// 才处理磁盘上上次遗留的备份；收尾路径不能碰它——被拒绝的第二个会话（游戏已在运行）收尾时，
+    /// 磁盘上那份属于正在运行的第一个会话，不能被它提前恢复掉。
+    /// </summary>
+    private void RestoreGameRegistrySettings(bool includeLeftover = false)
     {
         try
         {
             var backup = _registryBackup;
-            if (backup is null && File.Exists(BackupFile))
+            if (backup is null && includeLeftover && File.Exists(BackupFile))
             {
                 backup = GameRegistryBackup.FromJson(File.ReadAllText(BackupFile));
             }
 
             backup?.Restore(new CurrentUserGameRegistry());
-            _registryBackup = null;
-            if (File.Exists(BackupFile))
+            if (backup is not null || includeLeftover)
             {
-                File.Delete(BackupFile);
+                _registryBackup = null;
+                if (File.Exists(BackupFile))
+                {
+                    File.Delete(BackupFile);
+                }
             }
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)

@@ -88,7 +88,18 @@ public sealed class HostService : SparxieHost.SparxieHostBase
             }
         });
 
-        await session.RunAsync(context.CancellationToken).ConfigureAwait(false);
+        // 会话不绑 RPC 的取消令牌：启动器 / Broker 退出（RPC 断开）后，已经 Running 的会话继续到游戏退出——
+        // 触屏 Hook 归 Host 持有，Host 一停触屏就失效；退出后的注册表恢复也由 Host 做。
+        // 还没进入 Running 就断开（启动中退出启动器）仍然取消，避免留下没人管的半启动游戏。
+        using var sessionCts = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.ApplicationStopping);
+        using var disconnectRegistration = context.CancellationToken.Register(() =>
+        {
+            if (!session.IsRunning)
+            {
+                sessionCts.Cancel();
+            }
+        });
+        await session.RunAsync(sessionCts.Token).ConfigureAwait(false);
 
         events.Writer.TryComplete();
         try

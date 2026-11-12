@@ -89,7 +89,7 @@ app.Lifetime.ApplicationStarted.Register(() =>
 });
 
 // 生命周期绑定（后台 RPC 进程）：由主程序传入其 PID，主程序一退出 Broker 就跟着退出，
-// 不留下隐藏的提权后台进程。已进入 Running 的游戏进程不受影响（Host 与游戏的关系不变）。
+// 不留下隐藏的提权后台进程。已进入 Running 的会话由 SessionHost 独立持有（触屏 Hook、退出后恢复设置），游戏退出后 Host 自行结束。
 if (parentProcessId is { } parentPid)
 {
     app.Lifetime.ApplicationStarted.Register(() =>

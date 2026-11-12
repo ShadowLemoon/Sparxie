@@ -620,7 +620,7 @@ public sealed partial class MainWindow : Window
                     {
                         new TextBlock
                         {
-                            Text = "退出后会关闭启动器，已经启动的游戏不受影响。",
+                            Text = "退出后会关闭启动器，已启动的游戏继续运行。",
                             TextWrapping = TextWrapping.Wrap,
                         },
                         remember,
