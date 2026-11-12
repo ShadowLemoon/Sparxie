@@ -1420,7 +1420,8 @@ static uint64_t inject_patch(HANDLE Tar_handle, LPVOID Tar_ModBase, LPVOID _ptr_
 {
     // Sparxie 纯触屏：_ptr_fps 为 0 时仍注入触屏载荷（FPS 槽位写 0，游戏内 FPS
     // 同步载荷不启用）；仅当既无 FPS 指针又无触屏 Hook 列表时视为无效调用。
-    if (!_ptr_fps && !arg->PfuncList)
+    // Sparxie pure touch (frame-rate unlock off) has no FPS pointer. Genshin still carries its hook list; Star Rail carries its touch entry (Bootui).
+    if (!_ptr_fps && !arg->PfuncList && !((!isGenshin) && arg->Bootui))
         return 0;
 
     BYTE* _sc_buffer = (BYTE*)VirtualAlloc_Internal(0, 0x4000, PAGE_READWRITE);
@@ -1455,7 +1456,18 @@ static uint64_t inject_patch(HANDLE Tar_handle, LPVOID Tar_ModBase, LPVOID _ptr_
 
     if (!isGenshin)
     {
-        *(uint64_t*)(_sc_buffer + 0x18) = (uint64_t)_ptr_fps;
+        uint64_t fps_slot = (uint64_t)_ptr_fps;
+        if (!fps_slot)
+        {
+            // pure touch: the payload still writes its frame-rate value somewhere; give it a private page in the game, not the game's own setting
+            fps_slot = (uint64_t)VirtualAllocEx_Internal(Tar_handle, NULL, 0x1000, PAGE_READWRITE);
+            if (!fps_slot)
+            {
+                Show_Error_Msg(L"AllocEx Fail! (touch only)");
+                return 0;
+            }
+        }
+        *(uint64_t*)(_sc_buffer + 0x18) = fps_slot;
     }
 
     LPVOID Remote_payload_buffer = VirtualAllocEx_Internal(Tar_handle, NULL, 0x4000, PAGE_READWRITE);
@@ -1517,19 +1529,23 @@ static uint64_t inject_patch(HANDLE Tar_handle, LPVOID Tar_ModBase, LPVOID _ptr_
                 return 0;
             }
             *(uint64_t*)(_sc_buffer + 0x18) = Private_buffer;
-            uint64_t alienaddr = (uint64_t)_ptr_fps & 0xFFFFFFFFFFFFFFF8;
-            Phooked_func_struct Pfps_patch = (Phooked_func_struct)hook_info_ptr;
-            Pfps_patch->func_addr = alienaddr;
-            if (!ReadProcessMemoryInternal(Tar_handle, (void*)alienaddr, (void*)&Pfps_patch->orgpart, 0x10, 0))
+            // pure touch (no FPS pointer): the private page stays as the payload's target, and the game's frame-rate read is left alone
+            if (_ptr_fps)
             {
-                Show_Error_Msg(L"Failed Readfpspart (Base_fps)");
-                return 0;
+                uint64_t alienaddr = (uint64_t)_ptr_fps & 0xFFFFFFFFFFFFFFF8;
+                Phooked_func_struct Pfps_patch = (Phooked_func_struct)hook_info_ptr;
+                Pfps_patch->func_addr = alienaddr;
+                if (!ReadProcessMemoryInternal(Tar_handle, (void*)alienaddr, (void*)&Pfps_patch->orgpart, 0x10, 0))
+                {
+                    Show_Error_Msg(L"Failed Readfpspart (Base_fps)");
+                    return 0;
+                }
+                Pfps_patch->hookedpart = Pfps_patch->orgpart;
+                uint8_t mask = (uint64_t)_ptr_fps & 0x7;
+                int32_t immva = (int64_t)((Private_buffer - (uint64_t)_ptr_fps) - 4);
+                *(int32_t*)(((uint64_t)(&Pfps_patch->hookedpart)) + mask) = immva;
+                hook_info_ptr = (uint64_t)hook_info_ptr + sizeof(hooked_func_struct);
             }
-            Pfps_patch->hookedpart = Pfps_patch->orgpart;
-            uint8_t mask = (uint64_t)_ptr_fps & 0x7;
-            int32_t immva = (int64_t)((Private_buffer - (uint64_t)_ptr_fps) - 4);
-            *(int32_t*)(((uint64_t)(&Pfps_patch->hookedpart)) + mask) = immva;
-            hook_info_ptr = (uint64_t)hook_info_ptr + sizeof(hooked_func_struct);
         }
 
         if (GI_Func->UI_unhook_time)

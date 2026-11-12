@@ -108,3 +108,12 @@ git subtree add --squash --prefix=native/HoyoTouchCore/upstream \
   Func_getDPI / UI_unhook_time）；任一特征过期（`Use_mobile_UI` 被清零）即整次失败（返回 5）；
 - 星铁：挂起进程阶段调用 `Hksr_ENmobile_get_Ptr` 取 `injectarg.Bootui`，取不到即整次失败（返回 5）；
 - 去掉原段里的 `wprintf_s`（DLL 宿主没有控制台）。
+
+### 纯触屏（fps_unlock_enabled = 0）不再返回 HOYO_ERR_INSTALL_CONFIRM_FAILED（本地补丁，2026-11-11）
+
+- 现象：preview.9 及 031efe2 的 `sparxie_hoyo_bootstrap` 在关闭帧率解锁时返回 6，会话 Failed，游戏被终止。
+- 原因（main.cpp，`inject_patch`）：没有 FPS 指针时，星铁在函数入口 `return 0`（触屏入口 Bootui 不算有效钩子）；原神在无条件的 basefps 块里对地址 0 调
+  `ReadProcessMemory`（GetLastError=299）后 `return 0`。AssignProcessToJobObject 本身成功（GetLastError=0）。
+- 修改：入口判断把星铁的 Bootui 计为有效；星铁的 FPS 槽位在无指针时指向目标进程内的私有页；原神保留私有页但跳过对游戏帧率读取指令的钩子。
+- 验证：VM 上用带特征码的无害假游戏（假 YuanShen.exe 的 il2cpp 节，假 StarRail.exe + GameAssembly.dll + UnityPlayer.dll）、真实 SessionHost（preview.9）：
+  未修补 → Failed 6；修补 → Running → Exited。真实游戏里触屏层的表现需要实机确认。
