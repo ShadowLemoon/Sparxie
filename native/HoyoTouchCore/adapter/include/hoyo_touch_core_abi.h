@@ -86,6 +86,12 @@ typedef struct HoyoLaunchRequest
 
 #ifdef __cplusplus
 static_assert(sizeof(void*) != 8 || sizeof(HoyoLaunchRequest) == 96, "HoyoLaunchRequest x64 layout");
+static_assert(sizeof(void*) != 8 || offsetof(HoyoLaunchRequest, game_executable_path) == 56, "HoyoLaunchRequest x64 layout");
+static_assert(sizeof(void*) != 8 || offsetof(HoyoLaunchRequest, game_executable_path_chars) == 64, "HoyoLaunchRequest x64 layout");
+static_assert(sizeof(void*) != 8 || offsetof(HoyoLaunchRequest, game_arguments) == 72, "HoyoLaunchRequest x64 layout");
+static_assert(sizeof(void*) != 8 || offsetof(HoyoLaunchRequest, game_arguments_chars) == 80, "HoyoLaunchRequest x64 layout");
+static_assert(sizeof(void*) != 8 || offsetof(HoyoLaunchRequest, touch_ui_disabled) == 84, "HoyoLaunchRequest x64 layout");
+static_assert(sizeof(void*) != 8 || offsetof(HoyoLaunchRequest, reserved0) == 88, "HoyoLaunchRequest x64 layout");
 #endif
 
 // ---- 结果结构 ----

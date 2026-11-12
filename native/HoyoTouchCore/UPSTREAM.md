@@ -113,7 +113,7 @@ git subtree add --squash --prefix=native/HoyoTouchCore/upstream \
 
 ABI：`HoyoLaunchRequest` 末尾（`game_arguments_chars` 之后）追加 `touch_ui_disabled` 与 `reserved0`（x64 由 88 增至 96 字节；字段**取反存放**，
 全零 = 既有行为，所以没设置这个字段的新调用方也不会意外关掉触屏）。`hoyo_create_session` 接受 `size >= HOYO_LAUNCH_REQUEST_SIZE_V2`(88) 的请求，
-旧调用方缺省 `touch_ui_disabled=0`；`HOYO_ABI_VERSION` 保持 2（只追加字段，没有不兼容修改）。Profile/Broker 一侧仍是正向的 `touch_ui_enabled`（缺省 true）。同步风险：上游若重排 Mobile UI 的扫描段，
+旧调用方缺省 `touch_ui_disabled=0`；`HOYO_ABI_VERSION` 保持 2（只追加字段，没有不兼容修改）。头文件里的 static_assert 固定每个字段的偏移，托管一侧的镜像（`HoyoGameController`）与 `HoyoAbi.Tests` 逐字段断言同样的偏移。Profile/Broker 一侧仍是正向的 `touch_ui_enabled`（缺省 true）。同步风险：上游若重排 Mobile UI 的扫描段，
 需同时检查这里的 `want_touch_ui` 分支。
 
 ### 触屏载荷补齐（2026-11-09，bootstrap 内）

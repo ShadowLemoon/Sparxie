@@ -522,11 +522,37 @@ public class HoyoAbiSmokeTests
     };
 
     [Fact]
-    public void 请求结构大小为96字节且追加字段与C头一致()
+    public void 请求结构大小为96字节且每个字段偏移与C头的offsetof一致()
     {
+        // hoyo_touch_core_abi.h 的 offsetof 值（x64，头文件里有同样数值的 static_assert）：偏移错位时 native 会从别的字段里读 touch_ui_disabled 和 game_arguments
+        var expected = new (string Field, int Offset)[]
+        {
+            (nameof(HoyoLaunchRequest.Size), 0),
+            (nameof(HoyoLaunchRequest.AbiVersion), 4),
+            (nameof(HoyoLaunchRequest.GameType), 8),
+            (nameof(HoyoLaunchRequest.FpsUnlockEnabled), 12),
+            (nameof(HoyoLaunchRequest.TargetFps), 16),
+            (nameof(HoyoLaunchRequest.BackgroundFpsLimitEnabled), 20),
+            (nameof(HoyoLaunchRequest.BackgroundFps), 24),
+            (nameof(HoyoLaunchRequest.ProcessPriority), 28),
+            (nameof(HoyoLaunchRequest.GenshinFollowInGamePreset), 32),
+            (nameof(HoyoLaunchRequest.GenshinPreset30Fps), 36),
+            (nameof(HoyoLaunchRequest.GenshinPreset60Fps), 40),
+            (nameof(HoyoLaunchRequest.GenshinTouchUiScaleOverrideEnabled), 44),
+            (nameof(HoyoLaunchRequest.GenshinTouchUiScalePercent), 48),
+            (nameof(HoyoLaunchRequest.GameExecutablePath), 56),
+            (nameof(HoyoLaunchRequest.GameExecutablePathChars), 64),
+            (nameof(HoyoLaunchRequest.GameArguments), 72),
+            (nameof(HoyoLaunchRequest.GameArgumentsChars), 80),
+            (nameof(HoyoLaunchRequest.TouchUiDisabled), 84),
+            (nameof(HoyoLaunchRequest.Reserved0), 88),
+        };
         Assert.Equal(96, Marshal.SizeOf<HoyoLaunchRequest>());
         Assert.Equal(88, Marshal.SizeOf<HoyoLaunchRequestV2>());
-        Assert.Equal(84, (int)Marshal.OffsetOf<HoyoLaunchRequest>(nameof(HoyoLaunchRequest.TouchUiDisabled)));
+        foreach (var (field, offset) in expected)
+        {
+            Assert.Equal(offset, (int)Marshal.OffsetOf<HoyoLaunchRequest>(field));
+        }
     }
 
     [Theory]
