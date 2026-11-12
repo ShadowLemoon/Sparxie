@@ -19,6 +19,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="Fixtures\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Sparxie.Contracts\Sparxie.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Sparxie.Infrastructure\Sparxie.Infrastructure.csproj" />
   </ItemGroup>

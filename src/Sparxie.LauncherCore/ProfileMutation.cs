@@ -22,6 +22,11 @@ public sealed record ProfileMutation(
     int? GenshinPreset60Fps = null,
     bool? GenshinTouchUiScaleOverrideEnabled = null,
     int? GenshinTouchUiScalePercent = null,
+    string? EndfieldInputMode = null,
+    bool? EndfieldAutoResolution = null,
+    int? EndfieldWidth = null,
+    int? EndfieldHeight = null,
+    int? EndfieldRefreshRate = null,
     LaunchSettings? Launch = null)
 {
     public bool HasHoyoSettings =>
@@ -30,6 +35,13 @@ public sealed record ProfileMutation(
         || BackgroundFpsLimitEnabled.HasValue
         || BackgroundFps.HasValue
         || ProcessPriority.HasValue;
+
+    public bool HasEndfieldSettings =>
+        EndfieldInputMode is not null
+        || EndfieldAutoResolution.HasValue
+        || EndfieldWidth.HasValue
+        || EndfieldHeight.HasValue
+        || EndfieldRefreshRate.HasValue;
 
     public bool HasGenshinSettings =>
         GenshinFollowInGamePreset.HasValue
@@ -44,5 +56,6 @@ public sealed record ProfileMutation(
         || Game.HasValue
         || HasHoyoSettings
         || HasGenshinSettings
+        || HasEndfieldSettings
         || Launch is not null;
 }

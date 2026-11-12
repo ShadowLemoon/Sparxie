@@ -14,6 +14,7 @@
             <converters:GameDisplayConverter x:Key="GameDisplayConverter" />
             <converters:GameIconConverter x:Key="GameIconConverter" />
             <converters:PriorityDisplayConverter x:Key="PriorityDisplayConverter" />
+            <converters:EndfieldInputDisplayConverter x:Key="EndfieldInputDisplayConverter" />
 
             <!-- 统一视觉令牌：玻璃面板、描边、圆角。各页面只引用，不再各写各的色值。 -->
             <SolidColorBrush x:Key="GlassPanelBrush" Color="#E6111315" />

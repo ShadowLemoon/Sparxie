@@ -19,6 +19,7 @@ public static class ProfileSnapshotMapper
                 GameType.Genshin => "genshin",
                 GameType.StarRail => "starRail",
                 GameType.ZenlessZoneZero => "zenlessZoneZero",
+                GameType.Endfield => "endfield",
                 _ => throw new LauncherException(
                     LauncherFailureKind.ProfileSelection,
                     $"不支持的游戏类型: {profile.Game}"),
@@ -54,6 +55,11 @@ public static class ProfileSnapshotMapper
                     GenshinPreset60Fps = profile.Hoyo.GenshinPreset60Fps,
                     GenshinTouchUiScaleOverrideEnabled = profile.Hoyo.GenshinTouchUiScaleOverrideEnabled,
                     GenshinTouchUiScalePercent = profile.Hoyo.GenshinTouchUiScalePercent,
+                    EndfieldInputMode = profile.Hoyo.EndfieldInputMode,
+                    EndfieldAutoResolution = profile.Hoyo.EndfieldAutoResolution,
+                    EndfieldWidth = profile.Hoyo.EndfieldWidth,
+                    EndfieldHeight = profile.Hoyo.EndfieldHeight,
+                    EndfieldRefreshRate = profile.Hoyo.EndfieldRefreshRate,
                 },
         };
     }

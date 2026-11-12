@@ -23,4 +23,15 @@ public sealed class HoyoProfileSettings
     public bool GenshinTouchUiScaleOverrideEnabled { get; set; }
 
     public int GenshinTouchUiScalePercent { get; set; } = 400;
+
+    // Endfield 专属启动设置；其他游戏忽略这些字段。
+    public string EndfieldInputMode { get; set; } = "touch";
+
+    public bool EndfieldAutoResolution { get; set; } = true;
+
+    public int EndfieldWidth { get; set; } = 1920;
+
+    public int EndfieldHeight { get; set; } = 1080;
+
+    public int EndfieldRefreshRate { get; set; } = 60;
 }

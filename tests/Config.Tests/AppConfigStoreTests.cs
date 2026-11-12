@@ -1,4 +1,4 @@
-using Sparxie.Contracts.Errors;
+﻿using Sparxie.Contracts.Errors;
 using Sparxie.Contracts.Models;
 using Sparxie.Infrastructure.Configuration;
 
@@ -38,6 +38,65 @@ public class AppConfigStoreTests : IDisposable
         Assert.Equal(AppConfig.CurrentSchemaVersion, result.Config.SchemaVersion);
         Assert.Null(result.Config.SelectedProfileId);
         Assert.Empty(result.Config.Profiles);
+    }
+
+    [Fact]
+    public void 终末地已经去掉的自动输入在读取时一次性改为触控并写回()
+    {
+        File.WriteAllText(ConfigPath, """
+            {
+              "schemaVersion": 1,
+              "selectedProfileId": "endfield-cn-1",
+              "profiles": [
+                { "id": "endfield-cn-1", "displayName": "终末地", "game": "endfield", "executablePath": "D:\\Games\\Endfield.exe",
+                  "hoyo": { "fpsUnlockEnabled": true, "targetFps": 120, "backgroundFpsLimitEnabled": true, "backgroundFps": 10, "processPriority": "normal",
+                            "endfieldInputMode": "auto", "endfieldAutoResolution": true, "endfieldWidth": 1920, "endfieldHeight": 1080, "endfieldRefreshRate": 60 } },
+                { "id": "endfield-cn-2", "displayName": "终末地 键鼠", "game": "endfield", "executablePath": "D:\\Games\\Endfield.exe",
+                  "hoyo": { "fpsUnlockEnabled": true, "targetFps": 120, "backgroundFpsLimitEnabled": true, "backgroundFps": 10, "processPriority": "normal",
+                            "endfieldInputMode": "pc", "endfieldAutoResolution": true, "endfieldWidth": 1920, "endfieldHeight": 1080, "endfieldRefreshRate": 60 } }
+              ]
+            }
+            """);
+
+        var result = new AppConfigStore(ConfigPath).Load();
+
+        Assert.Equal(ConfigLoadState.Loaded, result.State);
+        Assert.Equal("touch", result.Config.Profiles[0].Hoyo!.EndfieldInputMode);
+        Assert.Equal("pc", result.Config.Profiles[1].Hoyo!.EndfieldInputMode);
+        var onDisk = File.ReadAllText(ConfigPath);
+        Assert.DoesNotContain("\"auto\"", onDisk);
+        Assert.Contains("\"endfieldInputMode\": \"touch\"", onDisk);
+        Assert.False(AppConfigStore.MigrateEndfieldInput(result.Config), "already migrated: nothing changes the second time");
+    }
+
+    [Fact]
+    public void 校验不再接受自动输入模式()
+    {
+        var config = new AppConfig { Profiles = [new GameProfile { Id = "e", DisplayName = "e", Game = GameType.Endfield, ExecutablePath = @"D:\Games\Endfield.exe", Hoyo = new HoyoProfileSettings { EndfieldInputMode = "auto" } }] };
+        Assert.Contains(AppConfigValidator.Validate(config), error => error.Contains("EndfieldInputMode"));
+        config.Profiles[0].Hoyo!.EndfieldInputMode = "touch";
+        Assert.DoesNotContain(AppConfigValidator.Validate(config), error => error.Contains("EndfieldInputMode"));
+    }
+
+    [Fact]
+    public void 终末地跟随串流时尺寸不参与校验固定尺寸才检查()
+    {
+        var profile = new GameProfile
+        {
+            Id = "e", DisplayName = "e", Game = GameType.Endfield, ExecutablePath = @"D:\Games\Endfield.exe",
+            Hoyo = new HoyoProfileSettings { EndfieldAutoResolution = true, EndfieldWidth = 0, EndfieldHeight = 0 },
+        };
+        var config = new AppConfig { Profiles = [profile] };
+        Assert.Empty(AppConfigValidator.Validate(config));
+
+        profile.Hoyo!.EndfieldAutoResolution = false;
+        Assert.Contains(AppConfigValidator.Validate(config), error => error.Contains("Endfield 分辨率"));
+
+        profile.Hoyo.EndfieldWidth = 2560;
+        profile.Hoyo.EndfieldHeight = 1440;
+        Assert.Empty(AppConfigValidator.Validate(config));
+        profile.Hoyo.EndfieldRefreshRate = 5;
+        Assert.Contains(AppConfigValidator.Validate(config), error => error.Contains("刷新率"));
     }
 
     [Fact]
@@ -155,34 +214,42 @@ public class AppConfigStoreTests : IDisposable
     }
 
     [Fact]
-    public void 非法game枚举时备份并生成空白配置()
-    {
-        File.WriteAllText(ConfigPath, """
-            {
-              "schemaVersion": 1,
-              "selectedProfileId": null,
-              "profiles": [{ "id": "p1", "displayName": "x", "game": "wow", "executablePath": "C:\\x.exe" }]
-            }
-            """);
-
-        var store = new AppConfigStore(ConfigPath);
-        var result = store.Load();
-
-        Assert.Equal(ConfigLoadState.RestoredFromCorrupt, result.State);
-        Assert.NotNull(result.BackupPath);
-        Assert.Empty(result.Config.Profiles);
-    }
-
-    [Fact]
-    public void 重复profileId时备份并生成空白配置()
+    public void 非法game枚举的Profile被移出其余保留并备份原文件()
     {
         File.WriteAllText(ConfigPath, """
             {
               "schemaVersion": 1,
               "selectedProfileId": null,
               "profiles": [
-                { "id": "p1", "displayName": "a", "game": "genshin", "executablePath": "C:\\a.exe" },
-                { "id": "p1", "displayName": "b", "game": "genshin", "executablePath": "C:\\b.exe" }
+                { "id": "p1", "displayName": "x", "game": "wow", "executablePath": "C:\\x.exe" },
+                { "id": "p2", "displayName": "原神", "game": "genshin", "executablePath": "C:\\Games\\YuanShen.exe" }
+              ]
+            }
+            """);
+        var original = File.ReadAllBytes(ConfigPath);
+
+        var store = new AppConfigStore(ConfigPath);
+        var result = store.Load();
+
+        Assert.Equal(ConfigLoadState.Repaired, result.State);
+        Assert.NotNull(result.BackupPath);
+        Assert.Equal(original, File.ReadAllBytes(result.BackupPath));
+        Assert.Contains("repaired-", Path.GetFileName(result.BackupPath));
+        Assert.Equal("p2", Assert.Single(result.Config.Profiles).Id);
+        Assert.Contains(result.Changes, c => c.Contains("p1") && c.Contains("移出"));
+        Assert.Equal(ConfigLoadState.Loaded, new AppConfigStore(ConfigPath).Load().State);
+    }
+
+    [Fact]
+    public void 重复profileId时保留先出现的并移出后一个()
+    {
+        File.WriteAllText(ConfigPath, """
+            {
+              "schemaVersion": 1,
+              "selectedProfileId": null,
+              "profiles": [
+                { "id": "p1", "displayName": "a", "game": "genshin", "executablePath": "C:\\a\\YuanShen.exe" },
+                { "id": "p1", "displayName": "b", "game": "genshin", "executablePath": "C:\\b\\YuanShen.exe" }
               ]
             }
             """);
@@ -190,8 +257,10 @@ public class AppConfigStoreTests : IDisposable
         var store = new AppConfigStore(ConfigPath);
         var result = store.Load();
 
-        Assert.Equal(ConfigLoadState.RestoredFromCorrupt, result.State);
+        Assert.Equal(ConfigLoadState.Repaired, result.State);
         Assert.NotNull(result.BackupPath);
+        var kept = Assert.Single(result.Config.Profiles);
+        Assert.Equal("a", kept.DisplayName);
     }
 
     [Fact]

@@ -42,6 +42,8 @@ foreach ($project in 'Sparxie.SessionHost', 'Sparxie.Broker', 'Sparxie.Desktop')
 }
 
 Copy-Item $HoyoTouchCore (Join-Path $app 'HoyoTouchCore.dll') -Force
+# EndfieldCore/EndfieldRuntime come from the SessionHost publish (native/EndfieldCore must be built first)
+foreach ($f in 'EndfieldCore.dll', 'EndfieldRuntime.dll') { if (-not (Test-Path (Join-Path $app $f))) { throw "$f missing from the publish output (build native/EndfieldCore first)" } }
 foreach ($f in 'ZZZTouchCore.dll', 'ZZZTouchRuntime.dll') { Copy-Item (Join-Path $RuntimeDirectory $f) $app -Force }
 
 $notices = @(
