@@ -132,7 +132,7 @@ public sealed class SettingsViewModel : ObservableObject
             var target = Path.Combine(AppPaths.DataRoot, "diagnostics", $"diag-{DateTime.Now:yyyyMMdd-HHmmss}");
             DiagnosticExporter.Export(AppPaths.DataRoot, target);
             Process.Start(new ProcessStartInfo { FileName = target, UseShellExecute = true });
-            ToolMessage = "已导出脱敏诊断包（不含 config.json）";
+            ToolMessage = "已导出脱敏诊断包";
         }
         catch (Exception ex)
         {

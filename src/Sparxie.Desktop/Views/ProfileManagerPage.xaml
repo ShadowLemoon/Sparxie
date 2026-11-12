@@ -73,7 +73,7 @@
             </ListView>
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                 <Button MinHeight="48" Padding="16,0" Click="AddProfileClick"
-                        AutomationProperties.Name="添加配置" ToolTipService.ToolTip="为这个游戏添加另一套配置（如其他服务器）">
+                        AutomationProperties.Name="添加配置">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <FontIcon Glyph="&#xE710;" FontSize="14" />
                         <TextBlock Text="添加配置" />
@@ -140,7 +140,7 @@
                                                 <Button MinHeight="40" Padding="14,0"
                                                         Click="AutoFindExecutableClick"
                                                         AutomationProperties.Name="自动查找游戏 EXE 路径"
-                                                        ToolTipService.ToolTip="自动查找：读取米哈游启动器登记的安装路径，优先国服、跳过已添加的">
+                                                       >
                                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                                         <FontIcon Glyph="&#xE721;" FontSize="14" />
                                                         <TextBlock Text="自动查找" />
@@ -149,7 +149,7 @@
                                                 <Button MinHeight="40" Padding="14,0"
                                                         Click="BrowseExecutableClick"
                                                         AutomationProperties.Name="浏览游戏 EXE 路径"
-                                                        ToolTipService.ToolTip="选择游戏 EXE 文件">
+                                                       >
                                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                                         <FontIcon Glyph="&#xE8B7;" FontSize="14" />
                                                         <TextBlock Text="浏览…" />
@@ -170,6 +170,8 @@
                                                 </DataTemplate>
                                             </ComboBox.ItemTemplate>
                                         </ComboBox>
+                                        <TextBlock Text="游戏进程的 CPU 调度优先级，一般保持“正常”" Style="{StaticResource CaptionText}" Margin="0,-8,0,0"
+                                                   Visibility="{Binding IsHoyoGame, Converter={StaticResource BoolToVisibilityConverter}}" />
                                     </StackPanel>
                                 </Border>
 
@@ -191,7 +193,6 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel VerticalAlignment="Center" Spacing="2">
                                             <TextBlock Text="目标帧率" />
-                                            <TextBlock Text="解锁游戏帧率上限，10–1000" Style="{StaticResource CaptionText}" />
                                         </StackPanel>
                                         <ToggleSwitch Grid.Column="1" MinWidth="0" OnContent="" OffContent="" VerticalAlignment="Center"
                                                       IsOn="{Binding FpsUnlockEnabled, Mode=TwoWay}"
@@ -211,7 +212,6 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel VerticalAlignment="Center" Spacing="2">
                                             <TextBlock Text="后台帧率" />
-                                            <TextBlock Text="窗口失去焦点时限制帧率，10–1000" Style="{StaticResource CaptionText}" />
                                         </StackPanel>
                                         <ToggleSwitch Grid.Column="1" MinWidth="0" OnContent="" OffContent="" VerticalAlignment="Center"
                                                       IsOn="{Binding BackgroundFpsLimitEnabled, Mode=TwoWay}"
@@ -233,7 +233,6 @@
                                             </Grid.ColumnDefinitions>
                                             <StackPanel VerticalAlignment="Center" Spacing="2">
                                                 <TextBlock Text="帧率档位映射" />
-                                                <TextBlock Text="跟随游戏内 30 / 60 帧档位" Style="{StaticResource CaptionText}" />
                                             </StackPanel>
                                             <ToggleSwitch Grid.Column="1" MinWidth="0" OnContent="" OffContent="" VerticalAlignment="Center"
                                                           IsOn="{Binding GenshinFollowInGamePreset, Mode=TwoWay}"
@@ -263,7 +262,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel VerticalAlignment="Center" Spacing="2">
                                             <TextBlock Text="触控 UI 缩放" />
-                                            <TextBlock Text="覆盖游戏内缩放，100–500%" Style="{StaticResource CaptionText}" />
+                                            <TextBlock Text="覆盖游戏感知到的桌面 DPI，主要用来调整方向键大小" Style="{StaticResource CaptionText}" />
                                         </StackPanel>
                                         <ToggleSwitch Grid.Column="1" MinWidth="0" OnContent="" OffContent=""
                                                       VerticalAlignment="Center"
@@ -299,7 +298,7 @@
                                         <Button MinHeight="40" Padding="14,0"
                                                 Click="AutoFindExecutableClick"
                                                 AutomationProperties.Name="自动查找游戏 EXE 路径"
-                                                ToolTipService.ToolTip="自动查找：读取米哈游启动器登记的安装路径，优先国服、跳过已添加的">
+                                               >
                                             <StackPanel Orientation="Horizontal" Spacing="8">
                                                 <FontIcon Glyph="&#xE721;" FontSize="14" />
                                                 <TextBlock Text="自动查找" />
@@ -308,7 +307,7 @@
                                         <Button MinHeight="40" Padding="14,0"
                                                 Click="BrowseExecutableClick"
                                                 AutomationProperties.Name="浏览游戏 EXE 路径"
-                                                ToolTipService.ToolTip="选择游戏 EXE 文件">
+                                               >
                                             <StackPanel Orientation="Horizontal" Spacing="8">
                                                 <FontIcon Glyph="&#xE8B7;" FontSize="14" />
                                                 <TextBlock Text="浏览…" />

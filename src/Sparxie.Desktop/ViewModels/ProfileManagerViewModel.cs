@@ -316,7 +316,7 @@ public sealed class ProfileManagerViewModel : ObservableObject
         }
 
         editing.ExecutablePath = choice.Path;
-        return Report(new AutoFindOutcome([], $"已填入：{choice.Path}（{choice.Source}）"), found: true);
+        return new AutoFindOutcome([], string.Empty);
     }
 
     private AutoFindOutcome Report(AutoFindOutcome outcome, bool found)
@@ -407,7 +407,6 @@ public sealed class ProfileManagerViewModel : ObservableObject
         try
         {
             _data.UpdateProfile(editing.Id, editing.ToMutation());
-            ReportSuccess("修改已保存");
         }
         catch (Exception ex)
         {
@@ -666,7 +665,7 @@ public sealed class ProfileEditorViewModel : ObservableObject
         get
         {
             var text = LaunchArguments.Build(_borderless, _extraArguments);
-            return text.Length == 0 ? "没有附加的命令行参数" : text;
+            return text;
         }
     }
 

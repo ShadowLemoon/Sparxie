@@ -87,7 +87,6 @@ public sealed class AutoFindExecutableTests : IDisposable
         manager.ApplyAutoFindChoice(outcome.Choices[1]);
 
         Assert.Equal(GlobalExe, manager.SelectedProfile!.ExecutablePath);
-        Assert.Contains("已填入", manager.StatusMessage);
     }
 
     [Fact]
@@ -102,7 +101,7 @@ public sealed class AutoFindExecutableTests : IDisposable
 
         Assert.Empty(outcome.Choices);
         Assert.Equal(GlobalExe, manager.SelectedProfile!.ExecutablePath);
-        Assert.Contains("已填入", outcome.Message);
+        Assert.Empty(outcome.Message); // 路径框本身就是反馈，不再另弹提示
     }
 
     [Fact]

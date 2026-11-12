@@ -60,7 +60,7 @@ public sealed class LaunchSettingsEditorTests : IDisposable
         var editor = CreateManager().SelectedProfile!;
 
         Assert.True(editor.ToMutation().Launch!.IsEmpty);
-        Assert.Equal("没有附加的命令行参数", editor.CommandLinePreview);
+        Assert.Equal(string.Empty, editor.CommandLinePreview);
         Assert.False(editor.ResolutionControlsEnabled);
     }
 

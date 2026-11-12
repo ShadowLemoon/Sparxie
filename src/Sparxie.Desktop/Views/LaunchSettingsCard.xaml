@@ -10,11 +10,8 @@
         <StackPanel Spacing="4">
             <TextBlock Text="分辨率" Style="{StaticResource SectionHeading}" Margin="0,0,0,8" />
 
-            <ToggleSwitch Header="启动时写入游戏的分辨率与全屏设置" OnContent="开" OffContent="关"
+            <ToggleSwitch Header="覆盖游戏的分辨率与全屏设置" OnContent="开" OffContent="关"
                           IsOn="{Binding OverrideResolution, Mode=TwoWay}" />
-            <TextBlock Text="关闭时不修改游戏自己的分辨率与全屏设置；游戏需要至少运行过一次。星铁、绝区零的国服与国际服 EXE 同名：先按米哈游启动器登记的安装路径认出服务器，认不出（手动解压的安装）时，本机已有哪几个服的设置就一起写入。"
-                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,8" />
-
             <CheckBox Content="全屏" IsChecked="{Binding Fullscreen, Mode=TwoWay}"
                       IsEnabled="{Binding ResolutionControlsEnabled}" />
             <CheckBox Content="使用无边框窗口" IsChecked="{Binding Borderless, Mode=TwoWay}" />
