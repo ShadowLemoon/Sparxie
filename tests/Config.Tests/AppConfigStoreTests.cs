@@ -1,4 +1,4 @@
-using Sparxie.Contracts.Errors;
+﻿using Sparxie.Contracts.Errors;
 using Sparxie.Contracts.Models;
 using Sparxie.Infrastructure.Configuration;
 
@@ -214,34 +214,42 @@ public class AppConfigStoreTests : IDisposable
     }
 
     [Fact]
-    public void 非法game枚举时备份并生成空白配置()
-    {
-        File.WriteAllText(ConfigPath, """
-            {
-              "schemaVersion": 1,
-              "selectedProfileId": null,
-              "profiles": [{ "id": "p1", "displayName": "x", "game": "wow", "executablePath": "C:\\x.exe" }]
-            }
-            """);
-
-        var store = new AppConfigStore(ConfigPath);
-        var result = store.Load();
-
-        Assert.Equal(ConfigLoadState.RestoredFromCorrupt, result.State);
-        Assert.NotNull(result.BackupPath);
-        Assert.Empty(result.Config.Profiles);
-    }
-
-    [Fact]
-    public void 重复profileId时备份并生成空白配置()
+    public void 非法game枚举的Profile被移出其余保留并备份原文件()
     {
         File.WriteAllText(ConfigPath, """
             {
               "schemaVersion": 1,
               "selectedProfileId": null,
               "profiles": [
-                { "id": "p1", "displayName": "a", "game": "genshin", "executablePath": "C:\\a.exe" },
-                { "id": "p1", "displayName": "b", "game": "genshin", "executablePath": "C:\\b.exe" }
+                { "id": "p1", "displayName": "x", "game": "wow", "executablePath": "C:\\x.exe" },
+                { "id": "p2", "displayName": "原神", "game": "genshin", "executablePath": "C:\\Games\\YuanShen.exe" }
+              ]
+            }
+            """);
+        var original = File.ReadAllBytes(ConfigPath);
+
+        var store = new AppConfigStore(ConfigPath);
+        var result = store.Load();
+
+        Assert.Equal(ConfigLoadState.Repaired, result.State);
+        Assert.NotNull(result.BackupPath);
+        Assert.Equal(original, File.ReadAllBytes(result.BackupPath));
+        Assert.Contains("repaired-", Path.GetFileName(result.BackupPath));
+        Assert.Equal("p2", Assert.Single(result.Config.Profiles).Id);
+        Assert.Contains(result.Changes, c => c.Contains("p1") && c.Contains("移出"));
+        Assert.Equal(ConfigLoadState.Loaded, new AppConfigStore(ConfigPath).Load().State);
+    }
+
+    [Fact]
+    public void 重复profileId时保留先出现的并移出后一个()
+    {
+        File.WriteAllText(ConfigPath, """
+            {
+              "schemaVersion": 1,
+              "selectedProfileId": null,
+              "profiles": [
+                { "id": "p1", "displayName": "a", "game": "genshin", "executablePath": "C:\\a\\YuanShen.exe" },
+                { "id": "p1", "displayName": "b", "game": "genshin", "executablePath": "C:\\b\\YuanShen.exe" }
               ]
             }
             """);
@@ -249,8 +257,10 @@ public class AppConfigStoreTests : IDisposable
         var store = new AppConfigStore(ConfigPath);
         var result = store.Load();
 
-        Assert.Equal(ConfigLoadState.RestoredFromCorrupt, result.State);
+        Assert.Equal(ConfigLoadState.Repaired, result.State);
         Assert.NotNull(result.BackupPath);
+        var kept = Assert.Single(result.Config.Profiles);
+        Assert.Equal("a", kept.DisplayName);
     }
 
     [Fact]
