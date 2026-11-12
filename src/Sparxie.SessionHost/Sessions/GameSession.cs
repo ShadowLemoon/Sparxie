@@ -58,6 +58,7 @@ public sealed class GameSession : IAsyncDisposable
 
             // 启动游戏进程前的 Runtime 准备（ZZZ：备份 PC 配置并写入触屏配置）
             await _controller.PrepareLaunchAsync(_options.Profile, cancellationToken).ConfigureAwait(false);
+            LaunchLog.Write(_options.Profile);
 
             // Running 前失效保护 Job：所有游戏在 Running 前都要覆盖本次进程。
             // Hoyo 由 bootstrap 创建进程后 Assign；其余由 SessionHost 预创建并 Assign。
@@ -300,8 +301,12 @@ public sealed class GameSession : IAsyncDisposable
             FileName = _options.Profile.ExecutablePath,
             UseShellExecute = false,
             WorkingDirectory = Path.GetDirectoryName(_options.Profile.ExecutablePath) ?? string.Empty,
-            // 自动注入的无边框参数 + 用户附加参数（Hoyo 由 native bootstrap 创建进程，参数经 C ABI 传入）。
-            Arguments = LaunchArguments.Build(_options.Profile.Launch.ToModel()),
+            // ScreenArgs carries Unity display arguments; Launch carries the upstream borderless/custom arguments.
+            Arguments = string.Join(' ', new[]
+            {
+                ScreenArguments.Build(_options.Profile.Screen),
+                LaunchArguments.Build(_options.Profile.Launch.ToModel()),
+            }.Where(value => value.Length > 0)),
         };
 
         var process = Process.Start(psi)
