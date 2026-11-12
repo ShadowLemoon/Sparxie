@@ -1,0 +1,18 @@
+Sparxie 附加许可（GNU GPL v3 第 7 条）
+Additional permission under section 7 of the GNU General Public License, version 3
+
+Copyright (C) 2026 Sparxie 版权持有人（以仓库提交记录的作者为准）
+
+Sparxie 自有代码依据 GNU 通用公共许可证第 3 版（见 LICENSE）发布。作为对该许可证第 7 条的
+附加许可，版权持有人另行授予如下权限：
+
+  你可以把 Sparxie 与「绝区零私有 Runtime」（ZZZTouchCore.dll、ZZZTouchRuntime.dll，
+  版本与分发边界见 RUNTIME-NOTICE.md）一起运行、链接和分发，而不因此被要求公开该
+  Runtime 的源代码。该 Runtime 是独立的闭源组件，保持其自己的许可，不适用 GPLv3。
+
+This additional permission applies only to the combination of Sparxie with the separately licensed,
+closed-source "ZZZ Runtime" named above. It does not apply to any other component.
+
+你可以在转发本程序或其修改版本时删除这条附加许可（GPLv3 第 7 条第 4 段）；删除后，上述权限
+对你的版本不再提供。第三方组件（.NET、gRPC、Hoyo 上游 MIT、inih BSD-3-Clause 等）不受本附加许可
+影响，各自适用其原始许可证，详见 THIRD-PARTY-NOTICES.md。

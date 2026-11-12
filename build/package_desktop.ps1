@@ -46,6 +46,7 @@ foreach ($f in 'ZZZTouchCore.dll', 'ZZZTouchRuntime.dll') { Copy-Item (Join-Path
 
 $notices = @(
     @((Join-Path $repo 'LICENSE'), 'LICENSE'),
+    @((Join-Path $repo 'LICENSE-EXCEPTION.txt'), 'LICENSE-EXCEPTION.txt'),
     @((Join-Path $repo 'THIRD-PARTY-NOTICES.md'), 'THIRD-PARTY-NOTICES.md'),
     @((Join-Path $repo 'native/HoyoTouchCore/upstream/LICENSE'), 'UPSTREAM-LICENSE-MIT.txt'),
     @((Join-Path $repo 'native/HoyoTouchCore/adapter/licenses/inih-LICENSE.txt'), 'inih-LICENSE.txt'),

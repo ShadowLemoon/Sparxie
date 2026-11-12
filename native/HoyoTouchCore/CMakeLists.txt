@@ -3,7 +3,7 @@ project(SparxieHoyoTouchCore LANGUAGES C CXX ASM_MASM)
 
 # Sparxie Hoyo Touch Core：C ABI DLL。
 # upstream/ 是 Git subtree 导入的 winTEuser/Genshin_StarRail_fps_unlocker（MIT），
-# adapter/ 是本项目 C ABI 与 SessionHost 对接代码（闭源专有）。
+# adapter/ 是本项目 C ABI 与 SessionHost 对接代码（GPLv3，见根目录 LICENSE）。
 # 本 CMake 位于 subtree 外，不修改上游文件。
 
 set(UPSTREAM_DIR ${CMAKE_CURRENT_SOURCE_DIR}/upstream)

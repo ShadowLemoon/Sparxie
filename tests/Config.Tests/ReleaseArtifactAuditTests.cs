@@ -59,6 +59,7 @@ public class ReleaseArtifactAuditTests
             "ZZZTouchCore.dll",
             "ZZZTouchRuntime.dll",
             "LICENSE",
+            "LICENSE-EXCEPTION.txt",
             "THIRD-PARTY-NOTICES.md",
             "UPSTREAM-LICENSE-MIT.txt",
             "inih-LICENSE.txt",

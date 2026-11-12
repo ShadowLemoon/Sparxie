@@ -1,8 +1,8 @@
 # RUNTIME NOTICE — 绝区零 Runtime
 
 本通知说明随 Sparxie 发布包分发的绝区零（Zenless Zone Zero）Runtime
-组件的身份与分发边界。本组件为独立闭源组件，不受根目录 `LICENSE`（Sparxie
-专有许可）约束，其版权归属与允许的使用/分发边界以本通知为准。
+组件的身份与分发边界。本组件为独立闭源组件，不受根目录 `LICENSE`（GPLv3）约束，
+其与 Sparxie 的关系由 `LICENSE-EXCEPTION.txt` 的附加许可说明，其版权归属与允许的使用/分发边界以本通知为准。
 
 ## 组件
 
@@ -30,4 +30,4 @@
 - 客户端不在运行时访问 Runtime 仓库，不包含任何仓库凭据；
 - Runtime 版本与哈希固定于可审查的构建配置；升级需显式修改版本与哈希并执行回归；
 - 构建时从 `ShadowLemoon/ZZZ-TouchRuntime` 的指定公开 Release 资产下载，哈希不符或缺少任一清单 DLL 时直接失败，不落入发布包；
-- 根目录 Sparxie 专有许可不改变本组件的独立许可身份。
+- 根目录 GPLv3 与附加许可（`LICENSE-EXCEPTION.txt`）不改变本组件的独立许可身份。

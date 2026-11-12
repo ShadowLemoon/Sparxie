@@ -61,7 +61,7 @@ Sparxie/
 
 ## 许可
 
-自有组件采用闭源专有许可，详见根目录 `LICENSE`；第三方组件许可与版权声明见 `THIRD-PARTY-NOTICES.md`。
+自有组件采用 GNU GPLv3，详见根目录 `LICENSE`；绝区零私有 Runtime 是独立的闭源组件，通过 `LICENSE-EXCEPTION.txt`（GPLv3 第 7 条附加许可）与 Sparxie 一起分发；第三方组件许可与版权声明见 `THIRD-PARTY-NOTICES.md`。
 
 ## 状态
 
