@@ -10,9 +10,21 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="SessionHost.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- native 构建产物随 publish 输出（CI 先构建 native 再 publish） -->
     <None Include="..\..\native\HoyoTouchCore\build\Release\HoyoTouchCore.dll"
           Link="HoyoTouchCore.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+    <None Include="..\..\native\EndfieldCore\build\Release\EndfieldCore.dll"
+          Link="EndfieldCore.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+    <None Include="..\..\native\EndfieldCore\build\Release\EndfieldRuntime.dll"
+          Link="EndfieldRuntime.dll"
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>

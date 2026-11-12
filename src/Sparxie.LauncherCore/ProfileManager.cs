@@ -144,7 +144,7 @@ public static class ProfileManager
 
     private static void ApplySettings(GameProfile profile, ProfileMutation mutation)
     {
-        if (mutation.HasHoyoSettings)
+        if (mutation.HasHoyoSettings || mutation.HasEndfieldSettings)
         {
             if (profile.Game == GameType.ZenlessZoneZero)
             {
@@ -176,6 +176,31 @@ public static class ProfileManager
             if (mutation.ProcessPriority is { } priority)
             {
                 hoyo.ProcessPriority = priority;
+            }
+
+            if (mutation.EndfieldInputMode is { } inputMode)
+            {
+                hoyo.EndfieldInputMode = inputMode;
+            }
+
+            if (mutation.EndfieldAutoResolution is { } autoResolution)
+            {
+                hoyo.EndfieldAutoResolution = autoResolution;
+            }
+
+            if (mutation.EndfieldWidth is { } width)
+            {
+                hoyo.EndfieldWidth = width;
+            }
+
+            if (mutation.EndfieldHeight is { } height)
+            {
+                hoyo.EndfieldHeight = height;
+            }
+
+            if (mutation.EndfieldRefreshRate is { } refreshRate)
+            {
+                hoyo.EndfieldRefreshRate = refreshRate;
             }
         }
 
@@ -286,6 +311,11 @@ public static class ProfileManager
                 GenshinPreset60Fps = source.Hoyo.GenshinPreset60Fps,
                 GenshinTouchUiScaleOverrideEnabled = source.Hoyo.GenshinTouchUiScaleOverrideEnabled,
                 GenshinTouchUiScalePercent = source.Hoyo.GenshinTouchUiScalePercent,
+                EndfieldInputMode = source.Hoyo.EndfieldInputMode,
+                EndfieldAutoResolution = source.Hoyo.EndfieldAutoResolution,
+                EndfieldWidth = source.Hoyo.EndfieldWidth,
+                EndfieldHeight = source.Hoyo.EndfieldHeight,
+                EndfieldRefreshRate = source.Hoyo.EndfieldRefreshRate,
             },
     };
 
@@ -304,6 +334,7 @@ public static class ProfileManager
         GameType.Genshin => "genshin",
         GameType.StarRail => "starRail",
         GameType.ZenlessZoneZero => "zenlessZoneZero",
+        GameType.Endfield => "endfield",
         _ => game.ToString(),
     };
 

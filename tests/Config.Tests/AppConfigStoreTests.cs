@@ -41,6 +41,65 @@ public class AppConfigStoreTests : IDisposable
     }
 
     [Fact]
+    public void 终末地已经去掉的自动输入在读取时一次性改为触控并写回()
+    {
+        File.WriteAllText(ConfigPath, """
+            {
+              "schemaVersion": 1,
+              "selectedProfileId": "endfield-cn-1",
+              "profiles": [
+                { "id": "endfield-cn-1", "displayName": "终末地", "game": "endfield", "executablePath": "D:\\Games\\Endfield.exe",
+                  "hoyo": { "fpsUnlockEnabled": true, "targetFps": 120, "backgroundFpsLimitEnabled": true, "backgroundFps": 10, "processPriority": "normal",
+                            "endfieldInputMode": "auto", "endfieldAutoResolution": true, "endfieldWidth": 1920, "endfieldHeight": 1080, "endfieldRefreshRate": 60 } },
+                { "id": "endfield-cn-2", "displayName": "终末地 键鼠", "game": "endfield", "executablePath": "D:\\Games\\Endfield.exe",
+                  "hoyo": { "fpsUnlockEnabled": true, "targetFps": 120, "backgroundFpsLimitEnabled": true, "backgroundFps": 10, "processPriority": "normal",
+                            "endfieldInputMode": "pc", "endfieldAutoResolution": true, "endfieldWidth": 1920, "endfieldHeight": 1080, "endfieldRefreshRate": 60 } }
+              ]
+            }
+            """);
+
+        var result = new AppConfigStore(ConfigPath).Load();
+
+        Assert.Equal(ConfigLoadState.Loaded, result.State);
+        Assert.Equal("touch", result.Config.Profiles[0].Hoyo!.EndfieldInputMode);
+        Assert.Equal("pc", result.Config.Profiles[1].Hoyo!.EndfieldInputMode);
+        var onDisk = File.ReadAllText(ConfigPath);
+        Assert.DoesNotContain("\"auto\"", onDisk);
+        Assert.Contains("\"endfieldInputMode\": \"touch\"", onDisk);
+        Assert.False(AppConfigStore.MigrateEndfieldInput(result.Config), "already migrated: nothing changes the second time");
+    }
+
+    [Fact]
+    public void 校验不再接受自动输入模式()
+    {
+        var config = new AppConfig { Profiles = [new GameProfile { Id = "e", DisplayName = "e", Game = GameType.Endfield, ExecutablePath = @"D:\Games\Endfield.exe", Hoyo = new HoyoProfileSettings { EndfieldInputMode = "auto" } }] };
+        Assert.Contains(AppConfigValidator.Validate(config), error => error.Contains("EndfieldInputMode"));
+        config.Profiles[0].Hoyo!.EndfieldInputMode = "touch";
+        Assert.DoesNotContain(AppConfigValidator.Validate(config), error => error.Contains("EndfieldInputMode"));
+    }
+
+    [Fact]
+    public void 终末地跟随串流时尺寸不参与校验固定尺寸才检查()
+    {
+        var profile = new GameProfile
+        {
+            Id = "e", DisplayName = "e", Game = GameType.Endfield, ExecutablePath = @"D:\Games\Endfield.exe",
+            Hoyo = new HoyoProfileSettings { EndfieldAutoResolution = true, EndfieldWidth = 0, EndfieldHeight = 0 },
+        };
+        var config = new AppConfig { Profiles = [profile] };
+        Assert.Empty(AppConfigValidator.Validate(config));
+
+        profile.Hoyo!.EndfieldAutoResolution = false;
+        Assert.Contains(AppConfigValidator.Validate(config), error => error.Contains("Endfield 分辨率"));
+
+        profile.Hoyo.EndfieldWidth = 2560;
+        profile.Hoyo.EndfieldHeight = 1440;
+        Assert.Empty(AppConfigValidator.Validate(config));
+        profile.Hoyo.EndfieldRefreshRate = 5;
+        Assert.Contains(AppConfigValidator.Validate(config), error => error.Contains("刷新率"));
+    }
+
+    [Fact]
     public void 桌面偏好随config一并保存且缺省时为空()
     {
         var store = new AppConfigStore(ConfigPath);

@@ -172,10 +172,56 @@
                                         </ComboBox>
                                         <TextBlock Text="游戏进程的 CPU 调度优先级，一般保持“正常”" Style="{StaticResource CaptionText}" Margin="0,-8,0,0"
                                                    Visibility="{Binding IsHoyoGame, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                        <ComboBox Header="界面模式" HorizontalAlignment="Stretch" MinHeight="48"
+                                                  Visibility="{Binding IsEndfield, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                  ItemsSource="{x:Bind vm:ProfileEditorViewModel.EndfieldInputModes}"
+                                                  SelectedItem="{Binding EndfieldInputMode, Mode=TwoWay}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Converter={StaticResource EndfieldInputDisplayConverter}}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
                                     </StackPanel>
                                 </Border>
 
                                 <views:LaunchSettingsCard />
+                                <Border Style="{StaticResource GlassCard}"
+                                        Visibility="{Binding IsEndfield, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <Grid ColumnSpacing="12" MinHeight="72">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                                            <TextBlock Text="固定分辨率" />
+                                            <TextBlock Text="关闭时使用主显示器分辨率" Style="{StaticResource CaptionText}" />
+                                        </StackPanel>
+                                        <ToggleSwitch Grid.Column="1" MinWidth="0" OnContent="" OffContent=""
+                                                      IsOn="{Binding EndfieldFixedResolution, Mode=TwoWay}"
+                                                      AutomationProperties.Name="启用固定分辨率" />
+                                        <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnSpacing="12" Margin="0,8,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <controls:NumberStepper Minimum="320" Maximum="7680" Step="1"
+                                                                    IsEnabled="{Binding EndfieldFixedResolution}"
+                                                                    Value="{Binding EndfieldWidth, Mode=TwoWay}" />
+                                            <controls:NumberStepper Grid.Column="1" Minimum="240" Maximum="4320" Step="1"
+                                                                    IsEnabled="{Binding EndfieldFixedResolution}"
+                                                                    Value="{Binding EndfieldHeight, Mode=TwoWay}" />
+                                            <controls:NumberStepper Grid.Column="2" Minimum="24" Maximum="1000" Step="1"
+                                                                    IsEnabled="{Binding EndfieldFixedResolution}"
+                                                                    Value="{Binding EndfieldRefreshRate, Mode=TwoWay}" />
+                                        </Grid>
+                                    </Grid>
+                                </Border>
                             </StackPanel>
 
                             <!-- 右栏：帧率 + 原神的触控 UI 缩放。开关与数值合成一行；关闭时只禁用数值，不改变尺寸。 -->
