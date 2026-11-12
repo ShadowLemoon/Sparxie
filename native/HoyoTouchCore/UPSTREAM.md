@@ -97,6 +97,25 @@ git subtree add --squash --prefix=native/HoyoTouchCore/upstream \
 - 需要时先评估能否在 adapter 内实现，再考虑最小 upstream 补丁；
 - 每次上游更新必须跑：构建、离线测试、实机回归（原神国服/国际服、星铁国服/国际服）。
 
+### PC 界面会话：触屏载荷开关 `touch_ui_enabled`（bootstrap 内）
+
+上游 `Genshin_StarRail_fps_unlocker` 里 Mobile UI 本来就是可选的（`Use_mobile_UI` 默认 0，
+`-EnableMobileUI` 参数才打开）；Sparxie 的 bootstrap 把它固定为 1，所以 FPS 解锁只能和触屏界面一起用。
+现在 bootstrap 末尾多一个参数 `touch_ui_enabled`（0/1），adapter 由 C ABI 请求结构的追加字段 `touch_ui_disabled` 换算后传入：
+
+- `touch_ui_enabled=1`（缺省）：与之前完全相同；
+- `touch_ui_enabled=0`：`Use_mobile_UI=0`。星铁不取 Bootui；原神的 Mobile UI 钩子表保持全零
+  （与上游 `main()` 在 `Use_mobile_UI=0` 时的行为一致），其余 FPS Patch 路径不变；
+- `touch_ui_enabled=0` 且 `fps_unlock_enabled=0`：没有可安装的内容，bootstrap 返回 1（参数错误），
+  adapter 在 `hoyo_create_session` 就以 `HOYO_ERR_CONFIG_INVALID` 拒绝（`touch_ui_disabled=1` 且 `fps_unlock_enabled=0`）；
+- 新增导出 `sparxie_hoyo_last_stage()`（bootstrap 当前阶段：2 触屏扫描、3 FPS 扫描、4 Patch、7 引擎模块加载），
+  adapter 用它把失败映射到准确的 `HOYO_STAGE_*`（此前一律报触屏扫描阶段）。
+
+ABI：`HoyoLaunchRequest` 末尾（`game_arguments_chars` 之后）追加 `touch_ui_disabled` 与 `reserved0`（x64 由 88 增至 96 字节；字段**取反存放**，
+全零 = 既有行为，所以没设置这个字段的新调用方也不会意外关掉触屏）。`hoyo_create_session` 接受 `size >= HOYO_LAUNCH_REQUEST_SIZE_V2`(88) 的请求，
+旧调用方缺省 `touch_ui_disabled=0`；`HOYO_ABI_VERSION` 保持 2（只追加字段，没有不兼容修改）。头文件里的 static_assert 固定每个字段的偏移，托管一侧的镜像（`HoyoGameController`）与 `HoyoAbi.Tests` 逐字段断言同样的偏移。Profile/Broker 一侧仍是正向的 `touch_ui_enabled`（缺省 true）。同步风险：上游若重排 Mobile UI 的扫描段，
+需同时检查这里的 `want_touch_ui` 分支。
+
 ### 触屏载荷补齐（2026-11-09，bootstrap 内）
 
 首版 `sparxie_hoyo_bootstrap` 只复制了 FPS 与 `verfiy` 扫描，漏掉了 main() 里的“Mobile UI”部分，
@@ -108,3 +127,12 @@ git subtree add --squash --prefix=native/HoyoTouchCore/upstream \
   Func_getDPI / UI_unhook_time）；任一特征过期（`Use_mobile_UI` 被清零）即整次失败（返回 5）；
 - 星铁：挂起进程阶段调用 `Hksr_ENmobile_get_Ptr` 取 `injectarg.Bootui`，取不到即整次失败（返回 5）；
 - 去掉原段里的 `wprintf_s`（DLL 宿主没有控制台）。
+
+### 纯触屏（fps_unlock_enabled = 0）不再返回 HOYO_ERR_INSTALL_CONFIRM_FAILED（本地补丁，2026-11-11）
+
+- 现象：preview.9 及 031efe2 的 `sparxie_hoyo_bootstrap` 在关闭帧率解锁时返回 6，会话 Failed，游戏被终止。
+- 原因（main.cpp，`inject_patch`）：没有 FPS 指针时，星铁在函数入口 `return 0`（触屏入口 Bootui 不算有效钩子）；原神在无条件的 basefps 块里对地址 0 调
+  `ReadProcessMemory`（GetLastError=299）后 `return 0`。AssignProcessToJobObject 本身成功（GetLastError=0）。
+- 修改：入口判断把星铁的 Bootui 计为有效；星铁的 FPS 槽位在无指针时指向目标进程内的私有页；原神保留私有页但跳过对游戏帧率读取指令的钩子。
+- 验证：VM 上用带特征码的无害假游戏（假 YuanShen.exe 的 il2cpp 节，假 StarRail.exe + GameAssembly.dll + UnityPlayer.dll）、真实 SessionHost（preview.9）：
+  未修补 → Failed 6；修补 → Running → Exited。真实游戏里触屏层的表现需要实机确认。

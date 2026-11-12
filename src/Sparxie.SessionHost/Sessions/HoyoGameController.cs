@@ -49,7 +49,7 @@ public sealed class HoyoGameController : IGameController
 
     public async Task InstallAsync(Process? gameProcess, IntPtr jobHandle, HoyoProfileSettings? hoyo, CancellationToken cancellationToken)
     {
-        var request = BuildRequest(hoyo);
+        var request = BuildRequest(_gameType, _launchPath, hoyo, _launchArguments);
         var result = new HoyoResult { Size = (uint)Marshal.SizeOf<HoyoResult>() };
 
         try
@@ -75,7 +75,8 @@ public sealed class HoyoGameController : IGameController
             {
                 hoyo_release(session);
                 _session = IntPtr.Zero;
-                throw new InvalidOperationException($"Hoyo 启动注入失败: {launchRc} {Marshal.PtrToStringUni(result.Message)}");
+                // 阶段码（HOYO_STAGE_*：2 触屏扫描、3 FPS 扫描、4 Patch、7 引擎模块加载）随失败信息一起上报，便于定位
+                throw new InvalidOperationException($"Hoyo 启动注入失败: {launchRc} 阶段 {result.Stage} {Marshal.PtrToStringUni(result.Message)}");
             }
 
         }
@@ -162,17 +163,19 @@ public sealed class HoyoGameController : IGameController
         }
     }
 
-    private HoyoLaunchRequest BuildRequest(HoyoProfileSettings? hoyo)
+    /// <summary>Profile 设置 → native 启动请求。GameExecutablePath 与 GameArguments（非零时）由调用方负责 FreeHGlobal。</summary>
+    internal static HoyoLaunchRequest BuildRequest(string gameType, string? launchPath, HoyoProfileSettings? hoyo, string? launchArguments = null)
     {
         var settings = hoyo ?? new HoyoProfileSettings { FpsUnlockEnabled = true, TargetFps = 120, ProcessPriority = ProcessPriority.Normal };
         // Hoyo 由 Runtime 创建进程：路径来自启动请求（bootstrap 内部 CreateProcess）
-        var path = _launchPath ?? string.Empty;
+        var path = launchPath ?? string.Empty;
+        var arguments = launchArguments ?? string.Empty;
 
         return new HoyoLaunchRequest
         {
             Size = (uint)Marshal.SizeOf<HoyoLaunchRequest>(),
             AbiVersion = ABI_VERSION,
-            GameType = _gameType switch
+            GameType = gameType switch
             {
                 "starRail" => 1, // starRail
                 _ => 0, // genshin
@@ -187,16 +190,16 @@ public sealed class HoyoGameController : IGameController
             GenshinPreset60Fps = settings.GenshinPreset60Fps,
             GenshinTouchUiScaleOverrideEnabled = settings.GenshinTouchUiScaleOverrideEnabled ? 1 : 0,
             GenshinTouchUiScalePercent = settings.GenshinTouchUiScalePercent,
+            TouchUiDisabled = settings.TouchUiEnabled ? 0 : 1,
             GameExecutablePath = Marshal.StringToHGlobalUni(path),
             GameExecutablePathChars = (uint)path.Length,
-            // 空串时不分配，native 侧按 NULL 处理（命令行为空）。
-            GameArguments = _launchArguments.Length == 0 ? IntPtr.Zero : Marshal.StringToHGlobalUni(_launchArguments),
-            GameArgumentsChars = (uint)_launchArguments.Length,
+            GameArguments = arguments.Length == 0 ? IntPtr.Zero : Marshal.StringToHGlobalUni(arguments),
+            GameArgumentsChars = (uint)arguments.Length,
         };
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct HoyoLaunchRequest
+    internal struct HoyoLaunchRequest
     {
         public uint Size;
         public uint AbiVersion;
@@ -215,6 +218,9 @@ public sealed class HoyoGameController : IGameController
         public uint GameExecutablePathChars;
         public IntPtr GameArguments;
         public uint GameArgumentsChars;
+        // 追加字段（x64 偏移 84 与 88）：取反存放，0 = 安装触屏载荷（缺省），1 = PC 界面会话。
+        public int TouchUiDisabled;
+        public int Reserved0;
     }
 
     [StructLayout(LayoutKind.Sequential)]

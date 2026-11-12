@@ -115,6 +115,11 @@ public static class ProfileSnapshotValidator
             {
                 return (ErrorCode.InvalidArgument, $"processPriority 非法: {hoyo.ProcessPriority}");
             }
+
+            if (hoyo.HasTouchUiEnabled && !hoyo.TouchUiEnabled && !hoyo.FpsUnlockEnabled)
+            {
+                return (ErrorCode.InvalidArgument, "touchUiEnabled 与 fpsUnlockEnabled 不能同时为 false");
+            }
         }
 
         return null;

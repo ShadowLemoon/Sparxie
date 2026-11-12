@@ -411,6 +411,8 @@ internal static class ProfileSnapshotExtensions
 
         return new HoyoProfileSettings
         {
+            // 字段缺省（旧客户端）= 触屏开启，保持既有行为。
+            TouchUiEnabled = !hoyo.HasTouchUiEnabled || hoyo.TouchUiEnabled,
             FpsUnlockEnabled = hoyo.FpsUnlockEnabled,
             TargetFps = hoyo.TargetFps,
             BackgroundFpsLimitEnabled = hoyo.BackgroundFpsLimitEnabled,

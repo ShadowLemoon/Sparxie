@@ -2,6 +2,9 @@
 
 状态：**bootstrap 已实现并导出（sparxie_hoyo_bootstrap），adapter 已接入调用，DLL 构建验证通过**。剩余为 SessionHost 进程创建协调与实机验收。
 
+> 更新：触屏载荷（Mobile UI / Bootui）现在由请求字段 `touch_ui_enabled` 决定（缺省 1），
+> `touch_ui_enabled=0` 为 PC 界面会话，仍可使用 FPS 解锁。见 `UPSTREAM.md`「PC 界面会话」。
+
 ## 目标
 
 让 `HoyoTouchCore.dll` 的 `hoyo_launch(session, game_pid, result)` 真正执行上游扫描/Patch/注入，使原神/星铁会话进入 Running。失败路径由运行时能力校验捕获（特征缺失/地址非法/写入失败 → 整次失败），不提供绕过。

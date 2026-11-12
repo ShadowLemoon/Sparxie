@@ -31,6 +31,9 @@ extern "C" {
 #define HOYO_ABI_VERSION 2u
 #define HOYO_ABI_NAME "SparxieHoyoTouchCore"
 
+// 追加 touch_ui_disabled 之前的结构大小（x64）；更小的请求被拒绝，更大的按 size 读取追加字段。
+#define HOYO_LAUNCH_REQUEST_SIZE_V2 88u
+
 // ---- 错误码（稳定，跨版本不变）----
 typedef enum HoyoTouchError
 {
@@ -76,7 +79,20 @@ typedef struct HoyoLaunchRequest
     uint32_t game_executable_path_chars;    // 不含 NUL
     const wchar_t* game_arguments;          // UTF-16, NUL-terminated; NULL or empty = no extra command line (ABI v2)
     uint32_t game_arguments_chars;          // excluding NUL
+    // 追加字段，仅在 size 覆盖它们时读取：0 = 安装触屏载荷（缺省，既有行为），1 = PC 界面会话（不装触屏载荷，仍可 FPS 解锁）。
+    int32_t touch_ui_disabled;
+    int32_t reserved0;
 } HoyoLaunchRequest;
+
+#ifdef __cplusplus
+static_assert(sizeof(void*) != 8 || sizeof(HoyoLaunchRequest) == 96, "HoyoLaunchRequest x64 layout");
+static_assert(sizeof(void*) != 8 || offsetof(HoyoLaunchRequest, game_executable_path) == 56, "HoyoLaunchRequest x64 layout");
+static_assert(sizeof(void*) != 8 || offsetof(HoyoLaunchRequest, game_executable_path_chars) == 64, "HoyoLaunchRequest x64 layout");
+static_assert(sizeof(void*) != 8 || offsetof(HoyoLaunchRequest, game_arguments) == 72, "HoyoLaunchRequest x64 layout");
+static_assert(sizeof(void*) != 8 || offsetof(HoyoLaunchRequest, game_arguments_chars) == 80, "HoyoLaunchRequest x64 layout");
+static_assert(sizeof(void*) != 8 || offsetof(HoyoLaunchRequest, touch_ui_disabled) == 84, "HoyoLaunchRequest x64 layout");
+static_assert(sizeof(void*) != 8 || offsetof(HoyoLaunchRequest, reserved0) == 88, "HoyoLaunchRequest x64 layout");
+#endif
 
 // ---- 结果结构 ----
 typedef struct HoyoResult
@@ -96,6 +112,7 @@ typedef struct HoyoResult
 #define HOYO_STAGE_PATCH 4u
 #define HOYO_STAGE_INSTALL_CONFIRM 5u
 #define HOYO_STAGE_WAIT 6u
+#define HOYO_STAGE_LOAD_ENGINE 7u
 
 // ---- 导出函数（首版最小集合）----
 
