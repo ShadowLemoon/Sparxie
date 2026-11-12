@@ -173,30 +173,26 @@ public sealed partial class ProfileManagerPage : Page
                 return;
             }
 
-            var picker = new Windows.Storage.Pickers.FileOpenPicker
-            {
-                SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.ComputerFolder,
-                ViewMode = Windows.Storage.Pickers.PickerViewMode.List,
-            };
-            WinRT.Interop.InitializeWithWindow.Initialize(
-                picker, WinRT.Interop.WindowNative.GetWindowHandle(window));
-            picker.FileTypeFilter.Add(".exe");
-
-            var file = await picker.PickSingleFileAsync();
-            if (file is null)
+            // Win32 IFileOpenDialog owned by this window: the WinRT FileOpenPicker fails in an elevated process.
+            var path = FileDialog.PickFile(
+                WinRT.Interop.WindowNative.GetWindowHandle(window),
+                "选择游戏 EXE",
+                [new FileDialogFilter("可执行文件 (*.exe)", "*.exe")],
+                FileDialog.FolderOf(profile.ExecutablePath));
+            if (path is null)
             {
                 return;
             }
 
             // 选完立即按当前游戏白名单反馈，避免用户填完再在保存时才看到失败。
-            if (!GameExecutables.IsAllowed(profile.Game, file.Path))
+            if (!GameExecutables.IsAllowed(profile.Game, path))
             {
                 var allowed = string.Join("、", GameExecutables.For(profile.Game));
                 await ShowMessageAsync($"该 EXE 不属于所选游戏，可用文件名：{allowed}");
                 return;
             }
 
-            profile.ExecutablePath = file.Path;
+            profile.ExecutablePath = path;
         }
         catch (Exception ex)
         {
