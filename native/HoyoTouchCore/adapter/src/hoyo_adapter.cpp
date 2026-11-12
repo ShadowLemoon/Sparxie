@@ -12,6 +12,8 @@
 
 #include <atomic>
 #include <cstdint>
+#include <cstring>
+#include <cwchar>
 
 
 namespace
@@ -60,7 +62,11 @@ extern "C" int __stdcall sparxie_hoyo_bootstrap(
     int32_t genshin_touch_ui_scale_percent,
     void* job_handle,
     uint32_t* out_pid,
-    uint32_t* out_fps_value_addr);
+    uint32_t* out_fps_value_addr,
+    int32_t touch_ui_enabled);
+
+// upstream 导出：最近一次 bootstrap 所处阶段（见 main.cpp g_sparxie_stage）
+extern "C" int __stdcall sparxie_hoyo_last_stage();
 
 extern "C" {
 
@@ -88,7 +94,7 @@ HoyoTouchError hoyo_create_session(
     result->size = sizeof(HoyoResult);
     result->stage = HOYO_STAGE_VALIDATION;
 
-    if (request->size < sizeof(HoyoLaunchRequest))
+    if (request->size < HOYO_LAUNCH_REQUEST_SIZE_V2)
     {
         result->error_code = HOYO_ERR_ABI_MISMATCH;
         result->message = L"request.size 过小";
@@ -131,6 +137,30 @@ HoyoTouchError hoyo_create_session(
         return HOYO_ERR_INVALID_ARGUMENT;
     }
 
+    // 追加字段：调用方 size 不覆盖 touch_ui_disabled 时取缺省 0（既有行为：安装触屏载荷）。
+    HoyoLaunchRequest normalized{};
+    memcpy(&normalized, request, request->size < sizeof(HoyoLaunchRequest) ? request->size : sizeof(HoyoLaunchRequest));
+    normalized.size = sizeof(HoyoLaunchRequest);
+    if (request->size < sizeof(HoyoLaunchRequest))
+    {
+        normalized.touch_ui_disabled = 0;
+        normalized.reserved0 = 0;
+    }
+    if (normalized.touch_ui_disabled != 0 && normalized.touch_ui_disabled != 1)
+    {
+        result->error_code = HOYO_ERR_INVALID_ARGUMENT;
+        result->message = L"touch_ui_disabled 须为 0/1";
+        result->message_chars = static_cast<uint32_t>(wcslen(result->message));
+        return HOYO_ERR_INVALID_ARGUMENT;
+    }
+    if (normalized.touch_ui_disabled == 1 && normalized.fps_unlock_enabled == 0)
+    {
+        result->error_code = HOYO_ERR_CONFIG_INVALID;
+        result->message = L"触屏载荷与FPS解锁均关闭";
+        result->message_chars = static_cast<uint32_t>(wcslen(result->message));
+        return HOYO_ERR_CONFIG_INVALID;
+    }
+
     {
         CsLock _lock;
         if (g_session != nullptr && g_session->active)
@@ -142,7 +172,7 @@ HoyoTouchError hoyo_create_session(
         }
 
         auto* session = new HoyoSession();
-        session->request = *request;
+        session->request = normalized;
         InterlockedExchange(&session->fps_value, request->target_fps);
         session->active = true;
         g_session = session;
@@ -242,11 +272,19 @@ HoyoTouchError hoyo_launch(void* session_handle, uint32_t game_pid, HoyoResult* 
         r.genshin_touch_ui_scale_percent,
         session->job_handle,
         &out_pid,
-        &out_fps_addr);
+        &out_fps_addr,
+        r.touch_ui_disabled ? 0 : 1);
 
     if (rc != 0)
     {
-        result->stage = HOYO_STAGE_SCAN_TOUCH;
+        switch (sparxie_hoyo_last_stage())
+        {
+            case 3: result->stage = HOYO_STAGE_SCAN_FPS; break;
+            case 4: result->stage = HOYO_STAGE_PATCH; break;
+            case 7: result->stage = HOYO_STAGE_LOAD_ENGINE; break;
+            case 1: result->stage = HOYO_STAGE_VALIDATION; break;
+            default: result->stage = HOYO_STAGE_SCAN_TOUCH; break;
+        }
         result->error_code = rc == 5 ? HOYO_ERR_SCAN_FAILED
                            : rc == 6 ? HOYO_ERR_INSTALL_CONFIRM_FAILED
                            : rc == 3 ? HOYO_ERR_PROCESS_NOT_FOUND

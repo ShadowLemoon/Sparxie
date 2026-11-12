@@ -2558,6 +2558,14 @@ __Continue:
 // 此补丁是"无法在 subtree 外实现的入口条件"，属于计划允许的最小上游差异。
 // ============================================================================
 
+// 最近一次 bootstrap 所处阶段（供 adapter 把失败映射到准确的 HOYO_STAGE_*）。
+// 1=参数/初始化 2=触屏载荷扫描 3=FPS 扫描 4=Patch 注入 7=游戏引擎模块加载
+static volatile LONG g_sparxie_stage = 1;
+extern "C" __declspec(dllexport) int __stdcall sparxie_hoyo_last_stage()
+{
+    return (int)g_sparxie_stage;
+}
+
 static int __stdcall sparxie_hoyo_bootstrap_impl(
     const wchar_t* game_executable_path,
     const wchar_t* game_arguments, // 附加命令行参数（可为 NULL/空）；Sparxie 自动注入的无边框与用户参数
@@ -2574,11 +2582,16 @@ static int __stdcall sparxie_hoyo_bootstrap_impl(
     int32_t genshin_touch_ui_scale_percent,
     void* job_handle,              // Running 前失效保护 Job（可为 null）；创建进程后 Assign
     uint32_t* out_pid,
-    uint32_t* out_fps_value_addr)  // 返回 FpsValue 地址（热调用）
+    uint32_t* out_fps_value_addr,  // 返回 FpsValue 地址（热调用）
+    int32_t touch_ui_enabled)       // 0 = PC 界面会话：不安装触屏载荷
 {
     if (!game_executable_path || !out_pid || !out_fps_value_addr)
     {
         return 1; // HOYO_ERR_INVALID_ARGUMENT
+    }
+    if (!touch_ui_enabled && !fps_unlock_enabled)
+    {
+        return 1; // 既无触屏载荷也无 FPS 解锁：没有可安装的内容，调用方应直接启动游戏
     }
 
     // ---- 初始化（与 main() 相同，但无控制台）----
@@ -2596,7 +2609,11 @@ static int __stdcall sparxie_hoyo_bootstrap_impl(
         ? (float)(genshin_touch_ui_scale_percent >= 100 && genshin_touch_ui_scale_percent <= 500
             ? genshin_touch_ui_scale_percent : 400) / 100.0f * 96.0f / 96.0f
         : 0.0f;
-    Use_mobile_UI = 1; // Sparxie：触屏是必选能力，原神/星铁都要安装触屏载荷
+    // 触屏载荷是否安装由调用方决定（缺省 1 = 既有行为）；0 = PC 界面会话，
+    // 上游 Use_mobile_UI 默认值即 0，下面所有触屏扫描/载荷分支自然跳过。
+    const bool want_touch_ui = (touch_ui_enabled != 0);
+    Use_mobile_UI = want_touch_ui ? 1 : 0;
+    g_sparxie_stage = 1;
     isHook = 1;
     PowerSave_target = (uint32_t)(background_fps >= 10 && background_fps <= 1000 ? background_fps : 10);
     is_old_version = 0;
@@ -2658,8 +2675,9 @@ static int __stdcall sparxie_hoyo_bootstrap_impl(
 
     inject_arg injectarg = { 0 };
     Hook_func_list GI_Func = { 0 };
-    if (isGenshin == 0)
+    if (isGenshin == 0 && want_touch_ui)
     {
+        g_sparxie_stage = 2;
         injectarg.Bootui = Hksr_ENmobile_get_Ptr(pi->hProcess, processDir.c_str());
         if (!injectarg.Bootui)
         {
@@ -2683,6 +2701,7 @@ static int __stdcall sparxie_hoyo_bootstrap_impl(
         return 5; // HOYO_ERR_SCAN_FAILED
     }
 
+    g_sparxie_stage = 7;
     if (isGenshin && is_old_version == 0)
     {
         Unityplayer_baseAddr = RemoteDll_Inject(pi->hProcess, 0);
@@ -2723,6 +2742,7 @@ static int __stdcall sparxie_hoyo_bootstrap_impl(
     // inject_patch 以 pfps=0 仅注入触屏载荷（计划：FPS 关闭时不扫描、不安装 FPS Patch）。
     if (fps_unlock_enabled)
     {
+    g_sparxie_stage = 3;
     if (isGenshin)
     {
         // 原神 pfps 扫描（与 main() 相同分支）
@@ -2811,6 +2831,7 @@ static int __stdcall sparxie_hoyo_bootstrap_impl(
     // ---- 原神 il2cpp 扫描（main() __genshin_il 分支的核心部分）----
     if (isGenshin)
     {
+        g_sparxie_stage = want_touch_ui ? 2 : 3; // il2cpp: Mobile UI 钩子表（触屏）或仅 FPS 同步地址
         LPVOID UA_baseAddr = Unityplayer_baseAddr;
         if (is_old_version)
         {
@@ -2936,7 +2957,7 @@ static int __stdcall sparxie_hoyo_bootstrap_impl(
                 Use_mobile_UI = 0;
             }
         }
-                    if (!Use_mobile_UI)
+                    if (want_touch_ui && !Use_mobile_UI)
                     {
                         TerminateProcess_Internal(pi->hProcess, 0);
                         CloseHandle_Internal(pi->hProcess);
@@ -2952,6 +2973,7 @@ static int __stdcall sparxie_hoyo_bootstrap_impl(
     }
 
     // ---- 注入（与 main() __Continue 一致）----
+    g_sparxie_stage = 4;
     uintptr_t Patch_buffer = inject_patch(pi->hProcess, Unityplayer_baseAddr, pfps, &injectarg);
     if (!Patch_buffer)
     {
@@ -2993,7 +3015,8 @@ extern "C" __declspec(dllexport) int __stdcall sparxie_hoyo_bootstrap(
     int32_t genshin_touch_ui_scale_percent,
     void* job_handle,
     uint32_t* out_pid,
-    uint32_t* out_fps_value_addr)
+    uint32_t* out_fps_value_addr,
+    int32_t touch_ui_enabled)
 {
     __try
     {
@@ -3003,7 +3026,8 @@ extern "C" __declspec(dllexport) int __stdcall sparxie_hoyo_bootstrap(
             genshin_follow_in_game_preset, genshin_preset_30_fps, genshin_preset_60_fps,
             genshin_touch_ui_scale_override_enabled, genshin_touch_ui_scale_percent,
             job_handle,
-            out_pid, out_fps_value_addr);
+            out_pid, out_fps_value_addr,
+            touch_ui_enabled);
     }
     __except (EXCEPTION_EXECUTE_HANDLER)
     {
