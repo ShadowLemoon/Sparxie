@@ -47,6 +47,25 @@ public sealed class ProfileManagerTests
     }
 
     [Fact]
+    public void 触屏载荷开关可修改且仅限Hoyo游戏()
+    {
+        var config = new AppConfig();
+        ProfileManager.Add(config, Create("sr-cn", "星铁", GameType.StarRail, @"D:\Games\StarRail.exe"));
+        ProfileManager.Add(config, Create("zzz-cn", "绝区零", GameType.ZenlessZoneZero, @"D:\Games\ZenlessZoneZero.exe"));
+
+        Assert.True(config.Profiles[0].Hoyo!.TouchUiEnabled);
+
+        var updated = ProfileManager.Update(config, "sr-cn", new ProfileMutation(TouchUiEnabled: false));
+        Assert.False(updated.Hoyo!.TouchUiEnabled);
+        Assert.True(updated.Hoyo.FpsUnlockEnabled);
+
+        // 复制/保存路径都经 Clone：开关不能在这里丢失。
+        Assert.False(ProfileManager.Update(config, "sr-cn", new ProfileMutation(TargetFps: 144)).Hoyo!.TouchUiEnabled);
+
+        Assert.ThrowsAny<Exception>(() => ProfileManager.Update(config, "zzz-cn", new ProfileMutation(TouchUiEnabled: false)));
+    }
+
+    [Fact]
     public void 选择和删除默认Profile按约定回落()
     {
         var config = new AppConfig();

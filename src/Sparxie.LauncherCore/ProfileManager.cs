@@ -177,6 +177,11 @@ public static class ProfileManager
             {
                 hoyo.ProcessPriority = priority;
             }
+
+            if (mutation.TouchUiEnabled is { } touchUiEnabled)
+            {
+                hoyo.TouchUiEnabled = touchUiEnabled;
+            }
         }
 
         if (mutation.HasGenshinSettings)
@@ -276,6 +281,7 @@ public static class ProfileManager
             ? null
             : new HoyoProfileSettings
             {
+                TouchUiEnabled = source.Hoyo.TouchUiEnabled,
                 FpsUnlockEnabled = source.Hoyo.FpsUnlockEnabled,
                 TargetFps = source.Hoyo.TargetFps,
                 BackgroundFpsLimitEnabled = source.Hoyo.BackgroundFpsLimitEnabled,

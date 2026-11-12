@@ -22,6 +22,7 @@ public sealed record ProfileMutation(
     int? GenshinPreset60Fps = null,
     bool? GenshinTouchUiScaleOverrideEnabled = null,
     int? GenshinTouchUiScalePercent = null,
+    bool? TouchUiEnabled = null,
     LaunchSettings? Launch = null)
 {
     public bool HasHoyoSettings =>
@@ -29,7 +30,8 @@ public sealed record ProfileMutation(
         || TargetFps.HasValue
         || BackgroundFpsLimitEnabled.HasValue
         || BackgroundFps.HasValue
-        || ProcessPriority.HasValue;
+        || ProcessPriority.HasValue
+        || TouchUiEnabled.HasValue;
 
     public bool HasGenshinSettings =>
         GenshinFollowInGamePreset.HasValue
