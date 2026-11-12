@@ -370,6 +370,7 @@ public sealed class ProfileManagerViewModel : ObservableObject
     {
         if (sender is not ProfileEditorViewModel editor
             || e.PropertyName is nameof(ProfileEditorViewModel.IsHoyoGame) or nameof(ProfileEditorViewModel.IsGenshin)
+                or nameof(ProfileEditorViewModel.IsEndfield)
                 or nameof(ProfileEditorViewModel.PathHint) or nameof(ProfileEditorViewModel.HasPathHint)
                 or nameof(ProfileEditorViewModel.CommandLinePreview) or nameof(ProfileEditorViewModel.ResolutionControlsEnabled)
                 or nameof(ProfileEditorViewModel.PresetEnabled) or nameof(ProfileEditorViewModel.CustomEnabled))
@@ -469,6 +470,11 @@ public sealed class ProfileEditorViewModel : ObservableObject
     private double _genshinPreset60Fps = 1000;
     private bool _genshinTouchUiScaleOverrideEnabled;
     private double _genshinTouchUiScalePercent = 400;
+    private string _endfieldInputMode = "touch";
+    private bool _endfieldAutoResolution = true;
+    private double _endfieldWidth = 1920;
+    private double _endfieldHeight = 1080;
+    private double _endfieldRefreshRate = 60;
     private bool _fullscreen = true;
     private bool _borderless;
     private bool _customResolution;
@@ -503,6 +509,7 @@ public sealed class ProfileEditorViewModel : ObservableObject
             OnPropertyChanged(nameof(PathHint));
             OnPropertyChanged(nameof(HasPathHint));
             OnPropertyChanged(nameof(IsGenshin));
+            OnPropertyChanged(nameof(IsEndfield));
         }
     }
     public string ExecutablePath
@@ -734,6 +741,24 @@ public sealed class ProfileEditorViewModel : ObservableObject
 
     public bool IsHoyoGame => Game != GameType.ZenlessZoneZero;
     public bool IsGenshin => Game == GameType.Genshin;
+    public bool IsEndfield => Game == GameType.Endfield;
+    public static string[] EndfieldInputModes { get; } = ["touch", "pc"];
+    public string EndfieldInputMode { get => _endfieldInputMode; set => SetProperty(ref _endfieldInputMode, value); }
+    public bool EndfieldAutoResolution
+    {
+        get => _endfieldAutoResolution;
+        set
+        {
+            if (SetProperty(ref _endfieldAutoResolution, value))
+            {
+                OnPropertyChanged(nameof(EndfieldFixedResolution));
+            }
+        }
+    }
+    public bool EndfieldFixedResolution { get => !_endfieldAutoResolution; set => EndfieldAutoResolution = !value; }
+    public double EndfieldWidth { get => _endfieldWidth; set => SetProperty(ref _endfieldWidth, value); }
+    public double EndfieldHeight { get => _endfieldHeight; set => SetProperty(ref _endfieldHeight, value); }
+    public double EndfieldRefreshRate { get => _endfieldRefreshRate; set => SetProperty(ref _endfieldRefreshRate, value); }
 
     /// <summary>新建编辑项。ID 与名称预填可用默认值，立即保存即可用。</summary>
     public static ProfileEditorViewModel New(IEnumerable<string> existingIds, GameType game, IEnumerable<string>? existingNames = null)
@@ -773,6 +798,11 @@ public sealed class ProfileEditorViewModel : ObservableObject
         GenshinPreset60Fps = profile.Hoyo?.GenshinPreset60Fps ?? 1000,
         GenshinTouchUiScaleOverrideEnabled = profile.Hoyo?.GenshinTouchUiScaleOverrideEnabled ?? false,
         GenshinTouchUiScalePercent = profile.Hoyo?.GenshinTouchUiScalePercent ?? 400,
+        EndfieldInputMode = profile.Hoyo?.EndfieldInputMode == "pc" ? "pc" : "touch",
+        EndfieldAutoResolution = profile.Hoyo?.EndfieldAutoResolution ?? true,
+        EndfieldWidth = profile.Hoyo?.EndfieldWidth ?? 1920,
+        EndfieldHeight = profile.Hoyo?.EndfieldHeight ?? 1080,
+        EndfieldRefreshRate = profile.Hoyo?.EndfieldRefreshRate ?? 60,
     }.WithLaunch(profile.Launch);
 
     private ProfileEditorViewModel WithLaunch(LaunchSettings? launch)
@@ -800,6 +830,11 @@ public sealed class ProfileEditorViewModel : ObservableObject
         GenshinPreset60Fps: IsGenshin ? ToFps(GenshinPreset60Fps, 1000) : null,
         GenshinTouchUiScaleOverrideEnabled: IsGenshin ? GenshinTouchUiScaleOverrideEnabled : null,
         GenshinTouchUiScalePercent: IsGenshin ? ToFps(GenshinTouchUiScalePercent, 400) : null,
+        EndfieldInputMode: IsEndfield ? EndfieldInputMode : null,
+        EndfieldAutoResolution: IsEndfield ? EndfieldAutoResolution : null,
+        EndfieldWidth: IsEndfield ? ToFps(EndfieldWidth, 1920) : null,
+        EndfieldHeight: IsEndfield ? ToFps(EndfieldHeight, 1080) : null,
+        EndfieldRefreshRate: IsEndfield ? ToFps(EndfieldRefreshRate, 60) : null,
         Launch: BuildLaunch());
 
     /// <summary>NumberBox 被清空时值为 NaN，直接 Convert.ToInt32 会抛 OverflowException。</summary>
