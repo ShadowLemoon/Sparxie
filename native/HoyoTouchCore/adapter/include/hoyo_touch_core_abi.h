@@ -78,6 +78,8 @@ typedef struct HoyoLaunchRequest
     uint32_t game_arguments_chars;          // excluding NUL
 } HoyoLaunchRequest;
 
+#define HOYO_MAX_GAME_ARGUMENT_CHARS 512u
+
 // ---- 结果结构 ----
 typedef struct HoyoResult
 {
@@ -135,6 +137,9 @@ HOYO_API HoyoTouchError hoyo_wait_game_exit(
     void* session,
     uint32_t timeout_ms,
     HoyoResult* result);
+
+// 最近一次 hoyo_launch 交给 CreateProcess 的命令行（UTF-16）。
+HOYO_API HoyoTouchError hoyo_get_launch_command(void* session, wchar_t* buffer, uint32_t capacity_chars, uint32_t* chars_out);
 
 // 释放会话（卸载注入句柄、释放资源）。幂等。
 HOYO_API HoyoTouchError hoyo_release(void* session);
