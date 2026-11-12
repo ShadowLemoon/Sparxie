@@ -6,8 +6,10 @@ using Sparxie.Contracts.Rpc;
 namespace Sparxie.SessionHost.Sessions;
 
 /// <summary>
-/// Endfield 启动与运行时控制器。EndfieldCore 以挂起状态创建 Endfield.exe 并加入会话 Job，
+/// Endfield 启动与运行时控制器。游戏按 Collapse Endfield 插件的方式启动：以挂起的 Games.exe 作为
+/// 父进程创建 Endfield.exe（PROC_THREAD_ATTRIBUTE_PARENT_PROCESS，见 native/EndfieldCore/endfield_decoy.cpp），
 /// 随后注入独立 Runtime，由 Runtime 通过公开的 IL2CPP 导出调用输入模式切换与 Unity 帧率接口。
+/// Games.exe 与游戏同属会话 Job，游戏退出时由 EndfieldCore 结束 Games.exe 并清理暂存目录。
 /// </summary>
 public sealed class EndfieldGameController : IGameController
 {
@@ -48,6 +50,7 @@ public sealed class EndfieldGameController : IGameController
             result = NewResult();
             rc = endfield_launch(_session, ref result);
             ThrowIfFailed(rc, result, $"Endfield 启动注入失败（阶段 {result.Stage}）");
+            WriteLaunchLine();
         }
         finally
         {
@@ -99,6 +102,29 @@ public sealed class EndfieldGameController : IGameController
         Release();
     }
 
+    /// <summary>One line per launch into logs\endfield-launch.log: the game pid, the decoy parent and the parent the OS reports.</summary>
+    private void WriteLaunchLine()
+    {
+        try
+        {
+            var info = new EndfieldSessionInfo { Size = (uint)Marshal.SizeOf<EndfieldSessionInfo>() };
+            if (endfield_get_session_info(_session, ref info) != Ok)
+            {
+                return;
+            }
+
+            var directory = Path.Combine(Sparxie.Infrastructure.Configuration.AppDataDirectory.Resolve(), "logs");
+            Directory.CreateDirectory(directory);
+            File.AppendAllText(
+                Path.Combine(directory, "endfield-launch.log"),
+                $"[{DateTime.Now:O}] game pid={info.GamePid} decoy parent pid={info.DecoyPid} parent seen by the OS={info.ParentPidSeen} image={Marshal.PtrToStringUni(info.DecoyImage, (int)info.DecoyImageChars)}{Environment.NewLine}");
+        }
+        catch (Exception)
+        {
+            // a diagnostics line must never fail a launch
+        }
+    }
+
     private void Release()
     {
         if (_session != IntPtr.Zero)
@@ -127,6 +153,10 @@ public sealed class EndfieldGameController : IGameController
             RefreshRate = settings.EndfieldRefreshRate,
             GameExecutablePath = Marshal.StringToHGlobalUni(launchPath),
             GameExecutablePathChars = (uint)launchPath.Length,
+            // flags 0 = production: Games.exe from the game's folder (PlatformProcess.exe), signatures required
+            Flags = 0,
+            ParentSourcePath = IntPtr.Zero,
+            ParentSourcePathChars = 0,
         };
     }
 
@@ -159,6 +189,21 @@ public sealed class EndfieldGameController : IGameController
         public int RefreshRate;
         public IntPtr GameExecutablePath;
         public uint GameExecutablePathChars;
+        // ENDFIELD_REQUEST_SIZE_V1 (48 bytes) ends here; the fields below exist since the decoy-parent launch.
+        public uint Flags;
+        public uint ParentSourcePathChars;
+        public IntPtr ParentSourcePath;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct EndfieldSessionInfo
+    {
+        public uint Size;
+        public uint GamePid;
+        public uint DecoyPid;
+        public uint ParentPidSeen;
+        public IntPtr DecoyImage;
+        public uint DecoyImageChars;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -180,6 +225,9 @@ public sealed class EndfieldGameController : IGameController
 
     [DllImport("EndfieldCore.dll", CallingConvention = CallingConvention.Cdecl)]
     private static extern int endfield_launch(IntPtr session, ref EndfieldResult result);
+
+    [DllImport("EndfieldCore.dll", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int endfield_get_session_info(IntPtr session, ref EndfieldSessionInfo info);
 
     [DllImport("EndfieldCore.dll", CallingConvention = CallingConvention.Cdecl)]
     private static extern int endfield_set_target_fps(IntPtr session, int targetFps, ref EndfieldResult result);

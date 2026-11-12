@@ -39,12 +39,25 @@ public sealed class EndfieldLaunchRequestTests
     }
 
     [Fact]
-    public void 请求布局与EndfieldCore的ABI一致()
+    public void 请求布局与EndfieldCore的ABI一致并默认走Games_exe父进程路径()
     {
-        // ENDFIELD_REQUEST_SIZE = 48 bytes: eight 4-byte fields, the path pointer at 32 and its length at 40 (padded to 48)
-        Assert.Equal(48, Marshal.SizeOf<EndfieldGameController.EndfieldLaunchRequest>());
-        Assert.Equal(32, (int)Marshal.OffsetOf<EndfieldGameController.EndfieldLaunchRequest>(nameof(EndfieldGameController.EndfieldLaunchRequest.GameExecutablePath)));
-        Assert.Equal(40, (int)Marshal.OffsetOf<EndfieldGameController.EndfieldLaunchRequest>(nameof(EndfieldGameController.EndfieldLaunchRequest.GameExecutablePathChars)));
+        // ENDFIELD_REQUEST_SIZE_V1 = 48 bytes; flags, parent_source_path_chars and parent_source_path follow (64 bytes in all)
+        Assert.Equal(64, Marshal.SizeOf<EndfieldGameController.EndfieldLaunchRequest>());
+        Assert.Equal(44, (int)Marshal.OffsetOf<EndfieldGameController.EndfieldLaunchRequest>(nameof(EndfieldGameController.EndfieldLaunchRequest.Flags)));
+        Assert.Equal(56, (int)Marshal.OffsetOf<EndfieldGameController.EndfieldLaunchRequest>(nameof(EndfieldGameController.EndfieldLaunchRequest.ParentSourcePath)));
+
+        var request = EndfieldGameController.BuildRequest(@"C:\Games\Endfield.exe", new HoyoProfileSettings());
+        try
+        {
+            // production: no test switches, and the default source (PlatformProcess.exe in the game's folder)
+            Assert.Equal(0u, request.Flags);
+            Assert.Equal(IntPtr.Zero, request.ParentSourcePath);
+            Assert.Equal(0u, request.ParentSourcePathChars);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(request.GameExecutablePath);
+        }
     }
 
     [Fact]
