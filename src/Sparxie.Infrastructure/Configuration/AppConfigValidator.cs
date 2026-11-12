@@ -36,83 +36,93 @@ public static class AppConfigValidator
         var ids = new HashSet<string>(StringComparer.Ordinal);
         foreach (var profile in config.Profiles)
         {
-            if (string.IsNullOrWhiteSpace(profile.Id))
-            {
-                errors.Add("profile.id 不能为空");
-            }
-            else if (!ids.Add(profile.Id))
+            if (!string.IsNullOrWhiteSpace(profile.Id) && !ids.Add(profile.Id))
             {
                 errors.Add($"重复的 profile.id: {profile.Id}");
             }
 
-            if (string.IsNullOrWhiteSpace(profile.DisplayName))
+            errors.AddRange(ValidateProfile(profile));
+        }
+
+        return errors;
+    }
+
+    /// <summary>单个 Profile 的字段校验（不含 profile 间的重复 id）。</summary>
+    public static IReadOnlyList<string> ValidateProfile(GameProfile profile)
+    {
+        var errors = new List<string>();
+        if (string.IsNullOrWhiteSpace(profile.Id))
+        {
+            errors.Add("profile.id 不能为空");
+        }
+
+        if (string.IsNullOrWhiteSpace(profile.DisplayName))
+        {
+            errors.Add($"profile {profile.Id} 的 displayName 不能为空");
+        }
+
+        if (!Enum.IsDefined(profile.Game))
+        {
+            errors.Add($"profile {profile.Id} 的 game 非法: {profile.Game}");
+        }
+
+        if (string.IsNullOrWhiteSpace(profile.ExecutablePath))
+        {
+            // 空路径 = 未完成配置（UI 允许先建 Profile 占位后填路径）；
+            // 启动时由 SessionHost 边界拒绝（ExecutableNotFound）。
+            // 非空时必须通过游戏类型 EXE 白名单。
+        }
+        else if (!GameExecutables.IsAllowed(profile.Game, profile.ExecutablePath))
+        {
+            errors.Add($"profile {profile.Id} 的 EXE 名称不在白名单: {Path.GetFileName(profile.ExecutablePath)}");
+        }
+
+        if (LaunchSettingsRules.Validate(profile.Launch) is { } launchError)
+        {
+            errors.Add($"profile {profile.Id} 的启动设置不合法：{launchError}");
+        }
+
+        if (profile.Game == GameType.ZenlessZoneZero)
+        {
+            if (profile.Hoyo is not null)
             {
-                errors.Add($"profile {profile.Id} 的 displayName 不能为空");
+                errors.Add($"profile {profile.Id} 的绝区零不应包含 hoyo 设置");
+            }
+        }
+        else if (profile.Hoyo is { } hoyo)
+        {
+            ValidateFps(errors, profile.Id, nameof(HoyoProfileSettings.TargetFps), hoyo.TargetFps);
+            ValidateFps(errors, profile.Id, nameof(HoyoProfileSettings.BackgroundFps), hoyo.BackgroundFps);
+            ValidateFps(errors, profile.Id, nameof(HoyoProfileSettings.GenshinPreset30Fps), hoyo.GenshinPreset30Fps);
+            ValidateFps(errors, profile.Id, nameof(HoyoProfileSettings.GenshinPreset60Fps), hoyo.GenshinPreset60Fps);
+
+            if (hoyo.GenshinTouchUiScalePercent is < MinTouchUiScalePercent or > MaxTouchUiScalePercent)
+            {
+                errors.Add($"profile {profile.Id} 的 genshinTouchUiScalePercent 超出 {MinTouchUiScalePercent}–{MaxTouchUiScalePercent}");
             }
 
-            if (!Enum.IsDefined(profile.Game))
+            if (!Enum.IsDefined(hoyo.ProcessPriority))
             {
-                errors.Add($"profile {profile.Id} 的 game 非法: {profile.Game}");
+                errors.Add($"profile {profile.Id} 的 processPriority 非法");
             }
 
-            if (string.IsNullOrWhiteSpace(profile.ExecutablePath))
+            if (profile.Game == GameType.Endfield)
             {
-                // 空路径 = 未完成配置（UI 允许先建 Profile 占位后填路径）；
-                // 启动时由 SessionHost 边界拒绝（ExecutableNotFound）。
-                // 非空时必须通过游戏类型 EXE 白名单。
-            }
-            else if (!GameExecutables.IsAllowed(profile.Game, profile.ExecutablePath))
-            {
-                errors.Add($"profile {profile.Id} 的 EXE 名称不在白名单: {Path.GetFileName(profile.ExecutablePath)}");
-            }
-
-            if (LaunchSettingsRules.Validate(profile.Launch) is { } launchError)
-            {
-                errors.Add($"profile {profile.Id} 的启动设置不合法：{launchError}");
-            }
-
-            if (profile.Game == GameType.ZenlessZoneZero)
-            {
-                if (profile.Hoyo is not null)
+                if (hoyo.EndfieldInputMode is not ("touch" or "pc"))
                 {
-                    errors.Add($"profile {profile.Id} 的绝区零不应包含 hoyo 设置");
+                    errors.Add($"profile {profile.Id} 的 EndfieldInputMode 非法");
                 }
-            }
-            else if (profile.Hoyo is { } hoyo)
-            {
-                ValidateFps(errors, profile.Id, nameof(HoyoProfileSettings.TargetFps), hoyo.TargetFps);
-                ValidateFps(errors, profile.Id, nameof(HoyoProfileSettings.BackgroundFps), hoyo.BackgroundFps);
-                ValidateFps(errors, profile.Id, nameof(HoyoProfileSettings.GenshinPreset30Fps), hoyo.GenshinPreset30Fps);
-                ValidateFps(errors, profile.Id, nameof(HoyoProfileSettings.GenshinPreset60Fps), hoyo.GenshinPreset60Fps);
 
-                if (hoyo.GenshinTouchUiScalePercent is < MinTouchUiScalePercent or > MaxTouchUiScalePercent)
+                // 分辨率只在固定尺寸时才有意义；跟随串流（auto）时尺寸字段不参与校验，
+                // 客户端用 0×0 表示"跟随"，这样的尺寸不应让整份配置被判为损坏。
+                if (!hoyo.EndfieldAutoResolution && !IsEndfieldSizeValid(hoyo.EndfieldWidth, hoyo.EndfieldHeight))
                 {
-                    errors.Add($"profile {profile.Id} 的 genshinTouchUiScalePercent 超出 {MinTouchUiScalePercent}–{MaxTouchUiScalePercent}");
+                    errors.Add($"profile {profile.Id} 的 Endfield 分辨率非法");
                 }
 
-                if (!Enum.IsDefined(hoyo.ProcessPriority))
+                if (hoyo.EndfieldRefreshRate is < MinEndfieldRefreshRate or > MaxEndfieldRefreshRate)
                 {
-                    errors.Add($"profile {profile.Id} 的 processPriority 非法");
-                }
-
-                if (profile.Game == GameType.Endfield)
-                {
-                    if (hoyo.EndfieldInputMode is not ("touch" or "pc"))
-                    {
-                        errors.Add($"profile {profile.Id} 的 EndfieldInputMode 非法");
-                    }
-
-                    // 分辨率只在固定尺寸时才有意义；跟随串流（auto）时尺寸字段不参与校验，
-                    // 客户端用 0×0 表示"跟随"，这样的尺寸不应让整份配置被判为损坏。
-                    if (!hoyo.EndfieldAutoResolution && !IsEndfieldSizeValid(hoyo.EndfieldWidth, hoyo.EndfieldHeight))
-                    {
-                        errors.Add($"profile {profile.Id} 的 Endfield 分辨率非法");
-                    }
-
-                    if (hoyo.EndfieldRefreshRate is < MinEndfieldRefreshRate or > MaxEndfieldRefreshRate)
-                    {
-                        errors.Add($"profile {profile.Id} 的 Endfield 刷新率非法");
-                    }
+                    errors.Add($"profile {profile.Id} 的 Endfield 刷新率非法");
                 }
             }
         }
