@@ -42,4 +42,14 @@ target_compile_options(EndfieldRuntimeTests PRIVATE /utf-8)
 target_link_options(FakeUnityEndfield PRIVATE /ENTRY:wWinMainCRTStartup)
 target_link_libraries(EndfieldRuntimeTests PRIVATE EndfieldCore)
 
+# Decoy-parent unit tests: every Win32 call replaced by a recording fake.
+# Built on its own; run: build\Release\EndfieldDecoyTests.exe
+add_executable(EndfieldDecoyTests endfield_decoy_tests.cpp endfield_decoy.cpp)
+set_target_properties(EndfieldDecoyTests PROPERTIES
+  CXX_STANDARD 20
+  CXX_STANDARD_REQUIRED YES
+  MSVC_RUNTIME_LIBRARY "MultiThreaded")
+target_compile_options(EndfieldDecoyTests PRIVATE /utf-8)
+target_link_libraries(EndfieldDecoyTests PRIVATE wintrust crypt32 bcrypt rpcrt4)
+
 install(TARGETS EndfieldCore EndfieldRuntime RUNTIME DESTINATION .)
