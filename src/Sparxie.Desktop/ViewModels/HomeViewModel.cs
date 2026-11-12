@@ -1,3 +1,4 @@
+using Sparxie.Infrastructure.Processes;
 using System.Collections.ObjectModel;
 using Sparxie.Contracts.Models;
 using Sparxie.Desktop.Services;
@@ -15,6 +16,17 @@ public sealed class HomeViewModel : ObservableObject
     private string _statusMessage = "准备就绪";
     private bool _isLaunching;
     private readonly HashSet<GameType> _activeGames = new();
+
+    /// <summary>
+    /// 当前页面游戏的进程监视：检测只绑定到当前选中的游戏（<see cref="SelectedGame"/>），换游戏就换盯的进程；
+    /// 以后增加游戏，只要它在 GameExecutables 里登记了进程名就自动适用，不用再改这里。
+    /// </summary>
+    private GameType? _watchedGame;
+
+    private System.Diagnostics.Process? _watchedProcess;
+
+    private Microsoft.UI.Dispatching.DispatcherQueue? _dispatcher;
+    private int _refreshing;
     private string? _backgroundPath;
 
     public HomeViewModel(DesktopDataService data, LauncherService launcher)
@@ -27,6 +39,180 @@ public sealed class HomeViewModel : ObservableObject
         SelectProfileCommand = new ParameterRelayCommand(SelectProfile);
         LaunchCommand = new AsyncRelayCommand(LaunchAsync, () => SelectedProfile is not null && !IsLaunching && !IsSelectedGameActive);
         Refresh();
+        try
+        {
+            _dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        }
+        catch
+        {
+            _dispatcher = null; // 没有 UI 线程（单元测试）：不检测进程
+        }
+
+        _ = RefreshGameProcessAsync();
+    }
+
+    /// <summary>
+    /// 检测<b>当前页面游戏</b>是不是已经在运行（启动器重开后仍在运行的、被别的启动器启动的）。不轮询：
+    /// 只在启动器启动、切换游戏、窗口被激活、点启动之前各检测一次；发现后订阅这个进程的退出事件，退出时自动恢复，和 Starward 的做法一致。
+    /// </summary>
+    public async Task RefreshGameProcessAsync()
+    {
+        if (_dispatcher is null || Interlocked.Exchange(ref _refreshing, 1) == 1)
+        {
+            return;
+        }
+
+        try
+        {
+            GameType game;
+            do
+            {
+                game = SelectedGame;
+                if (_watchedGame is { } watching && watching != game)
+                {
+                    StopWatching(); // 换了游戏：放掉之前盯的进程
+                    RaiseLaunchState();
+                }
+
+                var processes = await Task.Run(() => GameProcessDetector.FindRunning(game)).ConfigureAwait(true);
+                if (SelectedGame != game)
+                {
+                    DisposeAll(processes); // 检测期间切了游戏：丢弃结果，下一轮重新检测
+                    continue;
+                }
+
+                if (processes.Length == 0)
+                {
+                    if (StopWatching())
+                    {
+                        RaiseLaunchState();
+                    }
+
+                    continue;
+                }
+
+                if (_watchedProcess is { } existing && _watchedGame == game && !existing.HasExited)
+                {
+                    DisposeAll(processes);
+                    continue;
+                }
+
+                StopWatching();
+                Watch(game, processes);
+                RaiseLaunchState();
+            }
+            while (SelectedGame != game);
+        }
+        catch
+        {
+            // 检测失败时保持上一次的结果。
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _refreshing, 0);
+        }
+    }
+
+    private void Watch(GameType game, System.Diagnostics.Process[] processes)
+    {
+        var watched = processes[0];
+        DisposeAll(processes.Skip(1));
+        _watchedGame = game;
+        _watchedProcess = watched;
+        try
+        {
+            watched.EnableRaisingEvents = true;
+            watched.Exited += (_, _) => _dispatcher?.TryEnqueue(() =>
+            {
+                if (ReferenceEquals(_watchedProcess, watched))
+                {
+                    StopWatching();
+                    RaiseLaunchState();
+                }
+            });
+            if (watched.HasExited)
+            {
+                StopWatching();
+            }
+        }
+        catch
+        {
+            // 管理员权限的游戏进程，普通权限的启动器打不开它的句柄，订阅不了 Exited（实测会检测不到退出）。
+            // 退回只盯这一个游戏、每秒按进程名确认还在不在（进程枚举不需要打开句柄），游戏退出或换游戏就停。
+            StartExitFallback(game, watched);
+        }
+    }
+
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _exitFallback;
+
+    private void StartExitFallback(GameType game, System.Diagnostics.Process watched)
+    {
+        if (_dispatcher is null)
+        {
+            return;
+        }
+
+        var timer = _dispatcher.CreateTimer();
+        timer.Interval = TimeSpan.FromSeconds(1);
+        var checking = 0;
+        timer.Tick += async (_, _) =>
+        {
+            if (!ReferenceEquals(_watchedProcess, watched))
+            {
+                timer.Stop();
+                return;
+            }
+
+            if (Interlocked.Exchange(ref checking, 1) == 1)
+            {
+                return;
+            }
+
+            try
+            {
+                var stillRunning = await Task.Run(() =>
+                {
+                    var found = GameProcessDetector.FindRunning(game);
+                    DisposeAll(found);
+                    return found.Length > 0;
+                }).ConfigureAwait(true);
+                if (!stillRunning && ReferenceEquals(_watchedProcess, watched))
+                {
+                    timer.Stop();
+                    StopWatching();
+                    RaiseLaunchState();
+                }
+            }
+            catch
+            {
+                // 这一轮检测失败，下一秒再试。
+            }
+            finally
+            {
+                Interlocked.Exchange(ref checking, 0);
+            }
+        };
+        _exitFallback = timer;
+        timer.Start();
+    }
+
+    private bool StopWatching()
+    {
+        _exitFallback?.Stop();
+        _exitFallback = null;
+        var process = _watchedProcess;
+        _watchedProcess = null;
+        _watchedGame = null;
+        process?.Dispose();
+        return process is not null;
+    }
+
+    private static void DisposeAll(IEnumerable<System.Diagnostics.Process> processes)
+    {
+        foreach (var process in processes)
+        {
+            process.Dispose();
+        }
     }
 
     public ObservableCollection<ProfileListItemViewModel> Profiles { get; }
@@ -59,6 +245,7 @@ public sealed class HomeViewModel : ObservableObject
             RefreshProfiles();
             RebuildEntries();
             _ = LoadBackgroundAsync(value);
+            _ = RefreshGameProcessAsync();
         }
     }
 
@@ -335,7 +522,7 @@ public sealed class HomeViewModel : ObservableObject
     }
 
     /// <summary>当前选中的游戏已有会话在运行（同款游戏同一时间只允许一个会话）。</summary>
-    public bool IsSelectedGameActive => SelectedProfile is { } profile && _activeGames.Contains(profile.Game);
+    public bool IsSelectedGameActive => SelectedProfile is { } profile && (_activeGames.Contains(profile.Game) || (_watchedProcess is not null && _watchedGame == profile.Game));
 
     /// <summary>启动按钮文字：启动中 / 运行中 / 启动游戏。</summary>
     public string LaunchLabel => IsLaunching ? "启动中…" : IsSelectedGameActive ? "运行中" : "启动游戏";
@@ -542,6 +729,12 @@ public sealed class HomeViewModel : ObservableObject
         }
 
         var profile = SelectedProfile;
+        await RefreshGameProcessAsync().ConfigureAwait(true);
+        if (IsSelectedGameActive)
+        {
+            return; // 游戏已经在运行（刚被别的启动器启动），按钮会变成“运行中”
+        }
+
         IsLaunching = true;
         StatusMessage = $"正在启动 {profile.DisplayName}…";
         try

@@ -444,6 +444,12 @@ public sealed partial class MainWindow : Window
 
     private void OnFirstActivated(object sender, WindowActivatedEventArgs args)
     {
+        // 窗口被激活时重新检测一次游戏进程（别的启动器可能启动 / 退出了游戏）。
+        if (args.WindowActivationState != WindowActivationState.Deactivated)
+        {
+            _ = _viewModel.Home.RefreshGameProcessAsync();
+        }
+
         UpdateWindowHidden();
         ApplyVideoPause();
         // 系统会在激活时恢复上次保存的窗口摆放，覆盖构造期设置；延迟到恢复完成后再按 DPI 定尺寸。
