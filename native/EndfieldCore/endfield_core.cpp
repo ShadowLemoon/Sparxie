@@ -3,15 +3,18 @@
 
 #include <Windows.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <mutex>
 #include <string>
 
 #include <TlHelp32.h>
 
+#include "endfield_decoy.h"
 #include "endfield_shared.h"
 
 namespace {
@@ -23,6 +26,12 @@ using endfield_shared::SharedState;
 struct Session {
   EndfieldLaunchRequest request{};
   std::wstring executable;
+  std::wstring parent_source;
+  uint32_t flags = 0;
+  endfield::Ops ops = endfield::RealOps();
+  endfield::Decoy decoy;
+  std::mutex decoy_lock;  // the wait loop and the release both end the decoy
+  DWORD parent_seen = 0;
   void *job = nullptr;
   HANDLE process = nullptr;
   HANDLE mapping = nullptr;
@@ -147,6 +156,51 @@ std::wstring BuildCommandLine(const Session &session) {
   return command;
 }
 
+// Ends the decoy parent once the game is gone (the plugin disposes its bridge after WaitForExit): terminate, wait, remove the folder.
+void ReleaseDecoy(Session &session) {
+  std::lock_guard<std::mutex> guard(session.decoy_lock);
+  endfield::ReleaseDecoy(session.ops, session.decoy);
+}
+
+struct DecoyFailure {
+  EndfieldError error;
+  const wchar_t *message;
+};
+
+DecoyFailure Describe(endfield::DecoyError error) {
+  using endfield::DecoyError;
+  switch (error) {
+  case DecoyError::source_missing:
+    return {ENDFIELD_ERR_DECOY_FAILED, L"父进程来源 EXE 不存在（默认游戏目录下的 PlatformProcess.exe）"};
+  case DecoyError::signer_game:
+    return {ENDFIELD_ERR_DECOY_FAILED, L"游戏 EXE 的数字签名无效"};
+  case DecoyError::signer_source:
+    return {ENDFIELD_ERR_DECOY_FAILED, L"父进程来源 EXE 的数字签名无效"};
+  case DecoyError::signer_mismatch:
+    return {ENDFIELD_ERR_DECOY_FAILED, L"父进程来源签名者与游戏签名者不一致"};
+  case DecoyError::stage_dir:
+    return {ENDFIELD_ERR_DECOY_FAILED, L"无法在游戏目录创建父进程暂存目录"};
+  case DecoyError::stage_copy:
+    return {ENDFIELD_ERR_DECOY_FAILED, L"无法暂存 Games.exe"};
+  case DecoyError::stage_signer:
+    return {ENDFIELD_ERR_DECOY_FAILED, L"暂存的 Games.exe 签名验证失败"};
+  case DecoyError::create_suspended:
+    return {ENDFIELD_ERR_DECOY_FAILED, L"无法创建挂起的 Games.exe 父进程"};
+  case DecoyError::attr_init:
+    return {ENDFIELD_ERR_DECOY_FAILED, L"InitializeProcThreadAttributeList 失败"};
+  case DecoyError::attr_update:
+    return {ENDFIELD_ERR_DECOY_FAILED, L"UpdateProcThreadAttribute(PARENT_PROCESS) 失败"};
+  case DecoyError::create_game_elevation:
+    return {ENDFIELD_ERR_DECOY_FAILED, L"Endfield.exe 需要管理员权限（CreateProcess 740），会话宿主未提升"};
+  case DecoyError::create_game:
+    return {ENDFIELD_ERR_DECOY_FAILED, L"无法以 Games.exe 为父进程创建 Endfield.exe"};
+  case DecoyError::parent_mismatch:
+    return {ENDFIELD_ERR_DECOY_FAILED, L"游戏进程的父进程不是 Games.exe"};
+  default:
+    return {ENDFIELD_ERR_INTERNAL, L"Endfield 父进程启动出错"};
+  }
+}
+
 void CloseSessionHandles(Session &session) {
   if (session.shared)
     UnmapViewOfFile(session.shared);
@@ -171,7 +225,7 @@ endfield_create_session(const EndfieldLaunchRequest *request,
               L"缺少启动请求");
     return ENDFIELD_ERR_INVALID_ARGUMENT;
   }
-  if (request->size < sizeof(EndfieldLaunchRequest) ||
+  if (request->size < ENDFIELD_REQUEST_SIZE_V1 ||
       request->abi_version != ENDFIELD_ABI_VERSION) {
     SetResult(result, ENDFIELD_ERR_ABI_MISMATCH, ENDFIELD_STAGE_VALIDATION,
               L"Endfield ABI 不匹配");
@@ -189,7 +243,13 @@ endfield_create_session(const EndfieldLaunchRequest *request,
     return ENDFIELD_ERR_CONFIG_INVALID;
   }
   auto *session = new Session();
-  session->request = *request;
+  // the first release's request ends before `flags`: copy only what the caller sent, the rest stays at the defaults
+  std::memcpy(&session->request, request, std::min<size_t>(request->size, sizeof(EndfieldLaunchRequest)));
+  if (request->size >= sizeof(EndfieldLaunchRequest)) {
+    session->flags = request->flags;
+    if (request->parent_source_path && request->parent_source_path_chars)
+      session->parent_source.assign(request->parent_source_path, request->parent_source_path_chars);
+  }
   session->executable.assign(request->game_executable_path,
                              request->game_executable_path_chars);
   session->active = true;
@@ -227,29 +287,62 @@ ENDFIELD_API EndfieldError endfield_launch(void *handle,
     return ENDFIELD_ERR_PROCESS_NOT_FOUND;
   }
 
+  // Collapse's method: Endfield.exe is created with a suspended, never resumed Games.exe as its parent
+  // (PROC_THREAD_ATTRIBUTE_PARENT_PROCESS). Both join the session job, so both end with it.
+  const bool verify_signer = (session->flags & ENDFIELD_FLAG_TEST_SKIP_SIGNER_CHECK) == 0;
+  const bool launch_only = (session->flags & ENDFIELD_FLAG_TEST_LAUNCH_ONLY) != 0;
+  endfield::SweepStale(game_path.parent_path());
+  DWORD os_error = 0;
+  if (const auto staged = endfield::StageDecoy(session->ops, game_path, session->parent_source, verify_signer, session->decoy, &os_error);
+      staged != endfield::DecoyError::ok) {
+    const auto failure = Describe(staged);
+    SetLastError(os_error);
+    SetResult(result, failure.error, ENDFIELD_STAGE_DECOY, failure.message);
+    return failure.error;
+  }
+  if (session->job &&
+      !AssignProcessToJobObject(static_cast<HANDLE>(session->job), session->decoy.process)) {
+    const DWORD error = GetLastError();
+    ReleaseDecoy(*session);
+    SetLastError(error);
+    SetResult(result, ENDFIELD_ERR_INTERNAL, ENDFIELD_STAGE_DECOY, L"无法把 Games.exe 加入会话 Job");
+    return ENDFIELD_ERR_INTERNAL;
+  }
+
   std::wstring command = BuildCommandLine(*session);
-  STARTUPINFOW startup{};
-  startup.cb = sizeof(startup);
   PROCESS_INFORMATION process_info{};
-  const auto working_directory = game_path.parent_path().wstring();
-  if (!CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE,
-                      CREATE_SUSPENDED, nullptr, working_directory.c_str(),
-                      &startup, &process_info)) {
-    SetResult(result, ENDFIELD_ERR_PROCESS_NOT_FOUND, ENDFIELD_STAGE_VALIDATION,
-              L"无法创建 Endfield.exe");
-    return ENDFIELD_ERR_PROCESS_NOT_FOUND;
+  if (const auto started = endfield::StartWithParent(session->ops, session->decoy, game_path, command, CREATE_SUSPENDED, process_info, &os_error,
+                                                     &session->parent_seen);
+      started != endfield::DecoyError::ok) {
+    const auto failure = Describe(started);
+    ReleaseDecoy(*session);
+    SetLastError(os_error);
+    SetResult(result, failure.error, ENDFIELD_STAGE_DECOY, failure.message);
+    return failure.error;
   }
   session->process = process_info.hProcess;
   session->pid = process_info.dwProcessId;
 
+  // a child of a process in a job joins that job already; assigning it a second time is refused (ERROR_ACCESS_DENIED)
+  BOOL in_job = FALSE;
   if (session->job &&
+      !(IsProcessInJob(session->process, static_cast<HANDLE>(session->job), &in_job) && in_job) &&
       !AssignProcessToJobObject(static_cast<HANDLE>(session->job),
                                 session->process)) {
     TerminateProcess(session->process, 1);
     WaitForSingleObject(session->process, 5000);
+    CloseHandle(process_info.hThread);
+    ReleaseDecoy(*session);
     SetResult(result, ENDFIELD_ERR_INTERNAL, ENDFIELD_STAGE_PATCH,
               L"无法加入会话 Job");
     return ENDFIELD_ERR_INTERNAL;
+  }
+
+  if (launch_only) {
+    ResumeThread(process_info.hThread);
+    CloseHandle(process_info.hThread);
+    SetResult(result, ENDFIELD_OK, ENDFIELD_STAGE_DECOY);
+    return ENDFIELD_OK;
   }
 
   const auto game_assembly = game_path.parent_path() / L"GameAssembly.dll";
@@ -257,6 +350,7 @@ ENDFIELD_API EndfieldError endfield_launch(void *handle,
     TerminateProcess(session->process, 1);
     WaitForSingleObject(session->process, 5000);
     CloseHandle(process_info.hThread);
+    ReleaseDecoy(*session);
     SetResult(result, ENDFIELD_ERR_SCAN_FAILED, ENDFIELD_STAGE_SCAN_TOUCH,
               L"未找到 GameAssembly.dll，未执行 Endfield 扫描");
     return ENDFIELD_ERR_SCAN_FAILED;
@@ -275,6 +369,7 @@ ENDFIELD_API EndfieldError endfield_launch(void *handle,
     TerminateProcess(session->process, 1);
     WaitForSingleObject(session->process, 5000);
     CloseHandle(process_info.hThread);
+    ReleaseDecoy(*session);
     SetResult(result, ENDFIELD_ERR_INTERNAL, ENDFIELD_STAGE_PATCH,
               L"无法建立 Endfield 会话共享状态");
     return ENDFIELD_ERR_INTERNAL;
@@ -299,8 +394,8 @@ ENDFIELD_API EndfieldError endfield_launch(void *handle,
     TerminateProcess(session->process, 1);
     WaitForSingleObject(session->process, 5000);
     CloseHandle(process_info.hThread);
-    SetResult(result, ENDFIELD_ERR_PATCH_FAILED, ENDFIELD_STAGE_PATCH,
-              L"Endfield Runtime 注入失败");
+    ReleaseDecoy(*session);
+    SetResult(result, ENDFIELD_ERR_PATCH_FAILED, ENDFIELD_STAGE_PATCH, L"Endfield Runtime 注入失败");
     return ENDFIELD_ERR_PATCH_FAILED;
   }
   ResumeThread(process_info.hThread);
@@ -333,10 +428,25 @@ ENDFIELD_API EndfieldError endfield_launch(void *handle,
   if (!injected) {
     TerminateProcess(session->process, 1);
     WaitForSingleObject(session->process, 5000);
+    ReleaseDecoy(*session);
     SetResult(result, ENDFIELD_ERR_PATCH_FAILED, ENDFIELD_STAGE_PATCH, L"Endfield Runtime 注入失败");
     return ENDFIELD_ERR_PATCH_FAILED;
   }
   SetResult(result, ENDFIELD_OK, ENDFIELD_STAGE_PATCH);
+  return ENDFIELD_OK;
+}
+
+ENDFIELD_API EndfieldError endfield_get_session_info(void *handle,
+                                                     EndfieldSessionInfo *info) {
+  auto *session = static_cast<Session *>(handle);
+  if (!session || !session->active || !info || info->size < sizeof(EndfieldSessionInfo))
+    return ENDFIELD_ERR_INVALID_ARGUMENT;
+  std::lock_guard<std::mutex> guard(session->decoy_lock);
+  info->game_pid = session->pid;
+  info->decoy_pid = session->decoy.process ? session->decoy.pid : 0;
+  info->parent_pid_seen = session->parent_seen;
+  info->decoy_image = session->decoy.staged.c_str();
+  info->decoy_image_chars = static_cast<uint32_t>(session->decoy.staged.native().size());
   return ENDFIELD_OK;
 }
 
@@ -368,6 +478,7 @@ ENDFIELD_API EndfieldError endfield_wait_game_exit(void *handle,
   const DWORD wait = WaitForSingleObject(
       session->process, timeout_ms == 0 ? INFINITE : timeout_ms);
   if (wait == WAIT_OBJECT_0) {
+    ReleaseDecoy(*session);
     SetResult(result, ENDFIELD_OK, ENDFIELD_STAGE_WAIT);
     return ENDFIELD_OK;
   }
@@ -385,7 +496,10 @@ ENDFIELD_API EndfieldError endfield_release(void *handle) {
   if (session->process) {
     DWORD code = STILL_ACTIVE;
     if (GetExitCodeProcess(session->process, &code) && code == STILL_ACTIVE) {
-      // Running sessions are intentionally left alive; only the mapping closes.
+      // Running sessions are intentionally left alive, and so is the decoy parent the game was started under;
+      // only the mapping closes. (The decoy then ends with the game's session job, or stays until the game exits.)
+    } else {
+      ReleaseDecoy(*session);
     }
   }
   CloseSessionHandles(*session);

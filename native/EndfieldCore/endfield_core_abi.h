@@ -28,6 +28,8 @@ typedef enum EndfieldError {
   ENDFIELD_ERR_SESSION_NOT_ACTIVE = 8,
   ENDFIELD_ERR_NOT_SUPPORTED = 9,
   ENDFIELD_ERR_INTERNAL = 10,
+  // The decoy-parent launch failed (stage ENDFIELD_STAGE_DECOY; EndfieldResult.message says which step).
+  ENDFIELD_ERR_DECOY_FAILED = 11,
 } EndfieldError;
 
 typedef struct EndfieldLaunchRequest {
@@ -41,7 +43,19 @@ typedef struct EndfieldLaunchRequest {
   int32_t refresh_rate;
   const wchar_t *game_executable_path;
   uint32_t game_executable_path_chars;
+  // ---- added after the first release; read only when `size` covers them (an older client sends ENDFIELD_REQUEST_SIZE_V1 bytes) ----
+  uint32_t flags;  // ENDFIELD_FLAG_*
+  uint32_t parent_source_path_chars;
+  // The image copied to Games.exe and used as the game's parent. NULL/0 = PlatformProcess.exe in the game's folder.
+  const wchar_t *parent_source_path;
 } EndfieldLaunchRequest;
+
+// The size of the request before `flags` existed (the 4 bytes after game_executable_path_chars were padding).
+#define ENDFIELD_REQUEST_SIZE_V1 48u
+
+// Test-only switches. The Broker's protocol has no field for them and SessionHost never sets them.
+#define ENDFIELD_FLAG_TEST_SKIP_SIGNER_CHECK 0x1u  // do not require Authenticode signatures on the game and the decoy source
+#define ENDFIELD_FLAG_TEST_LAUNCH_ONLY 0x2u        // create game + decoy and resume; no scan, no Runtime injection
 
 typedef struct EndfieldResult {
   uint32_t size;
@@ -56,6 +70,7 @@ typedef struct EndfieldResult {
 #define ENDFIELD_STAGE_SCAN_TOUCH 2u
 #define ENDFIELD_STAGE_SCAN_FPS 3u
 #define ENDFIELD_STAGE_PATCH 4u
+#define ENDFIELD_STAGE_DECOY 5u
 #define ENDFIELD_STAGE_WAIT 6u
 
 ENDFIELD_API
@@ -66,6 +81,17 @@ ENDFIELD_API EndfieldError endfield_attach_job(void *session, void *job_handle,
                                                EndfieldResult *result);
 ENDFIELD_API EndfieldError endfield_launch(void *session,
                                            EndfieldResult *result);
+// What the launch produced; valid between a successful endfield_launch and endfield_release.
+typedef struct EndfieldSessionInfo {
+  uint32_t size;
+  uint32_t game_pid;
+  uint32_t decoy_pid;        // the suspended Games.exe, 0 once it was released
+  uint32_t parent_pid_seen;  // the game's InheritedFromUniqueProcessId as the OS reports it
+  const wchar_t *decoy_image;  // the staged Games.exe path (owned by the session)
+  uint32_t decoy_image_chars;
+} EndfieldSessionInfo;
+
+ENDFIELD_API EndfieldError endfield_get_session_info(void *session, EndfieldSessionInfo *info);
 ENDFIELD_API EndfieldError endfield_set_target_fps(void *session,
                                                    int32_t target_fps,
                                                    EndfieldResult *result);

@@ -51,6 +51,41 @@
   运行时注入流程，没有复制其源文件；若随发布包分发其 MIT 代码或资源，必须同时保留
   原项目的版权与许可证声明。该功能仅用于免费产品，并保留现有注入风险提示。
 
+## Endfield 启动方式（Collapse Launcher Endfield 插件）
+
+- 项目：Hi3Helper.Plugin.Endfield（Collapse Launcher 的 Endfield 插件，含 Hi3Helper.Hypergryph.Core）
+- 许可：MIT
+- 版权：Copyright (c) 2025 Collapse Launcher
+- 来源：https://github.com/misaka10843/Hi3Helper.Plugin.Endfield（提交 1efd304855ed68535d50e11504d790cd7004a3b1，`Hi3Helper.Hypergryph.Core/Management/GameDecoyParentBridge.cs`、`ParentProcessBridge.cs`、`Hi3Helper.Plugin.Endfield/Exports.GameLaunch.cs`）
+- 说明：`native/EndfieldCore/endfield_decoy.cpp` 将其启动方法由 C# 移植为 C++：把游戏目录下同签名者的
+  `PlatformProcess.exe` 复制为 `Games.exe` 并以挂起状态启动、不恢复，再以它为
+  `PROC_THREAD_ATTRIBUTE_PARENT_PROCESS` 调用 `CreateProcessW` 创建 `Endfield.exe`；创建前后用
+  `WinVerifyTrust` 与签名者证书哈希比对两份映像。移植部分保留上述版权与许可声明，其 MIT 许可全文如下。
+
+```
+MIT License
+
+Copyright (c) 2025 Collapse Launcher
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ---
 
 发布门禁检查项：

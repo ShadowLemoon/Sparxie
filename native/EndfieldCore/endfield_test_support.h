@@ -68,11 +68,13 @@ struct Session {
   EndfieldResult result{};
   EndfieldLaunchRequest request{};
   std::wstring game_path;
+  std::wstring source;
 };
 
-inline Session NewSession(const fs::path &game) {
+inline Session NewSession(const fs::path &game, uint32_t flags = 0, const std::wstring &source = L"") {
   Session s;
   s.game_path = game.wstring();
+  s.source = source;
   s.request.size = sizeof(EndfieldLaunchRequest);
   s.request.abi_version = ENDFIELD_ABI_VERSION;
   s.request.fps_unlock_enabled = 1;
@@ -83,6 +85,9 @@ inline Session NewSession(const fs::path &game) {
   s.request.refresh_rate = 60;
   s.request.game_executable_path = s.game_path.c_str();
   s.request.game_executable_path_chars = static_cast<uint32_t>(s.game_path.size());
+  s.request.flags = flags;
+  s.request.parent_source_path = s.source.empty() ? nullptr : s.source.c_str();
+  s.request.parent_source_path_chars = static_cast<uint32_t>(s.source.size());
   s.result.size = sizeof(EndfieldResult);
   return s;
 }

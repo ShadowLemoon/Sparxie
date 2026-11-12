@@ -16,6 +16,7 @@ namespace {
 struct UnityFixture {
   TempDir dir;
   fs::path game = dir.path / L"Endfield.exe";
+  fs::path source = dir.path / L"PlatformProcess.exe";
   fs::path record = dir.path / L"record.txt";
   fs::path data = dir.path / L"data";
   UnityFixture(DWORD life_ms) {
@@ -25,6 +26,7 @@ struct UnityFixture {
     fs::copy_file(beside / L"FakeUnityEndfield.exe", game);
     fs::copy_file(beside / L"FakeGameAssembly.dll", dir.path / L"GameAssembly.dll");
     fs::copy_file(beside / L"FakeUnityPlayer.dll", dir.path / L"UnityPlayer.dll");
+    fs::copy_file(beside / L"FakeEndfield.exe", source);
     SetEnvironmentVariableW(L"ECL_FAKE_RECORD", record.c_str());
     SetEnvironmentVariableW(L"ECL_FAKE_LIFE_MS", std::to_wstring(life_ms).c_str());
     SetEnvironmentVariableW(L"SPARXIE_DATA_DIR", data.c_str());
@@ -41,7 +43,7 @@ int Number(const std::wstring &record, const wchar_t *key) { return _wtoi(Field(
 
 void RunUnityGame(UnityFixture &fx, int32_t touch_ui_enabled, int32_t unlock) {
   Job job;
-  Session s = NewSession(fx.game);
+  Session s = NewSession(fx.game, ENDFIELD_FLAG_TEST_SKIP_SIGNER_CHECK);
   s.request.touch_ui_enabled = touch_ui_enabled;
   s.request.fps_unlock_enabled = unlock;
   s.request.target_fps = 144;
