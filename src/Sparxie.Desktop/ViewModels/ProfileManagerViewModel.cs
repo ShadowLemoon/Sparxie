@@ -469,7 +469,6 @@ public sealed class ProfileEditorViewModel : ObservableObject
     private double _genshinPreset60Fps = 1000;
     private bool _genshinTouchUiScaleOverrideEnabled;
     private double _genshinTouchUiScalePercent = 400;
-    private bool _overrideResolution;
     private bool _fullscreen = true;
     private bool _borderless;
     private bool _customResolution;
@@ -581,7 +580,12 @@ public sealed class ProfileEditorViewModel : ObservableObject
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int index);
 
-    /// <summary>总开关：开启才会在启动前写入分辨率与全屏设置；关闭时不修改游戏自己的设置。</summary>
+    private bool _overrideResolution;
+
+    /// <summary>
+    /// 总开关：开启才会在启动前备份并写入这套分辨率 / 全屏（游戏退出后恢复）；关闭时完全不碰游戏自己的设置。
+    /// 关闭时全屏 / 自定义分辨率 / 下拉 / 宽高联动禁用。
+    /// </summary>
     public bool OverrideResolution
     {
         get => _overrideResolution;
@@ -596,7 +600,14 @@ public sealed class ProfileEditorViewModel : ObservableObject
         }
     }
 
-    public bool Fullscreen { get => _fullscreen; set => SetProperty(ref _fullscreen, value); }
+    /// <summary>总开关关闭时，全屏 / 自定义分辨率 / 下拉 / 宽高联动禁用。</summary>
+    public bool ResolutionControlsEnabled => _overrideResolution;
+
+    public bool Fullscreen
+    {
+        get => _fullscreen;
+        set => SetProperty(ref _fullscreen, value);
+    }
 
     /// <summary>使用无边框窗口：自动注入 -popupwindow，与总开关、是否全屏都无关。</summary>
     public bool Borderless
@@ -641,7 +652,6 @@ public sealed class ProfileEditorViewModel : ObservableObject
 
     public double CustomHeight { get => _customHeight; set => SetProperty(ref _customHeight, value); }
 
-    public bool ResolutionControlsEnabled => _overrideResolution;
 
     public bool PresetEnabled => _overrideResolution && !_customResolution;
 
@@ -671,6 +681,7 @@ public sealed class ProfileEditorViewModel : ObservableObject
 
     private LaunchSettings BuildLaunch()
     {
+        // 总开关开启才带分辨率 / 全屏：启动前备份并写入游戏注册表，游戏退出后恢复备份值；关闭时 null = 不修改。
         int? width = null, height = null;
         bool? fullscreen = null;
         if (_overrideResolution)

@@ -154,6 +154,14 @@ public class GameRegistrySettingsTests
         public void SetDword(string subKey, string name, int value) => Keys[subKey][name] = value;
 
         public void SetBytes(string subKey, string name, byte[] value) => Keys[subKey][name] = value;
+
+        public void DeleteValue(string subKey, string name)
+        {
+            if (Keys.TryGetValue(subKey, out var values))
+            {
+                values.Remove(name);
+            }
+        }
     }
 
     private const string GenshinCn = @"Software\miHoYo\原神";
@@ -361,5 +369,85 @@ public class GameRegistrySettingsTests
             InstalledServerLocator.Resolve(GameType.ZenlessZoneZero, @"E:\Games\ZZZ2\ZenlessZoneZero.exe", registry));
         Assert.Equal(GameServer.Cn,
             InstalledServerLocator.Resolve(GameType.ZenlessZoneZero, @"E:\Games\ZZZ\ZenlessZoneZero.exe", registry));
+    }
+
+    [Fact]
+    public void 启动前备份原值写入我们的值退出后恢复()
+    {
+        var registry = new FakeRegistry(GenshinCn);
+        registry.SetDword(GenshinCn, GameRegistrySettings.ResolutionWidth, 2560);
+        registry.SetDword(GenshinCn, GameRegistrySettings.ResolutionHeight, 1440);
+        registry.SetDword(GenshinCn, GameRegistrySettings.IsFullscreen, 0);
+
+        var (result, backup) = GameRegistrySettings.ApplyWithBackup(
+            GameType.Genshin, @"D:\Games\YuanShen.exe",
+            new LaunchSettings { Width = 1280, Height = 720, Fullscreen = true }, registry);
+
+        Assert.True(result.Applied);
+        Assert.Equal(1280, registry.GetDword(GenshinCn, GameRegistrySettings.ResolutionWidth));
+        Assert.Equal(1, registry.GetDword(GenshinCn, GameRegistrySettings.IsFullscreen));
+
+        GameRegistrySettings.Restore(backup, registry);
+
+        Assert.Equal(2560, registry.GetDword(GenshinCn, GameRegistrySettings.ResolutionWidth));
+        Assert.Equal(1440, registry.GetDword(GenshinCn, GameRegistrySettings.ResolutionHeight));
+        Assert.Equal(0, registry.GetDword(GenshinCn, GameRegistrySettings.IsFullscreen));
+    }
+
+    [Fact]
+    public void 原来没有的值恢复时删除()
+    {
+        var registry = new FakeRegistry(GenshinCn);
+        registry.SetDword(GenshinCn, GameRegistrySettings.ResolutionWidth, 2560);
+        registry.SetDword(GenshinCn, GameRegistrySettings.ResolutionHeight, 1440); // 没有 IsFullscreen
+
+        var (_, backup) = GameRegistrySettings.ApplyWithBackup(
+            GameType.Genshin, @"D:\Games\YuanShen.exe", new LaunchSettings { Width = 1280, Height = 720, Fullscreen = true }, registry);
+        Assert.Equal(1, registry.GetDword(GenshinCn, GameRegistrySettings.IsFullscreen));
+
+        GameRegistrySettings.Restore(backup, registry);
+
+        Assert.Null(registry.GetDword(GenshinCn, GameRegistrySettings.IsFullscreen));
+    }
+
+    [Fact]
+    public void 开关没开时既不备份也不写()
+    {
+        var registry = new FakeRegistry(GenshinCn);
+        registry.SetDword(GenshinCn, GameRegistrySettings.ResolutionWidth, 2560);
+
+        var (result, backup) = GameRegistrySettings.ApplyWithBackup(
+            GameType.Genshin, @"D:\Games\YuanShen.exe", new LaunchSettings { Borderless = true }, registry);
+
+        Assert.False(result.Applied);
+        Assert.True(backup.IsEmpty);
+        Assert.Equal(2560, registry.GetDword(GenshinCn, GameRegistrySettings.ResolutionWidth));
+    }
+
+    [Fact]
+    public void 只存了全屏时宽高用默认的1920x1080()
+    {
+        var registry = new FakeRegistry(GenshinCn);
+
+        GameRegistrySettings.ApplyWithBackup(GameType.Genshin, @"D:\Games\YuanShen.exe", new LaunchSettings { Fullscreen = true }, registry);
+
+        Assert.Equal(1920, registry.GetDword(GenshinCn, GameRegistrySettings.ResolutionWidth));
+        Assert.Equal(1080, registry.GetDword(GenshinCn, GameRegistrySettings.ResolutionHeight));
+        Assert.Equal(1, registry.GetDword(GenshinCn, GameRegistrySettings.IsFullscreen));
+    }
+
+    [Fact]
+    public void 备份可以落盘再读回来恢复()
+    {
+        var registry = new FakeRegistry(GenshinCn);
+        registry.SetDword(GenshinCn, GameRegistrySettings.ResolutionWidth, 2560);
+        var (_, backup) = GameRegistrySettings.ApplyWithBackup(
+            GameType.Genshin, @"D:\Games\YuanShen.exe", new LaunchSettings { Width = 1280, Height = 720, Fullscreen = false }, registry);
+
+        var reloaded = GameRegistryBackup.FromJson(backup.ToJson())!;
+        reloaded.Restore(registry);
+
+        Assert.Equal(2560, registry.GetDword(GenshinCn, GameRegistrySettings.ResolutionWidth));
+        Assert.Null(registry.GetDword(GenshinCn, GameRegistrySettings.ResolutionHeight));
     }
 }

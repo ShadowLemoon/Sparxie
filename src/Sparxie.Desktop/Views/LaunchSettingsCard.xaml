@@ -10,11 +10,12 @@
         <StackPanel Spacing="4">
             <TextBlock Text="分辨率" Style="{StaticResource SectionHeading}" Margin="0,0,0,8" />
 
-            <ToggleSwitch Header="覆盖游戏的分辨率与全屏设置" OnContent="开" OffContent="关"
-                          IsOn="{Binding OverrideResolution, Mode=TwoWay}" />
+            <CheckBox Content="使用无边框窗口" IsChecked="{Binding Borderless, Mode=TwoWay}" Margin="0,0,0,8" />
+            <ToggleSwitch Header="启动时覆盖游戏的分辨率与全屏（退出后恢复）" OnContent="开" OffContent="关"
+                          IsOn="{Binding OverrideResolution, Mode=TwoWay}" Margin="0,0,0,8" />
+
             <CheckBox Content="全屏" IsChecked="{Binding Fullscreen, Mode=TwoWay}"
                       IsEnabled="{Binding ResolutionControlsEnabled}" />
-            <CheckBox Content="使用无边框窗口" IsChecked="{Binding Borderless, Mode=TwoWay}" />
             <CheckBox Content="自定义分辨率" IsChecked="{Binding CustomResolution, Mode=TwoWay}"
                       IsEnabled="{Binding ResolutionControlsEnabled}" />
 

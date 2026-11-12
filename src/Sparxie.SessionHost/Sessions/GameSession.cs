@@ -106,6 +106,7 @@ public sealed class GameSession : IAsyncDisposable
                 await _controller.WaitExitAsync(cancellationToken).ConfigureAwait(false);
             }
 
+            RestoreGameRegistrySettings();
             await EmitAsync(SessionStates.Exited, StageCode.Wait, ErrorCode.None,
                 GameExitDescription.Describe(exitCode, DateTimeOffset.UtcNow - runningSince), cancellationToken).ConfigureAwait(false);
         }
@@ -211,24 +212,61 @@ public sealed class GameSession : IAsyncDisposable
         return true;
     }
 
-    /// <summary>把分辨率 / 窗口模式写入游戏注册表设置；返回给 Starting 事件的说明（没有设置返回 null）。</summary>
+    private GameRegistryBackup? _registryBackup;
+
+    /// <summary>备份落盘位置（按游戏区分）：进程被强杀 / 断电后，下次启动先用它把游戏设置恢复回去。</summary>
+    private string BackupFile => Path.Combine(
+        Sparxie.Infrastructure.Configuration.AppDataDirectory.Resolve(), "recovery", $"registry-backup-{_options.Profile.Game}.json");
+
+    /// <summary>
+    /// 启动前：先备份游戏注册表里我们要改的分辨率 / 全屏值，再写入这套配置存的值；游戏进程退出后由 <see cref="RestoreGameRegistrySettings"/> 恢复。
+    /// 这样触屏启动用它自己的一套，键鼠启动（官方启动器等）看到的还是原来的值。返回给 Starting 事件的说明（没有就返回 null）。
+    /// </summary>
     private string? ApplyGameRegistrySettings()
     {
-        var launch = _options.Profile.Launch.ToModel();
-        if (launch is null)
-        {
-            return null;
-        }
-
         try
         {
-            var result = GameRegistrySettings.Apply(
-                _options.Profile.ToGameType(), _options.Profile.ExecutablePath, launch, new CurrentUserGameRegistry());
-            return result.Note ?? (result.Applied ? $"已写入游戏设置（{result.WrittenKeys.Count} 处）" : null);
+            RestoreGameRegistrySettings(); // 上次异常退出遗留的备份先恢复，免得把我们自己写的值当成“原值”备份
+            var registry = new CurrentUserGameRegistry();
+            var (result, backup) = GameRegistrySettings.ApplyWithBackup(
+                _options.Profile.ToGameType(), _options.Profile.ExecutablePath, _options.Profile.Launch.ToModel(), registry);
+            if (result.Applied && !backup.IsEmpty)
+            {
+                _registryBackup = backup;
+                Directory.CreateDirectory(Path.GetDirectoryName(BackupFile)!);
+                File.WriteAllText(BackupFile, backup.ToJson());
+            }
+
+            return result.Note ?? (result.Applied ? $"已写入游戏设置（{result.WrittenKeys.Count} 处），退出后恢复" : null);
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
         {
             return $"写入游戏设置失败：{ex.Message}";
+        }
+    }
+
+    /// <summary>把备份的值写回注册表。可重复调用；没有本次备份时看磁盘上有没有上次遗留的。</summary>
+    private void RestoreGameRegistrySettings()
+    {
+        try
+        {
+            var backup = _registryBackup;
+            if (backup is null && File.Exists(BackupFile))
+            {
+                backup = GameRegistryBackup.FromJson(File.ReadAllText(BackupFile));
+            }
+
+            backup?.Restore(new CurrentUserGameRegistry());
+            _registryBackup = null;
+            if (File.Exists(BackupFile))
+            {
+                File.Delete(BackupFile);
+            }
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
+        {
+            // 恢复失败：保留备份文件，下次启动前再试一次。
+            _ = ex;
         }
     }
 
@@ -286,6 +324,12 @@ public sealed class GameSession : IAsyncDisposable
     private void Cleanup()
     {
         _controller.Dispose();
+
+        // 游戏进程在 Running 前就失败 / 被杀时也要把设置恢复回去（已恢复过则什么都不做）。
+        if (!_announcedRunning || (_gameProcess?.HasExited ?? false))
+        {
+            RestoreGameRegistrySettings();
+        }
 
         if (_gameProcess is not null)
         {

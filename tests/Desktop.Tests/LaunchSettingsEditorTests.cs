@@ -61,7 +61,7 @@ public sealed class LaunchSettingsEditorTests : IDisposable
 
         Assert.True(editor.ToMutation().Launch!.IsEmpty);
         Assert.Equal(string.Empty, editor.CommandLinePreview);
-        Assert.False(editor.ResolutionControlsEnabled);
+        Assert.False(editor.OverrideResolution);
     }
 
     [Fact]
@@ -77,6 +77,37 @@ public sealed class LaunchSettingsEditorTests : IDisposable
         Assert.Null(launch.Fullscreen);
         Assert.True(launch.Borderless);
         Assert.Equal("-popupwindow", editor.CommandLinePreview);
+    }
+
+    [Fact]
+    public void 总开关关闭时分辨率相关控件联动禁用_打开后可用()
+    {
+        var editor = CreateManager().SelectedProfile!;
+        Assert.False(editor.OverrideResolution);
+        Assert.False(editor.ResolutionControlsEnabled);
+        Assert.False(editor.PresetEnabled);
+        Assert.False(editor.CustomEnabled);
+
+        editor.OverrideResolution = true;
+
+        Assert.True(editor.ResolutionControlsEnabled);
+        Assert.True(editor.PresetEnabled);
+        editor.CustomResolution = true;
+        Assert.True(editor.CustomEnabled);
+        Assert.False(editor.PresetEnabled);
+    }
+
+    [Fact]
+    public void 手动关掉总开关后不再带分辨率与全屏()
+    {
+        var editor = CreateManager().SelectedProfile!;
+        editor.OverrideResolution = true;
+        editor.Fullscreen = false;
+
+        editor.OverrideResolution = false;
+
+        var launch = editor.ToMutation().Launch;
+        Assert.True(launch is null || (launch.Width is null && launch.Fullscreen is null));
     }
 
     [Fact]

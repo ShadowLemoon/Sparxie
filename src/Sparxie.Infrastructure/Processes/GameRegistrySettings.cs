@@ -22,6 +22,9 @@ public interface IGameRegistry
     void SetDword(string subKey, string name, int value);
 
     void SetBytes(string subKey, string name, byte[] value);
+
+    /// <summary>删除一个值；键或值不存在时什么都不做。</summary>
+    void DeleteValue(string subKey, string name);
 }
 
 /// <summary>HKCU 下的真实实现；<paramref name="root"/> 只在测试里用来指向临时键。</summary>
@@ -77,6 +80,12 @@ public sealed class CurrentUserGameRegistry : IGameRegistry
         using var key = Registry.CurrentUser.CreateSubKey(Full(subKey));
         key.SetValue(name, value, RegistryValueKind.Binary);
     }
+
+    public void DeleteValue(string subKey, string name)
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(Full(subKey), writable: true);
+        key?.DeleteValue(name, throwOnMissingValue: false);
+    }
 }
 
 /// <summary>一次写入的结果：写了哪些键、跳过了什么，供日志 / 调试提示使用。</summary>
@@ -92,6 +101,60 @@ public sealed record GameRegistryResult(IReadOnlyList<string> WrittenKeys, strin
 /// </summary>
 public static class GameRegistrySettings
 {
+    /// <summary>启动设置里没存过分辨率 / 全屏时用的默认值（1920×1080 全屏）。</summary>
+    public const int DefaultWidth = 1920;
+    public const int DefaultHeight = 1080;
+
+    /// <summary>
+    /// 启动前的完整流程：先把这份 EXE 对应的游戏键里我们会改的值备份下来，再写入我们存的分辨率 / 全屏。
+    /// 返回的备份在游戏进程退出后交给 <see cref="Restore"/> 恢复，键鼠启动（官方启动器等）看到的还是原来的值。
+    /// 没存过的字段用默认值（1920×1080、全屏）。
+    /// </summary>
+    public static (GameRegistryResult Result, GameRegistryBackup Backup) ApplyWithBackup(
+        GameType game, string executablePath, LaunchSettings? launch, IGameRegistry registry)
+    {
+        ArgumentNullException.ThrowIfNull(registry);
+        if (launch is null || (launch.Width is null && launch.Height is null && launch.Fullscreen is null))
+        {
+            return (new GameRegistryResult([], null), new GameRegistryBackup()); // 开关没开：不碰游戏自己的设置
+        }
+
+        var effective = new LaunchSettings
+        {
+            Width = launch?.Width ?? DefaultWidth,
+            Height = launch?.Height ?? DefaultHeight,
+            Fullscreen = launch?.Fullscreen ?? true,
+        };
+
+        var backup = new GameRegistryBackup();
+        foreach (var key in CandidateKeys(game, executablePath, registry))
+        {
+            if (registry.KeyExists(key))
+            {
+                backup.Capture(registry, key, ManagedValues(game));
+            }
+        }
+
+        var result = Apply(game, executablePath, effective, registry);
+        return (result, backup);
+    }
+
+    /// <summary>把备份里的值原样写回（原来没有的值删掉）。</summary>
+    public static void Restore(GameRegistryBackup backup, IGameRegistry registry)
+    {
+        ArgumentNullException.ThrowIfNull(backup);
+        ArgumentNullException.ThrowIfNull(registry);
+        backup.Restore(registry);
+    }
+
+    /// <summary>某款游戏里我们会改写的值名。</summary>
+    private static string[] ManagedValues(GameType game) => game switch
+    {
+        GameType.Genshin => [ResolutionWidth, ResolutionHeight, IsFullscreen],
+        GameType.StarRail => [ResolutionWidth, ResolutionHeight, FullscreenMode, StarRailResolution],
+        _ => [ResolutionWidth, ResolutionHeight, FullscreenMode],
+    };
+
     public const string FullscreenMode = "Screenmanager Fullscreen mode_h3630240806"; // 1 全屏，3 窗口
     public const string IsFullscreen = "Screenmanager Is Fullscreen mode_h3981298716"; // 原神：0/1
     public const string ResolutionWidth = "Screenmanager Resolution Width_h182942802";
@@ -293,4 +356,69 @@ public static class InstalledServerLocator
     private static bool IsSameOrUnder(string directory, string root) =>
         directory.Equals(root, StringComparison.OrdinalIgnoreCase)
         || directory.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>
+/// 游戏注册表值的备份：启动前记下我们要改的值，游戏退出后原样写回。
+/// 可序列化成 JSON 落盘，进程被强杀、断电后下次启动先恢复上次遗留的备份。
+/// </summary>
+public sealed class GameRegistryBackup
+{
+    public sealed record Entry(string Key, string Name, string Kind, string? Value);
+
+    public List<Entry> Entries { get; set; } = [];
+
+    public bool IsEmpty => Entries.Count == 0;
+
+    public void Capture(IGameRegistry registry, string key, IEnumerable<string> names)
+    {
+        foreach (var name in names)
+        {
+            if (registry.GetDword(key, name) is { } dword)
+            {
+                Entries.Add(new Entry(key, name, "dword", dword.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            }
+            else if (registry.GetBytes(key, name) is { } bytes)
+            {
+                Entries.Add(new Entry(key, name, "bytes", Convert.ToBase64String(bytes)));
+            }
+            else
+            {
+                Entries.Add(new Entry(key, name, "absent", null)); // 原来没有：恢复时删除
+            }
+        }
+    }
+
+    public void Restore(IGameRegistry registry)
+    {
+        foreach (var entry in Entries)
+        {
+            switch (entry.Kind)
+            {
+                case "dword" when int.TryParse(entry.Value, out var dword):
+                    registry.SetDword(entry.Key, entry.Name, dword);
+                    break;
+                case "bytes" when entry.Value is not null:
+                    registry.SetBytes(entry.Key, entry.Name, Convert.FromBase64String(entry.Value));
+                    break;
+                case "absent":
+                    registry.DeleteValue(entry.Key, entry.Name);
+                    break;
+            }
+        }
+    }
+
+    public string ToJson() => System.Text.Json.JsonSerializer.Serialize(this);
+
+    public static GameRegistryBackup? FromJson(string json)
+    {
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<GameRegistryBackup>(json);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
 }
