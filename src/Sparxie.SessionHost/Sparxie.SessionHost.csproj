@@ -10,6 +10,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="SessionHost.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- native 构建产物随 publish 输出（CI 先构建 native 再 publish） -->
     <None Include="..\..\native\HoyoTouchCore\build\Release\HoyoTouchCore.dll"
           Link="HoyoTouchCore.dll"

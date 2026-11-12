@@ -38,6 +38,12 @@ message LaunchSettings {
   bool borderless = 5;
 }
 
+message ScreenArgs {
+  int32 width = 1;
+  int32 height = 2;
+  string window_mode = 3;
+}
+
 message ProfileSnapshot {
   string profile_id = 1;
   string display_name = 2;
@@ -45,6 +51,7 @@ message ProfileSnapshot {
   string executable_path = 4;
   HoyoSettings hoyo = 5;
   LaunchSettings launch = 6;
+  ScreenArgs screen = 7;
 }
 
 message StartSessionRequest {

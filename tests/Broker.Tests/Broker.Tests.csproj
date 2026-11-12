@@ -23,6 +23,7 @@
     <ProjectReference Include="..\..\src\Sparxie.Contracts\Sparxie.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Sparxie.Infrastructure\Sparxie.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Sparxie.Broker\Sparxie.Broker.csproj" />
+    <ProjectReference Include="..\FakeGame\FakeGame.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>
