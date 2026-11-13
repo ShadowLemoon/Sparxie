@@ -1,5 +1,4 @@
 #define WIN32_LEAN_AND_MEAN
-#include <TlHelp32.h>
 #include <Windows.h>
 
 #include <algorithm>
