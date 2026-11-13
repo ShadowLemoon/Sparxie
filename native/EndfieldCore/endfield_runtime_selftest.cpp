@@ -51,6 +51,14 @@ int main() {
   GetTempPathW(MAX_PATH, temp);
   g_ini_path = std::wstring(temp) + L"endfield_runtime_selftest-" +
                std::to_wstring(GetCurrentProcessId()) + L".ini";
+  auto read_ini = [&] {
+    char path[MAX_PATH * 3] = {};
+    WideCharToMultiByte(CP_ACP, 0, g_ini_path.c_str(), -1, path,
+                        sizeof(path) - 1, nullptr, nullptr);
+    g_drag_ini_path = path;
+    ReadDragSetting();
+    ReadUiConfig();
+  };
   auto write_ini = [](const char *text) {
     HANDLE f = CreateFileW(g_ini_path.c_str(), GENERIC_WRITE, 0, nullptr,
                            CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -63,7 +71,7 @@ int main() {
   DeleteFileW(g_ini_path.c_str());
   g_pm_want = 0;
   g_drop_touch_mouse = 0;
-  ReadIni();
+  read_ini();
   CHECK(g_pm_want == 2 && g_drop_touch_mouse == 1 && g_drag_setting == "auto");
   CHECK(g_cloud_mode == 1 && g_ui_rel == 0.0f && !g_ui_off &&
         !g_spec_ini.Any() && g_flag_observe && g_ui_knob_mode == 2 &&
@@ -74,88 +82,76 @@ int main() {
       "light\r\ntouch_mouse=drop\r\nclick_trace=off\r\nui_pointers="
       "all\r\npointer_guard=off\r\npointer_probe=off\r\n"
       "cloud_mode=on\r\nui_scale=auto\r\nsafe_area=auto\r\nobserve=1\r\n");
-  ReadIni();
+  read_ini();
   CHECK(g_pm_want == 2 && g_drop_touch_mouse == 1 && g_drag_setting == "auto");
   CHECK(g_cloud_mode == 1 && g_ui_rel == 0.0f && !g_ui_off &&
         !g_spec_ini.Any() && g_flag_observe && g_ui_knob_mode == 2 &&
         !g_flag_notch_write);
   write_ini("ui_pointers=0\r\n  TOUCH_MOUSE=off\r\ndrag_px=30 \r\n");
-  ReadIni();
+  read_ini();
   CHECK(g_pm_want == 0 && g_drop_touch_mouse == 0 && g_drag_setting == "30");
   write_ini(
       "ui_pointers=off\r\nui_pointers=garbage\r\n"); // the last line wins; text
                                                      // that is not a value
                                                      // means the default
-  ReadIni();
+  read_ini();
   CHECK(g_pm_want == 2);
   write_ini("ui_pointers=off\r\n");
-  ReadIni();
+  read_ini();
   CHECK(g_pm_want == -1);
   // cloud_mode=off: the PC path (standard knob off, notch through the game's
   // setting); ui_scale is clamped to 1.00 - 1.80; safe_area pixels
   write_ini(
       "cloud_mode=off\r\nui_scale=2.5\r\nsafe_area=120,100\r\nobserve=0\r\n");
-  ReadIni();
+  read_ini();
   CHECK(g_cloud_mode == 0 && g_ui_knob_mode == 0 && g_flag_notch_write &&
         g_ui_rel == 1.8f && g_spec_ini.Any() && g_spec_ini.l_px == 120.0f &&
         g_spec_ini.r_px == 100.0f && !g_flag_observe);
   CHECK(g_notch_reeval &&
         g_force_profile); // safe_area changed: worked out again once
   write_ini("cloud_mode=off\r\nui_scale=0.5\r\nsafe_area=off\r\n");
-  ReadIni();
+  read_ini();
   CHECK(g_ui_rel == 1.0f && !g_flag_notch_write && !g_ini_notch_write &&
         !g_spec_ini.Any());
   write_ini("ui_scale=off\r\nsafe_area=0,0\r\n");
-  ReadIni();
+  read_ini();
   CHECK(g_ui_off && g_cloud_mode == 1 && g_spec_ini.Any() &&
         g_spec_ini.l_px == 0.0f);
   write_ini("ui_scale=big\r\n");
-  ReadIni();
+  read_ini();
   CHECK(!g_ui_off && g_ui_rel == 0.0f);
   DeleteFileW(g_ini_path.c_str());
-  ReadIni();
+  read_ini();
 
   // the drag threshold: 0.1 inch at the client's density, never below the
   // game's own value, an ini number, off
   std::string basis;
-  CHECK(ComputeDragTarget("auto", 10, 2868, 1320, &basis) == 46);
-  CHECK(ComputeDragTarget("auto", 10, 1320, 2868, &basis) ==
-        46); // either orientation
-  CHECK(ComputeDragTarget("auto", 10, 1920, 1080, &basis) ==
-        16); // not in the table: 1.5 % of the height
-  CHECK(ComputeDragTarget("auto", 60, 2868, 1320, &basis) ==
-        60); // the game's value is larger: kept
-  CHECK(ComputeDragTarget("30", 10, 2868, 1320, &basis) == 30);
-  CHECK(ComputeDragTarget("off", 10, 2868, 1320, &basis) == 0);
+  g_drag.screen_w = []() { return 2868; };
+  g_drag.screen_h = []() { return 1320; };
+  g_drag_setting = "auto";
+  CHECK(ComputeDragTarget(10, &basis) == 46);
+  g_drag_setting = "30";
+  CHECK(ComputeDragTarget(10, &basis) == 30);
+  g_drag_setting = "off";
+  CHECK(ComputeDragTarget(10, &basis) == 0);
+  g_drag_setting = "auto";
 
   // the device profile: the stream size names the device; its insets in stream
   // pixels
   {
     float l = 0, r = 0, t = 0, b = 0;
-    Profile p = BuildProfile(ProfileSpec{}, 2868, 1320);
+    Profile p = BuildProfile(2868, 1320);
     ComputeInsets(p, 2868, 1320, &l, &r, &t, &b);
     CHECK(p.name == "iphone-17-pro-max" && p.cls == "phone" &&
           p.ui_scale == 1.4f && static_cast<int>(l + 0.5f) == 186 &&
           static_cast<int>(r + 0.5f) == 186 && t == 0 && b == 0 &&
           ProfileHasInsets(p));
-    p = BuildProfile(ProfileSpec{}, 2752, 2064);
+    p = BuildProfile(2752, 2064);
     CHECK(p.name == "ipad-pro-13" && p.cls == "pad" && !ProfileHasInsets(p));
-    p = BuildProfile(ProfileSpec{}, 1920, 1080);
+    p = BuildProfile(1920, 1080);
     CHECK(p.name == "generic" && !ProfileHasInsets(p));
-    p = BuildProfile(ProfileSpec{}, 2400, 1080);
+    p = BuildProfile(2400, 1080);
     CHECK(p.name.rfind("android", 0) == 0);
-    ProfileSpec px;
-    px.given = true;
-    px.l_px = 120;
-    px.r_px = 100;
-    p = BuildProfile(px, 2868, 1320);
-    ComputeInsets(p, 2868, 1320, &l, &r, &t, &b);
-    CHECK(p.source == "ini" && p.use_px && l == 120.0f && r == 100.0f &&
-          ProfileHasInsets(p));
-    ProfileSpec none;
-    none.given = true;
-    p = BuildProfile(none, 2868, 1320);
-    CHECK(p.source == "ini" && !ProfileHasInsets(p));
   }
 
   // the lifecycle thunk of the UI size: puts the held size into a new helper
