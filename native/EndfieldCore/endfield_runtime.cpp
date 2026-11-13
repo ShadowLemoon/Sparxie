@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cwchar>
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -45,7 +46,7 @@ LONG g_log_lines = 0;
 void Log(const char *format, ...) {
   if (g_log == INVALID_HANDLE_VALUE || !g_log_lock_ready)
     return;
-  if (InterlockedIncrement(&g_log_lines) > 4000)
+  if (InterlockedIncrement(&g_log_lines) > 9000)
     return;  // a hung loop must not fill a disk
   char text[900];
   SYSTEMTIME now;
@@ -298,10 +299,12 @@ bool IsTouchMadeMouse(UINT message, unsigned long extra_info) {
 }
 
 #include "endfield_drag.inc"
+#include "endfield_ui_config.inc"
 
 void ReadIni() {
   LONG want = 2, drop_mouse = 1;  // the defaults when a key (or the file) is missing
   std::string drag = "auto";
+  UiConfig ui;
   std::string text = ReadIniText();
   for (char *line = strtok(text.data(), "\r\n"); line; line = strtok(nullptr, "\r\n")) {
     while (*line == ' ' || *line == '\t')
@@ -315,6 +318,8 @@ void ReadIni() {
       drag = line + 8;
       while (!drag.empty() && (drag.back() == ' ' || drag.back() == '\t'))
         drag.pop_back();
+    } else {
+      ParseUiLine(line, ui);
     }
   }
   if (want != pm::g_want)
@@ -326,6 +331,7 @@ void ReadIni() {
   if (drag != g_drag_setting)
     Log("endfield-ui.ini: drag_px=%s", drag.c_str());
   g_drag_setting = drag;
+  ApplyUiConfig(ui);
 }
 
 void Pump() {
@@ -341,6 +347,7 @@ void Pump() {
       ReadIni();
     EnsureDrag();
     pm::Tick();
+    EnsureProfile();
   }
 }
 

@@ -80,6 +80,8 @@ void TestRuntimeKeepsTouchOnTheMainThread() {
   CHECK(Number(record, L"pointer_final") == 2);
   CHECK(Number(record, L"pointer_late") >= 1);
   CHECK(Number(record, L"pointer_late_wrong") == 0);
+  // no endfield-ui.ini beside the Runtime: the shipped defaults
+  CHECK(log.find(L"config: cloud_mode is on") != std::wstring::npos);
 }
 
 void TestRuntimeLeavesTheKeyboardUiAlone() {
