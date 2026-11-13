@@ -222,6 +222,61 @@
                                         </Grid>
                                     </Grid>
                                 </Border>
+                                <Border Style="{StaticResource GlassCard}"
+                                        Visibility="{Binding IsEndfield, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <StackPanel Spacing="16">
+                                        <TextBlock Text="触控界面" Style="{StaticResource SectionHeading}" />
+                                        <StackPanel Spacing="8">
+                                            <Grid ColumnSpacing="12">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="界面缩放" VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="1" Text="{Binding EndfieldUiScaleText}" VerticalAlignment="Center"
+                                                           Style="{StaticResource CaptionText}"
+                                                           Visibility="{Binding EndfieldUiScaleManual, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                            </Grid>
+                                            <RadioButtons MaxColumns="2" SelectedIndex="{Binding EndfieldUiScaleModeIndex, Mode=TwoWay}"
+                                                          AutomationProperties.Name="界面缩放方式">
+                                                <x:String>自动</x:String>
+                                                <x:String>手动</x:String>
+                                            </RadioButtons>
+                                            <Slider Minimum="100" Maximum="180" StepFrequency="5" SmallChange="5" LargeChange="10" TickFrequency="5"
+                                                    IsEnabled="{Binding EndfieldUiScaleManual}"
+                                                    Value="{Binding EndfieldUiScalePercent, Mode=TwoWay}"
+                                                    AutomationProperties.Name="界面缩放倍数" />
+                                        </StackPanel>
+                                        <Border Style="{StaticResource RowDivider}" />
+                                        <StackPanel Spacing="8">
+                                            <TextBlock Text="安全边距" />
+                                            <RadioButtons MaxColumns="3" SelectedIndex="{Binding EndfieldSafeAreaModeIndex, Mode=TwoWay}"
+                                                          AutomationProperties.Name="安全边距方式">
+                                                <x:String>自动</x:String>
+                                                <x:String>关闭</x:String>
+                                                <x:String>手动</x:String>
+                                            </RadioButtons>
+                                            <Grid ColumnSpacing="12">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Spacing="2">
+                                                    <TextBlock Text="左（像素）" Style="{StaticResource CaptionText}" />
+                                                    <controls:NumberStepper Minimum="0" Maximum="600" Step="1"
+                                                                            IsEnabled="{Binding EndfieldSafeManual}"
+                                                                            Value="{Binding EndfieldSafeLeft, Mode=TwoWay}" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Spacing="2">
+                                                    <TextBlock Text="右（像素）" Style="{StaticResource CaptionText}" />
+                                                    <controls:NumberStepper Minimum="0" Maximum="600" Step="1"
+                                                                            IsEnabled="{Binding EndfieldSafeManual}"
+                                                                            Value="{Binding EndfieldSafeRight, Mode=TwoWay}" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
 
                             <!-- 右栏：帧率 + 原神的触控 UI 缩放。开关与数值合成一行；关闭时只禁用数值，不改变尺寸。 -->
