@@ -303,6 +303,7 @@ bool IsTouchMadeMouse(UINT message, unsigned long extra_info) {
 #include "endfield_drag.inc"
 #include "endfield_ui_config.inc"
 #include "endfield_ui_size.inc"
+#include "endfield_notch.inc"
 
 void ReadIni() {
   LONG want = 2, drop_mouse = 1;  // the defaults when a key (or the file) is missing
@@ -338,6 +339,10 @@ void ReadIni() {
 }
 
 void Pump() {
+  if (g_finalizing) {
+    RestoreNotch();  // the session was released: the original notch padding goes back through the game's own setter (on this, the game's main thread)
+    return;
+  }
   if (!g_shared || !g_shared->alive)
     return;
   const LONG n = InterlockedIncrement(&g_pumps);
@@ -352,6 +357,7 @@ void Pump() {
     pm::Tick();
     EnsureProfile();
     EnsureUiKnob();
+    EnsureNotch();
     ObserveUi();
   }
 }
@@ -484,7 +490,15 @@ DWORD WINAPI RuntimeThread(void *) {
     }
     Sleep(250);
   }
-  Log("session released; Runtime stops (pumps=%ld, touch applications=%ld)", g_pumps, g_touch_applies);
+  if (g_notch_written && !g_notch_restored) {
+    g_finalizing = true;  // one last pump on the game's main thread restores the notch padding
+    if (window && IsWindow(window) && g_pump_message)
+      PostMessageW(window, g_pump_message, 0, 0);
+    for (int i = 0; i < 12 && !g_notch_restored; ++i)
+      Sleep(100);
+  }
+  Log("session released; Runtime stops (pumps=%ld, touch applications=%ld, notch %s)", g_pumps, g_touch_applies,
+      g_notch_written ? (g_notch_restored ? "restored" : "NOT restored (the game's main thread did not run it)") : "untouched");
   if (g_hook)
     UnhookWindowsHookEx(g_hook);
   g_hook = nullptr;
