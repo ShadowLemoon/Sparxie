@@ -6,11 +6,13 @@
 #include <cstdio>
 #include <cwchar>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "endfield_shared.h"
@@ -300,6 +302,7 @@ bool IsTouchMadeMouse(UINT message, unsigned long extra_info) {
 
 #include "endfield_drag.inc"
 #include "endfield_ui_config.inc"
+#include "endfield_ui_size.inc"
 
 void ReadIni() {
   LONG want = 2, drop_mouse = 1;  // the defaults when a key (or the file) is missing
@@ -348,6 +351,7 @@ void Pump() {
     EnsureDrag();
     pm::Tick();
     EnsureProfile();
+    EnsureUiKnob();
   }
 }
 
