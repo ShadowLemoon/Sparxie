@@ -281,10 +281,18 @@ std::string ReadIniText() {
 
 #include "endfield_pointer_mode.inc"
 
+// touch_mouse=drop (default) | off: Windows makes WM_LBUTTONDOWN / WM_LBUTTONUP / WM_LBUTTONDBLCLK / WM_MOUSEMOVE from a touch (signature 0xFF5157xx in the message's extra info) although the
+// touch itself reaches the game as WM_POINTER. The game's UI then sees the finger twice, once as a finger and once as a mouse that jumps to the same place. The hook turns these messages into WM_NULL
+// before the game reads them; the mouse itself is not touched.
+volatile LONG g_drop_touch_mouse = 1;
+LONG g_dropped_mouse = 0;
+bool IsTouchMadeMouse(UINT message, unsigned long extra_info) {
+  return (message == WM_LBUTTONDOWN || message == WM_LBUTTONUP || message == WM_LBUTTONDBLCLK || message == WM_MOUSEMOVE) && (extra_info & 0xFFFFFF00ul) == 0xFF515700ul;
+}
 
 
 void ReadIni() {
-  LONG want = 2;  // the default when the key (or the file) is missing
+  LONG want = 2, drop_mouse = 1;  // the defaults when a key (or the file) is missing
   std::string text = ReadIniText();
   for (char *line = strtok(text.data(), "\r\n"); line; line = strtok(nullptr, "\r\n")) {
     while (*line == ' ' || *line == '\t')
@@ -292,11 +300,16 @@ void ReadIni() {
     if (_strnicmp(line, "ui_pointers=", 12) == 0) {
       const char *v = line + 12;
       want = _strnicmp(v, "off", 3) == 0 ? -1 : ((v[0] >= '0' && v[0] <= '2') ? v[0] - '0' : 2);
+    } else if (_strnicmp(line, "touch_mouse=", 12) == 0) {
+      drop_mouse = _strnicmp(line + 12, "off", 3) == 0 ? 0 : 1;
     }
   }
   if (want != pm::g_want)
     Log("endfield-ui.ini: ui_pointers=%ld (-1 off, 0 SingleMouseOrPenButMultiTouchAndTrack, 1 SingleUnifiedPointer, 2 AllPointersAsIs)", want);
   pm::g_want = want;
+  if (drop_mouse != g_drop_touch_mouse)
+    Log("endfield-ui.ini: touch_mouse=%s (the mouse messages Windows makes from touches %s)", drop_mouse ? "drop" : "off", drop_mouse ? "are removed before the game reads them" : "are left alone");
+  g_drop_touch_mouse = drop_mouse;
 }
 
 void Pump() {
@@ -351,6 +364,11 @@ LRESULT CALLBACK GetMsgProc(int code, WPARAM wparam, LPARAM lparam) {
   if (code == HC_ACTION && (wparam & PM_REMOVE)) {
     const MSG *message = reinterpret_cast<const MSG *>(lparam);
     pm::HoldFast();
+    if (message && g_drop_touch_mouse && IsTouchMadeMouse(message->message, static_cast<unsigned long>(GetMessageExtraInfo()))) {
+      if (InterlockedIncrement(&g_dropped_mouse) <= 6)
+        Log("touch_mouse: removed message 0x%04x made from a touch (#%ld)", message->message, g_dropped_mouse);
+      const_cast<MSG *>(message)->message = WM_NULL;
+    }
     if (message && message->message == g_pump_message && g_pump_message != 0) {
       g_pumped_by_hook = true;
       RunPump();
