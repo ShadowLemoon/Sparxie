@@ -11,8 +11,12 @@
 // patched) with: the user platform of the stream's client device (iOS 8 / Android 11) and the client's safe area rectangle. Everything else the game computes from them (UI scale, mobile layers,
 // notch padding) is the game's own code. The slot offsets are read from the machine code of the two methods (checked byte patterns), not hard-coded.
 //
-// The slot table (read from the game's code, see CLOUD_MODE.md "slot table"): a native page directory in a global; every method reads `page = dir[k]; if (page && page[i].fn) return
-// page[i].fn(page[i].ctx, ...)`. If the game puts in a new page or directory later, the two slots are filled again in the new one. Turning cloud_mode off empties the two slots.
+// The slot table (read from the game's code, see CLOUD_MODE.md "slot table"): a native page directory. At metadata load the game allocates an array of page pointers (one per 0x1000 hot-fixable
+// methods, all null) and keeps it in a global; every method reads `page = dir[k]; if (page && page[i].fn) return page[i].fn(page[i].ctx, ...)`. Pages are created only by the game's own slot setter, when
+// a hot-fix is loaded: calloc(0x1000, 0x10) through the IL2CPP memory callbacks, under its lock, only while dir[k] is null. At shutdown the game frees every non-null page with the IL2CPP free callback.
+// A session without a hot-fix therefore has no page at all. The Runtime then creates the page itself, exactly as the game would: 0x10000 zeroed bytes from the game's own allocator (il2cpp_alloc,
+// which is the same malloc callback family; the game's shutdown free is then correct), stored with an interlocked compare-exchange only while dir[k] is still null. If the game puts in its own page or
+// a new directory later, the two slots are filled again in the new one. Turning cloud_mode off empties the two slots and leaves the page (all other entries are zero = "no hot-fix").
 // If the slots cannot be filled within ~10 s of the first attempt, the Runtime falls back to the PC path (the UI size knob and the notch setting, as with cloud_mode=off) for the session.
 //
 // endfield-ui.ini:  cloud_mode=on (default) | off (changed live: off puts the slots back to empty).
@@ -28,7 +32,14 @@ LONG g_installed_at = 0, g_verify_due = 0, g_verify_count = 0;
 LONG g_try_since = -1;      // pump of the first install attempt with cloud_mode on (the fallback timer runs from here)
 LONG g_reinstalls = 0;      // how often the slots were filled again (the game replaced its page/directory or emptied a slot)
 constexpr LONG kFallbackPumps = 40;   // ~10 s (250 ms pumps)
+constexpr int kPageBytes = 0x10000;   // the game's page: calloc(0x1000 entries, 0x10 bytes) in its slot setter
 
+using AllocFn = void *(__cdecl *)(size_t);
+using FreeFn = void(__cdecl *)(void *);
+AllocFn g_alloc = nullptr;   // il2cpp_alloc: the game's malloc callback
+FreeFn g_free = nullptr;     // il2cpp_free: the game's free callback (the same one its shutdown uses on pages)
+void *g_our_page = nullptr;  // a page the Runtime created and published (owned by the game from then on)
+LONG g_pages_made = 0;
 const char *g_last_fail = "not tried yet";
 
 struct HotSlot {
@@ -148,8 +159,36 @@ bool ReadDirPage(const HotSlot &s, void **dir_out, void ***page_at_out, void **p
   }
 }
 
-// The slot table: page = dir[+table_off]. The memory behind the slots must be committed and writable.
-bool ResolveSlots(HotSlot &s) {
+// A zeroed page from the game's own allocator, published only while the entry is still null. Returns the page now in the entry (ours or the one the game put in first), null on failure.
+void *CreatePage(void **page_at, const HotSlot &s) {
+  if (!g_alloc || !g_free) {
+    g_last_fail = "il2cpp_alloc / il2cpp_free are not exported";
+    return nullptr;
+  }
+  if (s.fn_off < 0 || s.ctx_off < 0 || s.fn_off + 8 > kPageBytes || s.ctx_off + 8 > kPageBytes) {
+    g_last_fail = "a slot offset lies outside the game's page size";
+    return nullptr;
+  }
+  void *mine = g_alloc(kPageBytes);
+  if (!mine) {
+    g_last_fail = "il2cpp_alloc returned null";
+    return nullptr;
+  }
+  memset(mine, 0, kPageBytes);
+  void *prev = InterlockedCompareExchangePointer(page_at, mine, nullptr);
+  if (prev) {  // the game created its page in the meantime: ours was never visible to it
+    g_free(mine);
+    return prev;
+  }
+  g_our_page = mine;
+  InterlockedIncrement(&g_pages_made);
+  Log("cloud: the game has no slot page here (no hot-fix loaded in this session): created one like the game does: 0x%x zeroed bytes from the game's allocator (il2cpp_alloc) at %p, "
+      "put into its directory entry +0x%x by compare-exchange (it was null); every other entry stays zero = the game's own method bodies run", kPageBytes, mine, s.table_off);
+  return mine;
+}
+
+// The slot table: page = dir[+table_off]; with create, a missing page is created (see CreatePage). The memory behind the slots must be committed and writable.
+bool ResolveSlots(HotSlot &s, bool create = false) {
   void *dir = nullptr, *page = nullptr;
   void **page_at = nullptr;
   if (!ReadDirPage(s, &dir, &page_at, &page)) {
@@ -157,8 +196,13 @@ bool ResolveSlots(HotSlot &s) {
     return false;
   }
   if (!page) {
-    g_last_fail = "the slot page is not there (no hot-fix loaded in this session)";
-    return false;
+    if (!create) {
+      g_last_fail = "the slot page is not there";
+      return false;
+    }
+    page = CreatePage(page_at, s);
+    if (!page)
+      return false;
   }
   __try {
     char *table = static_cast<char *>(page);
@@ -199,14 +243,18 @@ bool Prepare() {
   g_device_info_manager = FindClassAnywhere("Beyond", "DeviceInfoManager");
   g_ui_const = FindClassAnywhere("Beyond.UI", "UIConst");
   g_notch_adapter = FindClassAnywhere("Beyond.UI", "NotchAdapter");
+  if (g_managed.game_assembly) {
+    g_alloc = reinterpret_cast<AllocFn>(GetProcAddress(g_managed.game_assembly, "il2cpp_alloc"));
+    g_free = reinterpret_cast<FreeFn>(GetProcAddress(g_managed.game_assembly, "il2cpp_free"));
+  }
   g_user.what = "DeviceInfo.get_userPlatform";
   g_safe.what = "DeviceInfo.get_safeArea";
   const void *m_user = StaticMethod(g_device_info, "get_userPlatform", 0);
   const void *m_safe = StaticMethod(g_device_info, "get_safeArea", 0);
   const bool a = ParseHotSlot(m_user, &g_user), b = ParseHotSlot(m_safe, &g_safe);
-  Log("cloud: hot-fix slots read from the machine code: %s %s (global %llx, table offset +0x%x, function slot +0x%x, context slot +0x%x); %s %s (global %llx, table offset +0x%x, function slot +0x%x, context slot +0x%x)",
+  Log("cloud: hot-fix slots read from the machine code: %s %s (global %llx, table offset +0x%x, function slot +0x%x, context slot +0x%x); %s %s (global %llx, table offset +0x%x, function slot +0x%x, context slot +0x%x); il2cpp_alloc=%d il2cpp_free=%d",
       g_user.what, a ? "found" : "NOT found", static_cast<unsigned long long>(g_user.global), g_user.table_off, g_user.fn_off, g_user.ctx_off, g_safe.what, b ? "found" : "NOT found",
-      static_cast<unsigned long long>(g_safe.global), g_safe.table_off, g_safe.fn_off, g_safe.ctx_off);
+      static_cast<unsigned long long>(g_safe.global), g_safe.table_off, g_safe.fn_off, g_safe.ctx_off, g_alloc != nullptr, g_free != nullptr);
   if (!(a && b))
     g_last_fail = "the hot-fix check was not found in the machine code of the two methods";
   __try {
@@ -399,7 +447,7 @@ void FillSlot(HotSlot &s, void *hook) {
 
 bool FillBoth() {
   HotSlot u = g_user, s = g_safe;
-  if (!ResolveSlots(u) || !ResolveSlots(s))
+  if (!ResolveSlots(u, true) || !ResolveSlots(s, true))
     return false;
   g_user = u;
   g_safe = s;
@@ -430,8 +478,8 @@ void Install() {
   g_cloud_since = g_pumps;
   g_installed_at = g_pumps;
   ScheduleStateLogs();
-  Log("cloud: PATH A active (the game's own mobile UI): DeviceInfo.get_userPlatform -> %ld, DeviceInfo.get_safeArea -> the device insets; slot page %p; asking the UI to lay out again", g_user_platform,
-      g_user.page);
+  Log("cloud: PATH A active (the game's own mobile UI): DeviceInfo.get_userPlatform -> %ld, DeviceInfo.get_safeArea -> the device insets; slot page %p (%s); asking the UI to lay out again", g_user_platform,
+      g_user.page, g_user.page == g_our_page ? "created by the Runtime" : "the game's own");
   ForceRelayout("cloud_mode went on");
 }
 
