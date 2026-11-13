@@ -144,7 +144,7 @@ public static class ProfileManager
 
     private static void ApplySettings(GameProfile profile, ProfileMutation mutation)
     {
-        if (mutation.HasHoyoSettings)
+        if (mutation.HasHoyoSettings || mutation.HasEndfieldSettings)
         {
             if (profile.Game == GameType.ZenlessZoneZero)
             {
@@ -176,6 +176,57 @@ public static class ProfileManager
             if (mutation.ProcessPriority is { } priority)
             {
                 hoyo.ProcessPriority = priority;
+            }
+
+            if (mutation.EndfieldInputMode is { } inputMode)
+            {
+                hoyo.EndfieldInputMode = inputMode;
+            }
+
+            if (mutation.EndfieldAutoResolution is { } autoResolution)
+            {
+                hoyo.EndfieldAutoResolution = autoResolution;
+            }
+
+            if (mutation.EndfieldWidth is { } width)
+            {
+                hoyo.EndfieldWidth = width;
+            }
+
+            if (mutation.EndfieldHeight is { } height)
+            {
+                hoyo.EndfieldHeight = height;
+            }
+
+            if (mutation.EndfieldRefreshRate is { } refreshRate)
+            {
+                hoyo.EndfieldRefreshRate = refreshRate;
+            }
+
+            // the touch-interface settings never fail a save: out-of-range values are brought into range
+            if (mutation.EndfieldUiScaleMode is { } uiScaleMode)
+            {
+                hoyo.EndfieldUiScaleMode = EndfieldUiSettings.NormalizeScaleMode(uiScaleMode);
+            }
+
+            if (mutation.EndfieldUiScalePercent is { } uiScalePercent)
+            {
+                hoyo.EndfieldUiScalePercent = EndfieldUiSettings.NormalizeScalePercent(uiScalePercent);
+            }
+
+            if (mutation.EndfieldSafeAreaMode is { } safeAreaMode)
+            {
+                hoyo.EndfieldSafeAreaMode = EndfieldUiSettings.NormalizeSafeAreaMode(safeAreaMode);
+            }
+
+            if (mutation.EndfieldSafeLeft is { } safeLeft)
+            {
+                hoyo.EndfieldSafeLeft = EndfieldUiSettings.NormalizeInset(safeLeft);
+            }
+
+            if (mutation.EndfieldSafeRight is { } safeRight)
+            {
+                hoyo.EndfieldSafeRight = EndfieldUiSettings.NormalizeInset(safeRight);
             }
         }
 
@@ -286,6 +337,16 @@ public static class ProfileManager
                 GenshinPreset60Fps = source.Hoyo.GenshinPreset60Fps,
                 GenshinTouchUiScaleOverrideEnabled = source.Hoyo.GenshinTouchUiScaleOverrideEnabled,
                 GenshinTouchUiScalePercent = source.Hoyo.GenshinTouchUiScalePercent,
+                EndfieldInputMode = source.Hoyo.EndfieldInputMode,
+                EndfieldAutoResolution = source.Hoyo.EndfieldAutoResolution,
+                EndfieldWidth = source.Hoyo.EndfieldWidth,
+                EndfieldHeight = source.Hoyo.EndfieldHeight,
+                EndfieldRefreshRate = source.Hoyo.EndfieldRefreshRate,
+                EndfieldUiScaleMode = source.Hoyo.EndfieldUiScaleMode,
+                EndfieldUiScalePercent = source.Hoyo.EndfieldUiScalePercent,
+                EndfieldSafeAreaMode = source.Hoyo.EndfieldSafeAreaMode,
+                EndfieldSafeLeft = source.Hoyo.EndfieldSafeLeft,
+                EndfieldSafeRight = source.Hoyo.EndfieldSafeRight,
             },
     };
 
@@ -304,6 +365,7 @@ public static class ProfileManager
         GameType.Genshin => "genshin",
         GameType.StarRail => "starRail",
         GameType.ZenlessZoneZero => "zenlessZoneZero",
+        GameType.Endfield => "endfield",
         _ => game.ToString(),
     };
 

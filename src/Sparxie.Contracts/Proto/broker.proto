@@ -27,6 +27,17 @@ message HoyoSettings {
   int32 genshin_preset_60_fps = 8;
   bool genshin_touch_ui_scale_override_enabled = 9;
   int32 genshin_touch_ui_scale_percent = 10;
+  string endfield_input_mode = 12;
+  bool endfield_auto_resolution = 13;
+  int32 endfield_width = 14;
+  int32 endfield_height = 15;
+  int32 endfield_refresh_rate = 16;
+  // Endfield touch interface. All optional: empty mode = auto, scale percent 0 = default 140, insets 0 = none. Never a reason to refuse a session.
+  string endfield_ui_scale_mode = 17;     // auto | manual
+  int32 endfield_ui_scale_percent = 18;   // 100-180, only read when the mode is manual
+  string endfield_safe_area_mode = 19;    // auto | off | manual
+  int32 endfield_safe_left = 20;          // pixels, only read when manual
+  int32 endfield_safe_right = 21;
 }
 
 // 启动设置：width/height 为 0 表示不修改；fullscreen 0 不修改 / 1 全屏 / 2 窗口；borderless 为 true 时自动加 -popupwindow。

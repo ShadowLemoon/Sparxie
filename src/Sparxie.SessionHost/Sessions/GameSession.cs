@@ -380,6 +380,7 @@ internal static class ProfileSnapshotExtensions
         "genshin" => GameType.Genshin,
         "starRail" => GameType.StarRail,
         "zenlessZoneZero" => GameType.ZenlessZoneZero,
+        "endfield" => GameType.Endfield,
         _ => throw new InvalidOperationException($"未知 game: {profile.Game}"),
     };
 
@@ -409,6 +410,12 @@ internal static class ProfileSnapshotExtensions
             return null;
         }
 
+        // 客户端没有发送任何 Endfield 字段（旧启动器：输入模式为空、分辨率与刷新率为 0）= 使用模型默认值：
+        // 自动模式、自动分辨率、60 Hz。否则 EndfieldCore 会以 0x0 的非法参数拒绝会话。
+        var endfieldUnset = string.IsNullOrWhiteSpace(hoyo.EndfieldInputMode)
+            && hoyo.EndfieldWidth == 0 && hoyo.EndfieldHeight == 0 && hoyo.EndfieldRefreshRate == 0;
+        var endfieldDefaults = new HoyoProfileSettings();
+
         return new HoyoProfileSettings
         {
             FpsUnlockEnabled = hoyo.FpsUnlockEnabled,
@@ -427,6 +434,18 @@ internal static class ProfileSnapshotExtensions
             GenshinPreset60Fps = hoyo.GenshinPreset60Fps,
             GenshinTouchUiScaleOverrideEnabled = hoyo.GenshinTouchUiScaleOverrideEnabled,
             GenshinTouchUiScalePercent = hoyo.GenshinTouchUiScalePercent,
+            // the removed 自动 (and an empty field of an older client) is touch
+            EndfieldInputMode = hoyo.EndfieldInputMode == "pc" ? "pc" : "touch",
+            EndfieldAutoResolution = endfieldUnset ? endfieldDefaults.EndfieldAutoResolution : hoyo.EndfieldAutoResolution,
+            EndfieldWidth = endfieldUnset ? endfieldDefaults.EndfieldWidth : hoyo.EndfieldWidth,
+            EndfieldHeight = endfieldUnset ? endfieldDefaults.EndfieldHeight : hoyo.EndfieldHeight,
+            EndfieldRefreshRate = endfieldUnset ? endfieldDefaults.EndfieldRefreshRate : hoyo.EndfieldRefreshRate,
+            // an older client sends none of these: empty mode = auto, percent 0 = default, insets 0
+            EndfieldUiScaleMode = EndfieldUiSettings.NormalizeScaleMode(hoyo.EndfieldUiScaleMode),
+            EndfieldUiScalePercent = EndfieldUiSettings.NormalizeScalePercent(hoyo.EndfieldUiScalePercent),
+            EndfieldSafeAreaMode = EndfieldUiSettings.NormalizeSafeAreaMode(hoyo.EndfieldSafeAreaMode),
+            EndfieldSafeLeft = EndfieldUiSettings.NormalizeInset(hoyo.EndfieldSafeLeft),
+            EndfieldSafeRight = EndfieldUiSettings.NormalizeInset(hoyo.EndfieldSafeRight),
         };
     }
 }

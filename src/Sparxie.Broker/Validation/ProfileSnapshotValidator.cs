@@ -18,6 +18,7 @@ public static class ProfileSnapshotValidator
         "genshin",
         "starRail",
         "zenlessZoneZero",
+        "endfield",
     };
 
     private static readonly HashSet<string> ValidPriorities = new(StringComparer.Ordinal)
@@ -62,6 +63,7 @@ public static class ProfileSnapshotValidator
             {
                 "genshin" => GameType.Genshin,
                 "starRail" => GameType.StarRail,
+                "endfield" => GameType.Endfield,
                 _ => GameType.ZenlessZoneZero,
             }, profile.ExecutablePath))
         {

@@ -18,6 +18,7 @@
     <Project Path="tests/Desktop.Tests/Desktop.Tests.csproj" />
     <Project Path="tests/HoyoAbi.Tests/HoyoAbi.Tests.csproj" />
     <Project Path="tests/LauncherCore.Tests/LauncherCore.Tests.csproj" />
+    <Project Path="tests/SessionHost.Tests/SessionHost.Tests.csproj" />
     <Project Path="tests/Zzz.Tests/Zzz.Tests.csproj" />
   </Folder>
 </Solution>

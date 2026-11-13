@@ -55,4 +55,31 @@ public sealed class ProfileSnapshotMapperTests
         Assert.Equal("zenlessZoneZero", snapshot.Game);
         Assert.Null(snapshot.Hoyo);
     }
+
+    [Fact]
+    public void 终末地Profile映射游戏标识和专属设置()
+    {
+        var profile = new GameProfile
+        {
+            Id = "e1",
+            DisplayName = "终末地",
+            Game = GameType.Endfield,
+            ExecutablePath = @"D:\Games\Endfield.exe",
+            Hoyo = new HoyoProfileSettings
+            {
+                EndfieldInputMode = "pc",
+                EndfieldAutoResolution = false,
+                EndfieldWidth = 2560,
+                EndfieldHeight = 1440,
+                EndfieldRefreshRate = 144,
+            },
+        };
+
+        var snapshot = ProfileSnapshotMapper.Map(profile);
+
+        Assert.Equal("endfield", snapshot.Game);
+        Assert.Equal("pc", snapshot.Hoyo!.EndfieldInputMode);
+        Assert.False(snapshot.Hoyo.EndfieldAutoResolution);
+        Assert.Equal((2560, 1440, 144), (snapshot.Hoyo.EndfieldWidth, snapshot.Hoyo.EndfieldHeight, snapshot.Hoyo.EndfieldRefreshRate));
+    }
 }
