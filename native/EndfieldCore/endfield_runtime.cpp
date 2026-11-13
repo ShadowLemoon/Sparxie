@@ -383,11 +383,12 @@ int g_drag_target = 0;
 int g_drag_last_logged_target = -1;
 std::unordered_map<void *, int>
     g_es_seen; // EventSystem object -> value we last set
-LONG g_es_resets = 0, g_drag_pumps = 0;
+LONG g_es_resets = 0, g_drag_pumps = 0, g_survey_stage = 0;
 bool g_drag_scan_full =
     false; // drag_scan=full: the last build's FindObjectsOfType over all
            // EventSystems every second (heavy on the game thread); default:
            // EventSystem.current, full scan every 30 s
+LONG g_survey_at = 0;
 
 void *FindClassIn(const char *ns, const char *name) {
   HMODULE game = g_managed.game_assembly;
