@@ -7,6 +7,7 @@
 //  - knob B: _useCustomStandardResolution + _customStandardResolution = standard resolution / f (cloud mode, or when A is verified to do nothing).
 // f is ui_scale (relative to the PC default); auto = the device profile's size, else the phone build's (the PC multiplier removed). In cloud mode the game's own phone size is already the base,
 // so only the factor above it is written. A value the game resets, or a new helper, gets the held value again; a changed ui_scale is applied once from the ORIGINAL values.
+// Every new panel brings its own helper: the helper's Awake / OnEnable / Start are replaced by thunks that put the held size in first, so a new panel does not appear small and then jump.
 
 void ForceRelayout(const char *why) {
   if (!ResolveUi() || !g_ui.helper_class || !g_ui.m_h_force)
@@ -94,6 +95,102 @@ bool KnobEffective(void *helper, char *why, size_t cap) {
   return false;
 }
 
+// ---- every panel brings its own UICanvasScaleHelper. Written afterwards (the periodic scan) a new panel is first laid out with the game's size and then jumps. The helper's own Awake / OnEnable / Start
+// are replaced (the MethodInfo's code pointer, which the engine reads when it sends the message; no code bytes are touched) by thunks that put the size into the helper's serialized fields first and
+// then call the original, so the first layout of a new helper already has the held size.
+constexpr int kLifeSlots = 8;
+using LifeFn = void(__cdecl *)(void *, const void *);
+using FieldOffsetFn2 = int(__cdecl *)(void *);
+using ClassParentFn = void *(__cdecl *)(void *);
+LifeFn g_life_orig[kLifeSlots] = {};
+int g_off_use = -1, g_off_res = -1, g_off_pc = -1, g_life_slots = 0;
+bool g_life_tried = false;
+LONG g_life_calls = 0, g_life_primed = 0;
+void PrimeHelper(void *self) {
+  if (!self || g_off_use < 0 || g_off_res < 0)
+    return;
+  __try {
+    if (*static_cast<void **>(self) != g_ui.helper_class)
+      return;
+    char *base = static_cast<char *>(self);
+    if (g_knob == kKnobStdVerify || g_knob == kKnobStdDone) {
+      *reinterpret_cast<unsigned char *>(base + g_off_use) = 1;
+      float *res = reinterpret_cast<float *>(base + g_off_res);
+      res[0] = g_std_target[0];
+      res[1] = g_std_target[1];
+      InterlockedIncrement(&g_life_primed);
+    } else if ((g_knob == kKnobPcVerify || g_knob == kKnobPcDone) && g_off_pc >= 0) {
+      float *pc = reinterpret_cast<float *>(base + g_off_pc);
+      pc[0] = g_pc_target;
+      if (g_pc_kind == 2)
+        pc[1] = g_pc_target;
+      InterlockedIncrement(&g_life_primed);
+    }
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+  }
+}
+template <int I>
+void __cdecl LifeThunk(void *self, const void *method) {
+  InterlockedIncrement(&g_life_calls);
+  PrimeHelper(self);
+  if (g_life_orig[I])
+    g_life_orig[I](self, method);
+}
+template <int... I>
+std::array<LifeFn, sizeof...(I)> MakeLife(std::integer_sequence<int, I...>) {
+  return {&LifeThunk<I>...};
+}
+const std::array<LifeFn, kLifeSlots> g_life_thunks = MakeLife(std::make_integer_sequence<int, kLifeSlots>{});
+
+void InstallLifecycle() {
+  if (g_life_tried || !g_ui.helper_class || !g_ui.f_h_use || !g_ui.f_h_res || !g_refl.ok)
+    return;
+  g_life_tried = true;
+  HMODULE game = g_managed.game_assembly;
+  auto field_offset = reinterpret_cast<FieldOffsetFn2>(GetProcAddress(game, "il2cpp_field_get_offset"));
+  auto class_parent = reinterpret_cast<ClassParentFn>(GetProcAddress(game, "il2cpp_class_get_parent"));
+  if (!field_offset) {
+    Log("UI size: lifecycle hook not installed: il2cpp_field_get_offset is missing");
+    return;
+  }
+  g_off_use = field_offset(g_ui.f_h_use);
+  g_off_res = field_offset(g_ui.f_h_res);
+  g_off_pc = g_ui.f_h_pc ? field_offset(g_ui.f_h_pc) : -1;
+  const unsigned char *base = reinterpret_cast<const unsigned char *>(game);
+  const IMAGE_NT_HEADERS *nt = reinterpret_cast<const IMAGE_NT_HEADERS *>(base + reinterpret_cast<const IMAGE_DOS_HEADER *>(base)->e_lfanew);
+  const uintptr_t lo = reinterpret_cast<uintptr_t>(base), hi = lo + nt->OptionalHeader.SizeOfImage;
+  std::string all_names;
+  void *k = g_ui.helper_class;
+  for (int depth = 0; k && depth < 5; ++depth, k = class_parent ? class_parent(k) : nullptr) {
+    void *iter = nullptr;
+    while (const void *m = g_refl.get_methods(k, &iter)) {
+      const char *name = g_refl.method_name(m);
+      if (!name)
+        continue;
+      if (depth == 0) {
+        all_names += name;
+        all_names += " ";
+      }
+      if (!(strcmp(name, "Awake") == 0 || strcmp(name, "OnEnable") == 0 || strcmp(name, "Start") == 0))
+        continue;
+      if (!g_refl.is_instance(m) || g_refl.param_count(m) != 0 || TypeKind(g_ui.ret_type(m)) != 1)
+        continue;  // only instance, no-argument, void messages (Start may be a coroutine)
+      uintptr_t *code = reinterpret_cast<uintptr_t *>(const_cast<void *>(m));
+      if (*code < lo || *code >= hi || g_life_slots >= kLifeSlots)
+        continue;
+      DWORD old = 0;
+      if (!VirtualProtect(code, sizeof(*code), PAGE_READWRITE, &old))
+        continue;
+      g_life_orig[g_life_slots] = reinterpret_cast<LifeFn>(*code);
+      *code = reinterpret_cast<uintptr_t>(g_life_thunks[g_life_slots]);
+      VirtualProtect(code, sizeof(*code), old, &old);
+      Log("UI size: lifecycle hook %d on %s (class depth %d), code at GameAssembly+0x%llx", g_life_slots, name, depth, static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(g_life_orig[g_life_slots]) - lo));
+      ++g_life_slots;
+    }
+  }
+  Log("UI size: UICanvasScaleHelper methods: %s; field offsets use=%d res=%d pc=%d; %d lifecycle hook(s)", all_names.c_str(), g_off_use, g_off_res, g_off_pc, g_life_slots);
+}
+
 // what the UI looks like now: every CanvasScaler with its reference resolution and its canvas scale, every helper with its custom resolution; for the log, a few times per session
 LONG g_state_logs = 0, g_state_due = 0;
 void LogUiState(const char *when) {
@@ -101,7 +198,7 @@ void LogUiState(const char *when) {
     return;
   void **scalers = nullptr;
   const size_t n = FindObjects(g_ui.scaler_class, &scalers);
-  Log("UI state (%s): %zu CanvasScaler(s), factor x%.3f", when, n, g_f_used);
+  Log("UI state (%s): %zu CanvasScaler(s), factor x%.3f, lifecycle hook ran %ld time(s), primed %ld helper(s)", when, n, g_f_used, g_life_calls, g_life_primed);
   size_t shown = 0;
   for (size_t i = 0; i < n && shown < 16; ++i) {
     int mode = -1;
@@ -167,6 +264,8 @@ void EnsureUiKnob() {
   FindModules();
   if (!ResolveUi())
     return;
+  if (g_knob == kKnobWaiting && !g_life_tried && ResolveRefl())
+    InstallLifecycle();
   if (!g_ui.helper_class || !g_ui.f_h_pc) {
     g_knob = kKnobFailed;
     Log("UI size: UICanvasScaleHelper or its _customPCReferenceResolutionScale field is missing; nothing is changed");
@@ -364,4 +463,61 @@ void EnsureUiKnob() {
     if (reset && g_ui.m_h_force)
       Invoke0(g_ui.m_h_force, h, nullptr);
   }
+}
+
+// ===================== read-only observation: names of new canvases / scalers (the ESC menu) =====================
+std::unordered_map<void *, bool> g_seen_canvas, g_seen_scaler;
+LONG g_observe_budget = 400;
+void ObserveUi() {
+  if (!g_flag_observe || g_observe_budget <= 0 || g_knob == kKnobWaiting)
+    return;
+  if (g_pumps % 8 != 3)
+    return;
+  FindModules();
+  if (!ResolveUi())
+    return;
+  std::unordered_map<void *, bool> now_scaler, now_canvas;
+  void **items = nullptr;
+  size_t count = FindObjects(g_ui.scaler_class, &items);
+  for (size_t i = 0; i < count; ++i) {
+    void *sc = items[i];
+    if (!sc)
+      continue;
+    now_scaler[sc] = true;
+    if (g_seen_scaler.count(sc))
+      continue;
+    int mode = -1;
+    Vec2 ref{0, 0};
+    float sf = 0;
+    ReadInt(g_ui.m_get_mode, sc, &mode);
+    ReadVec2(g_ui.m_get_ref, sc, &ref);
+    ReadFloat(g_ui.m_get_sf, sc, &sf);
+    if (InterlockedDecrement(&g_observe_budget) >= 0) {
+      char name[96];
+      Log("observe: new CanvasScaler %p '%s' mode=%d reference (%.0f x %.0f) scaleFactor %.3f", sc, NameOf(sc, name, sizeof(name)), mode, ref.x, ref.y, sf);
+    }
+  }
+  if (g_ui.canvas_class && g_ui.m_c_root && g_ui.m_c_mode) {
+    count = FindObjects(g_ui.canvas_class, &items);
+    for (size_t i = 0; i < count; ++i) {
+      void *cv = items[i];
+      if (!cv)
+        continue;
+      now_canvas[cv] = true;
+      if (g_seen_canvas.count(cv))
+        continue;
+      int root = 0, mode = -1;
+      ReadBool(g_ui.m_c_root, cv, &root);
+      ReadInt(g_ui.m_c_mode, cv, &mode);
+      float sf = 0;
+      if (g_ui.m_c_get_sf)
+        ReadFloat(g_ui.m_c_get_sf, cv, &sf);
+      if (root && mode != 2 && InterlockedDecrement(&g_observe_budget) >= 0) {
+        char name[96];
+        Log("observe: new root Canvas %p '%s' renderMode=%d scaleFactor %.3f", cv, NameOf(cv, name, sizeof(name)), mode, sf);
+      }
+    }
+  }
+  g_seen_scaler.swap(now_scaler);
+  g_seen_canvas.swap(now_canvas);
 }

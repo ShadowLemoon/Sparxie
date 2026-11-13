@@ -352,6 +352,7 @@ void Pump() {
     pm::Tick();
     EnsureProfile();
     EnsureUiKnob();
+    ObserveUi();
   }
 }
 
