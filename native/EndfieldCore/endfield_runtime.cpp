@@ -375,12 +375,13 @@ DWORD WINAPI RuntimeThread(void *) {
       ++posts_logged;
       if (!posted || posts_logged <= 2)
         Log("pump message posted: %s (error %lu), hook calls so far %ld", posted ? "ok" : "FAILED", posted ? 0ul : GetLastError(), g_hook_calls);
-      if (posts_logged == 6 && !g_pumped_by_hook && g_subclassed != window) {
+      // Windows Unity needs 5 to 11 s to start pumping messages (loading): the hook is given 60 s before the window procedure is replaced
+      if (posts_logged == 240 && !g_pumped_by_hook && g_subclassed != window) {
         // the hook is installed but never ran: take the window's procedure instead
         SetLastError(0);
         g_original_proc = reinterpret_cast<WNDPROC>(SetWindowLongPtrW(window, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(PumpWndProc)));
         g_subclassed = g_original_proc ? window : nullptr;
-        Log("the message hook has not run after 6 posts; window procedure %s (error %lu)", g_original_proc ? "replaced" : "NOT replaced", g_original_proc ? 0ul : GetLastError());
+        Log("the message hook has not run after 240 posts (60 s); window procedure %s (error %lu)", g_original_proc ? "replaced" : "NOT replaced", g_original_proc ? 0ul : GetLastError());
       }
     }
     Sleep(250);
