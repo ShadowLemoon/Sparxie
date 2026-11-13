@@ -3458,10 +3458,16 @@ void Pump() {
   if (n == 1)
     Log("first pump runs on the game's main thread (tid %lu)",
         GetCurrentThreadId());
-  EnsureFrameRate();
+  {
+    EnsureFrameRate();
+  }
   if (g_shared->touch_ui_enabled) {
-    EnsureTouch();
-    EnsureDrag();
+    {
+      EnsureTouch();
+    }
+    {
+      EnsureDrag();
+    }
     pm::Tick(n);
     if (n == 1 || n % 20 == 1)
       ReadUiConfig();
