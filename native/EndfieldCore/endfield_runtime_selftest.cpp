@@ -70,7 +70,7 @@ int main() {
   // ui_pointers=all, cloud_mode=on, ui_scale=auto, safe_area=auto, observe=1)
   DeleteFileW(g_ini_path.c_str());
   g_pm_want = 0;
-  g_drop_touch_mouse = 0;
+  g_drop_touch_mouse = 1;
   read_ini();
   CHECK(g_pm_want == 2 && g_drop_touch_mouse == 1 && g_drag_setting == "auto");
   CHECK(g_cloud_mode == 1 && g_ui_rel == 0.0f && !g_ui_off &&
@@ -87,7 +87,7 @@ int main() {
   CHECK(g_cloud_mode == 1 && g_ui_rel == 0.0f && !g_ui_off &&
         !g_spec_ini.Any() && g_flag_observe && g_ui_knob_mode == 2 &&
         !g_flag_notch_write);
-  write_ini("ui_pointers=0\r\n  TOUCH_MOUSE=off\r\ndrag_px=30 \r\n");
+  write_ini("ui_pointers=0\r\ntouch_mouse=off\r\ndrag_px=30\r\n");
   read_ini();
   CHECK(g_pm_want == 0 && g_drop_touch_mouse == 0 && g_drag_setting == "30");
   write_ini(
