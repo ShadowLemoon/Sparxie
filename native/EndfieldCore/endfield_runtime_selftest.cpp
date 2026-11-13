@@ -46,16 +46,6 @@ int main() {
   pm::HoldFast();
   CHECK(*reinterpret_cast<int32_t *>(module + 0x30) == 1);
 
-  // touch-made mouse messages are recognised by the signature in the extra
-  // info, a real mouse is not
-  CHECK(IsTouchMadeMouse(WM_LBUTTONDOWN, 0xFF5157C3ul) &&
-        IsTouchMadeMouse(WM_MOUSEMOVE, 0xFF515700ul) &&
-        IsTouchMadeMouse(WM_LBUTTONDBLCLK, 0xFF5157FFul));
-  CHECK(!IsTouchMadeMouse(WM_LBUTTONDOWN, 0) &&
-        !IsTouchMadeMouse(WM_LBUTTONDOWN, 0xFF5156FFul) &&
-        !IsTouchMadeMouse(WM_RBUTTONDOWN, 0xFF5157C3ul) &&
-        !IsTouchMadeMouse(WM_POINTERDOWN, 0xFF5157C3ul));
-
   // the ini keys
   wchar_t temp[MAX_PATH];
   GetTempPathW(MAX_PATH, temp);

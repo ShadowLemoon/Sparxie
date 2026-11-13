@@ -86,6 +86,18 @@ void Log(const char *format, ...) {
   LeaveCriticalSection(&g_log_lock);
 }
 
+volatile LONG g_pm_want =
+    2; // ui_pointers=all|0|1|2|off: the pointerBehavior the UI input module is
+       // held at (2 = AllPointersAsIs); -1 = off
+volatile LONG g_pm_guard = 1; // pointer_guard=on|off: the module's setter drops
+                              // changes away from the held value
+volatile LONG g_pm_probe =
+    0; // pointer_probe=on|off: log who changes the value (call sites, callers)
+volatile LONG g_drop_touch_mouse =
+    1; // touch_mouse=drop (default) | off: the mouse messages Windows makes
+       // from a touch are taken out of the game thread's queue
+LONG g_dropped_mouse = 0;
+
 void OpenLog(const wchar_t *wanted) {
   InitializeCriticalSection(&g_log_lock);
   g_log_lock_ready = true;
@@ -3387,7 +3399,6 @@ void EnsureProfile() {
       g_have_profile = true;
       g_last_w = w;
       g_last_h = h;
-      LogGameThresholds();
     }
   }
   if (!g_flag_safe_override)
