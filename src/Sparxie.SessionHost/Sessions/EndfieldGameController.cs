@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Sparxie.Contracts.Models;
 using Sparxie.Contracts.Rpc;
+using Sparxie.Infrastructure.Configuration;
+using Sparxie.Infrastructure.Endfield;
 
 namespace Sparxie.SessionHost.Sessions;
 
@@ -14,13 +16,30 @@ public sealed class EndfieldGameController : IGameController
     private const int Ok = 0;
     private IntPtr _session;
     private string? _launchPath;
+    private string _profileId = string.Empty;
+    private EndfieldUiSync? _uiSync;
     private bool _disposed;
+    private readonly string _iniPath;
+    private readonly string _configPath;
+
+    public EndfieldGameController()
+        : this(EndfieldUiIni.DefaultPath(), Path.Combine(AppDataDirectory.Resolve(), "config.json"))
+    {
+    }
+
+    /// <summary>Tests point the ini and the config at their own folder.</summary>
+    internal EndfieldGameController(string iniPath, string configPath)
+    {
+        _iniPath = iniPath;
+        _configPath = configPath;
+    }
 
     public bool CreatesProcess => true;
 
     public Task PrepareLaunchAsync(ProfileSnapshot profile, CancellationToken cancellationToken)
     {
         _launchPath = profile.ExecutablePath;
+        _profileId = profile.ProfileId;
         return Task.CompletedTask;
     }
 
@@ -30,6 +49,10 @@ public sealed class EndfieldGameController : IGameController
         {
             throw new InvalidOperationException("Endfield EXE 路径为空");
         }
+
+        // touch-interface settings reach the Runtime through endfield-ui.ini; they are in place before the game exists, so its first read already sees them
+        _uiSync = new EndfieldUiSync(_profileId, _iniPath, _configPath, WriteLogLine);
+        _uiSync.Write(hoyo);
 
         var request = BuildRequest(_launchPath, hoyo);
         var result = NewResult();
@@ -48,6 +71,7 @@ public sealed class EndfieldGameController : IGameController
             result = NewResult();
             rc = endfield_launch(_session, ref result);
             ThrowIfFailed(rc, result, $"Endfield 启动注入失败（阶段 {result.Stage}）");
+            _uiSync.Start(UiFollowInterval);
         }
         finally
         {
@@ -99,8 +123,27 @@ public sealed class EndfieldGameController : IGameController
         Release();
     }
 
+    private static readonly TimeSpan UiFollowInterval = TimeSpan.FromSeconds(2);
+
+    /// <summary>One timestamped line into logs\endfield-launch.log. A diagnostics line must never fail a launch.</summary>
+    private static void WriteLogLine(string text)
+    {
+        try
+        {
+            var directory = Path.Combine(AppDataDirectory.Resolve(), "logs");
+            Directory.CreateDirectory(directory);
+            File.AppendAllText(Path.Combine(directory, "endfield-launch.log"), $"[{DateTime.Now:O}] {text}{Environment.NewLine}");
+        }
+        catch (Exception)
+        {
+            // see the summary
+        }
+    }
+
     private void Release()
     {
+        _uiSync?.Dispose();
+        _uiSync = null;
         if (_session != IntPtr.Zero)
         {
             endfield_release(_session);
