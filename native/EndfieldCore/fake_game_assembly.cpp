@@ -127,14 +127,14 @@ il2cpp_class_get_method_from_name(void *klass, const char *name, int argc) {
 EXPORT const void *il2cpp_class_get_methods(void *klass, void **iter) {
   if (klass != &g_object_class || !iter || *iter)
     return nullptr;
-  *iter = &g_find_method_info;
-  return &g_find_method_info;
+  *iter = &g_find_objects_method;
+  return &g_find_objects_method;
 }
 EXPORT const char *il2cpp_method_get_name(const void *method) {
-  return method == &g_find_method_info ? "FindObjectsOfType" : "";
+  return method == &g_find_objects_method ? "FindObjectsOfType" : "";
 }
 EXPORT unsigned il2cpp_method_get_param_count(const void *method) {
-  return method == &g_find_method_info ? 2u : 0u;
+  return method == &g_find_objects_method ? 2u : 0u;
 }
 EXPORT bool il2cpp_method_is_generic(const void *) { return false; }
 EXPORT void il2cpp_field_get_value(void *, void *, void *) {}
