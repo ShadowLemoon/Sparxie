@@ -440,6 +440,12 @@ internal static class ProfileSnapshotExtensions
             EndfieldWidth = endfieldUnset ? endfieldDefaults.EndfieldWidth : hoyo.EndfieldWidth,
             EndfieldHeight = endfieldUnset ? endfieldDefaults.EndfieldHeight : hoyo.EndfieldHeight,
             EndfieldRefreshRate = endfieldUnset ? endfieldDefaults.EndfieldRefreshRate : hoyo.EndfieldRefreshRate,
+            // an older client sends none of these: empty mode = auto, percent 0 = default, insets 0
+            EndfieldUiScaleMode = EndfieldUiSettings.NormalizeScaleMode(hoyo.EndfieldUiScaleMode),
+            EndfieldUiScalePercent = EndfieldUiSettings.NormalizeScalePercent(hoyo.EndfieldUiScalePercent),
+            EndfieldSafeAreaMode = EndfieldUiSettings.NormalizeSafeAreaMode(hoyo.EndfieldSafeAreaMode),
+            EndfieldSafeLeft = EndfieldUiSettings.NormalizeInset(hoyo.EndfieldSafeLeft),
+            EndfieldSafeRight = EndfieldUiSettings.NormalizeInset(hoyo.EndfieldSafeRight),
         };
     }
 }

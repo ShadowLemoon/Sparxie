@@ -27,6 +27,11 @@ public sealed record ProfileMutation(
     int? EndfieldWidth = null,
     int? EndfieldHeight = null,
     int? EndfieldRefreshRate = null,
+    string? EndfieldUiScaleMode = null,
+    int? EndfieldUiScalePercent = null,
+    string? EndfieldSafeAreaMode = null,
+    int? EndfieldSafeLeft = null,
+    int? EndfieldSafeRight = null,
     LaunchSettings? Launch = null)
 {
     public bool HasHoyoSettings =>
@@ -41,7 +46,12 @@ public sealed record ProfileMutation(
         || EndfieldAutoResolution.HasValue
         || EndfieldWidth.HasValue
         || EndfieldHeight.HasValue
-        || EndfieldRefreshRate.HasValue;
+        || EndfieldRefreshRate.HasValue
+        || EndfieldUiScaleMode is not null
+        || EndfieldUiScalePercent.HasValue
+        || EndfieldSafeAreaMode is not null
+        || EndfieldSafeLeft.HasValue
+        || EndfieldSafeRight.HasValue;
 
     public bool HasGenshinSettings =>
         GenshinFollowInGamePreset.HasValue

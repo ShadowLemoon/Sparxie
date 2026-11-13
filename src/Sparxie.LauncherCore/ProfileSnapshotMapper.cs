@@ -60,6 +60,11 @@ public static class ProfileSnapshotMapper
                     EndfieldWidth = profile.Hoyo.EndfieldWidth,
                     EndfieldHeight = profile.Hoyo.EndfieldHeight,
                     EndfieldRefreshRate = profile.Hoyo.EndfieldRefreshRate,
+                    EndfieldUiScaleMode = EndfieldUiSettings.NormalizeScaleMode(profile.Hoyo.EndfieldUiScaleMode),
+                    EndfieldUiScalePercent = EndfieldUiSettings.NormalizeScalePercent(profile.Hoyo.EndfieldUiScalePercent),
+                    EndfieldSafeAreaMode = EndfieldUiSettings.NormalizeSafeAreaMode(profile.Hoyo.EndfieldSafeAreaMode),
+                    EndfieldSafeLeft = EndfieldUiSettings.NormalizeInset(profile.Hoyo.EndfieldSafeLeft),
+                    EndfieldSafeRight = EndfieldUiSettings.NormalizeInset(profile.Hoyo.EndfieldSafeRight),
                 },
         };
     }

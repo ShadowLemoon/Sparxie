@@ -202,6 +202,32 @@ public static class ProfileManager
             {
                 hoyo.EndfieldRefreshRate = refreshRate;
             }
+
+            // the touch-interface settings never fail a save: out-of-range values are brought into range
+            if (mutation.EndfieldUiScaleMode is { } uiScaleMode)
+            {
+                hoyo.EndfieldUiScaleMode = EndfieldUiSettings.NormalizeScaleMode(uiScaleMode);
+            }
+
+            if (mutation.EndfieldUiScalePercent is { } uiScalePercent)
+            {
+                hoyo.EndfieldUiScalePercent = EndfieldUiSettings.NormalizeScalePercent(uiScalePercent);
+            }
+
+            if (mutation.EndfieldSafeAreaMode is { } safeAreaMode)
+            {
+                hoyo.EndfieldSafeAreaMode = EndfieldUiSettings.NormalizeSafeAreaMode(safeAreaMode);
+            }
+
+            if (mutation.EndfieldSafeLeft is { } safeLeft)
+            {
+                hoyo.EndfieldSafeLeft = EndfieldUiSettings.NormalizeInset(safeLeft);
+            }
+
+            if (mutation.EndfieldSafeRight is { } safeRight)
+            {
+                hoyo.EndfieldSafeRight = EndfieldUiSettings.NormalizeInset(safeRight);
+            }
         }
 
         if (mutation.HasGenshinSettings)
@@ -316,6 +342,11 @@ public static class ProfileManager
                 EndfieldWidth = source.Hoyo.EndfieldWidth,
                 EndfieldHeight = source.Hoyo.EndfieldHeight,
                 EndfieldRefreshRate = source.Hoyo.EndfieldRefreshRate,
+                EndfieldUiScaleMode = source.Hoyo.EndfieldUiScaleMode,
+                EndfieldUiScalePercent = source.Hoyo.EndfieldUiScalePercent,
+                EndfieldSafeAreaMode = source.Hoyo.EndfieldSafeAreaMode,
+                EndfieldSafeLeft = source.Hoyo.EndfieldSafeLeft,
+                EndfieldSafeRight = source.Hoyo.EndfieldSafeRight,
             },
     };
 
