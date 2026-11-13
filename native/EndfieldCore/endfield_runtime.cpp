@@ -27,6 +27,9 @@
 //  - the frame-rate target is held the same way.
 //  - taps: the UI input module's pointer mode is held so that every finger keeps its own pointer record (endfield_pointer_mode.inc), the mouse messages Windows makes from touches are
 //    removed before the game reads them, and the drag threshold follows the client's pixel density (endfield_drag.inc).
+//  - the phone UI: the game is told, through its own cloud-gaming inputs, that the user plays on the stream's client device (endfield_cloud.inc); the UI size and the notch padding follow
+//    from that in the game's own code, with ui_scale on top (endfield_ui_size.inc). If those inputs cannot be set, the UI size and the notch go through the PC UI's own settings instead.
+//  - endfield-ui.ini beside the DLL (written by Sparxie) holds the keys; see UI_INI_CONTRACT.md.
 //  - everything it does is written to endfield-runtime.log (next to Sparxie's other logs).
 // Behaviour of the game's DeviceInfo is the community's finding (Better-Endfield docs/ui/MOBILE_UI_REVERSING.md: "write the state through ChangeInputType, on the main thread");
 // the code here is our own.
@@ -304,6 +307,7 @@ bool IsTouchMadeMouse(UINT message, unsigned long extra_info) {
 #include "endfield_ui_config.inc"
 #include "endfield_ui_size.inc"
 #include "endfield_notch.inc"
+#include "endfield_cloud.inc"
 
 void ReadIni() {
   LONG want = 2, drop_mouse = 1;  // the defaults when a key (or the file) is missing
@@ -356,6 +360,7 @@ void Pump() {
     EnsureDrag();
     pm::Tick();
     EnsureProfile();
+    cl::Tick();
     EnsureUiKnob();
     EnsureNotch();
     ObserveUi();
