@@ -42,7 +42,7 @@ const Dev kDevices[] = {
     {"iphone-14-pro-max", "iPhone 14 Pro Max / 15 Plus / 15 Pro Max / 16 Plus", "phone", 2796, 1290, 932, 59},
     {"iphone-16-pro", "iPhone 16 Pro / 17 / 17 Pro", "phone", 2622, 1206, 874, 62},
     {"iphone-air", "iPhone Air", "phone", 2736, 1260, 912, 62},
-    {"iphone-17-pro-max", "iPhone 17 Pro Max / 16 Pro Max", "phone", 2868, 1320, 956, 62, 1.35f},
+    {"iphone-17-pro-max", "iPhone 17 Pro Max / 16 Pro Max", "phone", 2868, 1320, 956, 62, 1.4f},
     {"ipad-9", "iPad 9th gen", "pad", 2160, 1620, 1080, 0},
     {"ipad-mini", "iPad mini 6 / 7", "pad", 2266, 1488, 1133, 0},
     {"ipad-air-11", "iPad Air 11 / iPad 10", "pad", 2360, 1640, 1180, 0},

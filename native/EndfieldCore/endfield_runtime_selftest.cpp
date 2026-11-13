@@ -100,7 +100,7 @@ int main() {
     float l = 0, r = 0, t = 0, b = 0;
     Profile p = BuildProfile(ProfileSpec{}, 2868, 1320);
     ComputeInsets(p, 2868, 1320, &l, &r, &t, &b);
-    CHECK(p.name == "iphone-17-pro-max" && p.cls == "phone" && p.ui_scale == 1.35f && static_cast<int>(l + 0.5f) == 186 && static_cast<int>(r + 0.5f) == 186 && t == 0 && b == 0 && ProfileHasInsets(p));
+    CHECK(p.name == "iphone-17-pro-max" && p.cls == "phone" && p.ui_scale == 1.4f && static_cast<int>(l + 0.5f) == 186 && static_cast<int>(r + 0.5f) == 186 && t == 0 && b == 0 && ProfileHasInsets(p));
     p = BuildProfile(ProfileSpec{}, 2752, 2064);
     CHECK(p.name == "ipad-pro-13" && p.cls == "pad" && !ProfileHasInsets(p));
     p = BuildProfile(ProfileSpec{}, 1920, 1080);

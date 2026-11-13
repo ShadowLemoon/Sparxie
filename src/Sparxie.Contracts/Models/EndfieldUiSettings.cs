@@ -16,8 +16,8 @@ public static class EndfieldUiSettings
     public const int MaxScalePercent = 180;
     public const int ScaleStepPercent = 5;
 
-    /// <summary>1.25: what an unknown phone gets when the scale is automatic; also the value a manual slider starts from.</summary>
-    public const int DefaultScalePercent = 125;
+    /// <summary>1.40: the settings card's default and reset value; automatic unknown-device fallback remains the game's phone size (1.25).</summary>
+    public const int DefaultScalePercent = 140;
 
     public const int MaxSafeInset = 600;
 

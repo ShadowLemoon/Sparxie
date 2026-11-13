@@ -19,7 +19,7 @@ public sealed class EndfieldUiLauncherTests
 
         var snapshot = ProfileSnapshotMapper.Map(created);
 
-        Assert.Equal(("auto", 125, "auto", 0, 0), (snapshot.Hoyo!.EndfieldUiScaleMode, snapshot.Hoyo.EndfieldUiScalePercent, snapshot.Hoyo.EndfieldSafeAreaMode, snapshot.Hoyo.EndfieldSafeLeft, snapshot.Hoyo.EndfieldSafeRight));
+        Assert.Equal(("auto", 140, "auto", 0, 0), (snapshot.Hoyo!.EndfieldUiScaleMode, snapshot.Hoyo.EndfieldUiScalePercent, snapshot.Hoyo.EndfieldSafeAreaMode, snapshot.Hoyo.EndfieldSafeLeft, snapshot.Hoyo.EndfieldSafeRight));
     }
 
     [Fact]

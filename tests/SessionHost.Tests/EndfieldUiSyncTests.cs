@@ -50,7 +50,7 @@ public sealed class EndfieldUiSyncTests : IDisposable
     {
         var model = new HoyoSettings { EndfieldInputMode = "touch", FpsUnlockEnabled = true, TargetFps = 120, EndfieldWidth = 1920, EndfieldHeight = 1080, EndfieldRefreshRate = 60 }.ToModel()!;
 
-        Assert.Equal(("auto", 125, "auto", 0, 0), (model.EndfieldUiScaleMode, model.EndfieldUiScalePercent, model.EndfieldSafeAreaMode, model.EndfieldSafeLeft, model.EndfieldSafeRight));
+        Assert.Equal(("auto", 140, "auto", 0, 0), (model.EndfieldUiScaleMode, model.EndfieldUiScalePercent, model.EndfieldSafeAreaMode, model.EndfieldSafeLeft, model.EndfieldSafeRight));
         Assert.Equal(("auto", "auto"), EndfieldUiSettings.IniValues(model));
     }
 

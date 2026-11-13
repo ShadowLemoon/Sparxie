@@ -32,7 +32,7 @@ message HoyoSettings {
   int32 endfield_width = 14;
   int32 endfield_height = 15;
   int32 endfield_refresh_rate = 16;
-  // Endfield touch interface. All optional: empty mode = auto, scale percent 0 = default 125, insets 0 = none. Never a reason to refuse a session.
+  // Endfield touch interface. All optional: empty mode = auto, scale percent 0 = default 140, insets 0 = none. Never a reason to refuse a session.
   string endfield_ui_scale_mode = 17;     // auto | manual
   int32 endfield_ui_scale_percent = 18;   // 100-180, only read when the mode is manual
   string endfield_safe_area_mode = 19;    // auto | off | manual

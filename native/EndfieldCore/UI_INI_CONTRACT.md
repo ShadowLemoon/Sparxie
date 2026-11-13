@@ -7,7 +7,7 @@ A missing file or a missing key means the default. The defaults are the values S
 
 | key | values | default | meaning |
 |---|---|---|---|
-| `ui_scale` | `auto` \| `off` \| a number from `1.00` to `1.80` | `auto` | Size of the game UI relative to the PC build's default size. `auto` = per client device (table keyed by stream resolution): iPhone 17 Pro Max / 16 Pro Max class (2868×1320) = `1.35`; every other device = the phone build's size (the game's PC multiplier removed, `1.25` in the shipped game). A number overrides the table, e.g. `1.3`, `1.35`, `1.4`. `off` = the game's own size. Numbers outside 1.00–1.80 are clamped; text that is not a number means `auto`. |
+| `ui_scale` | `auto` \| `off` \| a number from `1.00` to `1.80` | `auto` | Size of the game UI relative to the PC build's default size. `auto` = per client device (table keyed by stream resolution): iPhone 17 Pro Max / 16 Pro Max class (2868×1320) = `1.40`; every other device = the phone build's size (the game's PC multiplier removed, `1.25` in the shipped game). A number overrides the table, e.g. `1.25`, `1.35`, `1.4`. `off` = the game's own size. Numbers outside 1.00–1.80 are clamped; text that is not a number means `auto`. |
 | `safe_area` | `auto` \| `off` \| `<left>,<right>` | `auto` | Notch / side safe area. `auto` = from the client device (table keyed by stream resolution, e.g. 2868×1320 = iPhone 17 Pro Max → 186 px per side; iPads, notch-less phones and unknown sizes = 0). `off` = the game's own setting is not touched. `<left>,<right>` = pixels in **stream** coordinates, e.g. `186,186`; `0,0` means no inset. |
 
 ## Keys of the Runtime (Sparxie keeps them as they are)

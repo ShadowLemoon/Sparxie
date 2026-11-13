@@ -44,7 +44,7 @@ public sealed class EndfieldUiDesktopTests : IDisposable
 
         Assert.Equal(0, editor.EndfieldUiScaleModeIndex);
         Assert.False(editor.EndfieldUiScaleManual);
-        Assert.Equal(125, editor.EndfieldUiScalePercent);
+        Assert.Equal(140, editor.EndfieldUiScalePercent);
         Assert.Equal("1.25×", editor.EndfieldUiScaleText);
         Assert.Equal(0, editor.EndfieldSafeAreaModeIndex);
         Assert.False(editor.EndfieldSafeManual);

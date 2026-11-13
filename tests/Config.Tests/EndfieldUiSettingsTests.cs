@@ -26,11 +26,11 @@ public sealed class EndfieldUiSettingsTests : IDisposable
     // ---- values ----
 
     [Theory]
-    [InlineData("auto", 125, "auto")]
-    [InlineData("manual", 125, "1.25")]
+    [InlineData("auto", 140, "auto")]
+    [InlineData("manual", 140, "1.40")]
     [InlineData("manual", 100, "1.00")]
     [InlineData("manual", 180, "1.80")]
-    [InlineData("manual", 0, "1.25")]
+    [InlineData("manual", 0, "1.40")]
     [InlineData("manual", 127, "1.25")]
     [InlineData("manual", 128, "1.30")]
     [InlineData("manual", 99, "1.00")]
@@ -60,7 +60,7 @@ public sealed class EndfieldUiSettingsTests : IDisposable
         try
         {
             CultureInfo.CurrentCulture = new CultureInfo("de-DE");
-            Assert.Equal("1.25", EndfieldUiSettings.ScaleValue("manual", 125));
+            Assert.Equal("1.40", EndfieldUiSettings.ScaleValue("manual", 140));
             Assert.Equal("12,34", EndfieldUiSettings.SafeAreaValue("manual", 12, 34));
         }
         finally
@@ -97,7 +97,7 @@ public sealed class EndfieldUiSettingsTests : IDisposable
 
         Assert.Equal(ConfigLoadState.Loaded, result.State);
         var hoyo = result.Config.Profiles.Single().Hoyo!;
-        Assert.Equal(("auto", 125, "auto", 0, 0), (hoyo.EndfieldUiScaleMode, hoyo.EndfieldUiScalePercent, hoyo.EndfieldSafeAreaMode, hoyo.EndfieldSafeLeft, hoyo.EndfieldSafeRight));
+        Assert.Equal(("auto", 140, "auto", 0, 0), (hoyo.EndfieldUiScaleMode, hoyo.EndfieldUiScalePercent, hoyo.EndfieldSafeAreaMode, hoyo.EndfieldSafeLeft, hoyo.EndfieldSafeRight));
         Assert.Equal(before, File.ReadAllBytes(ConfigPath));
         Assert.Empty(Directory.GetFiles(_dir, "config.*-*.json"));
     }

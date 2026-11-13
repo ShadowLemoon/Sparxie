@@ -47,7 +47,7 @@ It gives the game's own UI code the one input the cloud client would give it, wi
   - userPlatform -> iOS (8) for iPhone/iPad profiles, Android (11) for Android profiles; this is what `CloudGame.platform` would be.
   - safeArea -> `Rect(x = left inset, y = bottom inset, w = W - left - right, h = H - top - bottom)` in screen pixels from the device profile (`safe_area` in the ini; the 2868x1320 iPhone 17 Pro Max row = 186 px per side).
 - Everything else (UI scale = the phone value, mobile UI layers, notch padding, canvas layout) is the game's own computation from these two inputs. `ui_scale` then only adds the extra factor above the phone size
-  (ui_scale / PC multiplier: 1.35 / 1.25 = 1.08 for the 17 Pro Max class) through the standard-resolution knob.
+  (ui_scale / PC multiplier: 1.40 / 1.25 = 1.12 for the 17 Pro Max class) through the standard-resolution knob.
 - `cloud_mode=on` is the default. `cloud_mode=off` (live) puts both slots back to what they were (empty) and asks the UI to lay out again.
 - The Runtime logs `cloud state (...)`: userPlatform, isPCUser/isMobileUser/isIOSUser, DeviceInfo.safeArea, DeviceInfoManager.NotchPadding, UIConst.GetResolutionScale, hook call counts, and `UI state` for UIRoot / CanvasRoot.
 - In a session without a hot-fix the slot page does not exist: the game creates it only when a hot-fix is loaded. See 7.
