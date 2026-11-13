@@ -5,8 +5,12 @@
 #include <cstdint>
 #include <cstdio>
 #include <cwchar>
+#include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 #include "endfield_shared.h"
 
@@ -18,6 +22,8 @@
 //  - every managed call is made on the game's main thread. The Runtime posts a private window message to the Unity window every 250 ms and a WH_GETMESSAGE hook on that thread runs the
 //    check when the message comes out of the queue (ChangeInputType raises onInputTypeChanged, which restyles Unity UI objects; that is main-thread work).
 //  - the frame-rate target is held the same way.
+//  - taps: the UI input module's pointer mode is held so that every finger keeps its own pointer record (endfield_pointer_mode.inc), the mouse messages Windows makes from touches are
+//    removed before the game reads them, and the drag threshold follows the client's pixel density (endfield_drag.inc).
 //  - everything it does is written to endfield-runtime.log (next to Sparxie's other logs).
 // Behaviour of the game's DeviceInfo is the community's finding (Better-Endfield docs/ui/MOBILE_UI_REVERSING.md: "write the state through ChangeInputType, on the main thread");
 // the code here is our own.
@@ -279,6 +285,7 @@ std::string ReadIniText() {
   return ReadWholeFile(g_ini_path);
 }
 
+#include "endfield_il2cpp.inc"
 #include "endfield_pointer_mode.inc"
 
 // touch_mouse=drop (default) | off: Windows makes WM_LBUTTONDOWN / WM_LBUTTONUP / WM_LBUTTONDBLCLK / WM_MOUSEMOVE from a touch (signature 0xFF5157xx in the message's extra info) although the
@@ -290,9 +297,11 @@ bool IsTouchMadeMouse(UINT message, unsigned long extra_info) {
   return (message == WM_LBUTTONDOWN || message == WM_LBUTTONUP || message == WM_LBUTTONDBLCLK || message == WM_MOUSEMOVE) && (extra_info & 0xFFFFFF00ul) == 0xFF515700ul;
 }
 
+#include "endfield_drag.inc"
 
 void ReadIni() {
   LONG want = 2, drop_mouse = 1;  // the defaults when a key (or the file) is missing
+  std::string drag = "auto";
   std::string text = ReadIniText();
   for (char *line = strtok(text.data(), "\r\n"); line; line = strtok(nullptr, "\r\n")) {
     while (*line == ' ' || *line == '\t')
@@ -302,6 +311,10 @@ void ReadIni() {
       want = _strnicmp(v, "off", 3) == 0 ? -1 : ((v[0] >= '0' && v[0] <= '2') ? v[0] - '0' : 2);
     } else if (_strnicmp(line, "touch_mouse=", 12) == 0) {
       drop_mouse = _strnicmp(line + 12, "off", 3) == 0 ? 0 : 1;
+    } else if (_strnicmp(line, "drag_px=", 8) == 0) {
+      drag = line + 8;
+      while (!drag.empty() && (drag.back() == ' ' || drag.back() == '\t'))
+        drag.pop_back();
     }
   }
   if (want != pm::g_want)
@@ -310,6 +323,9 @@ void ReadIni() {
   if (drop_mouse != g_drop_touch_mouse)
     Log("endfield-ui.ini: touch_mouse=%s (the mouse messages Windows makes from touches %s)", drop_mouse ? "drop" : "off", drop_mouse ? "are removed before the game reads them" : "are left alone");
   g_drop_touch_mouse = drop_mouse;
+  if (drag != g_drag_setting)
+    Log("endfield-ui.ini: drag_px=%s", drag.c_str());
+  g_drag_setting = drag;
 }
 
 void Pump() {
@@ -323,6 +339,7 @@ void Pump() {
     EnsureTouch();
     if (n == 1 || n % 20 == 1)
       ReadIni();
+    EnsureDrag();
     pm::Tick();
   }
 }

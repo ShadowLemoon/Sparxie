@@ -15,7 +15,6 @@ namespace pm {
 
 using FieldFromName = void *(__cdecl *)(void *, const char *);
 using FieldOffsetFn = int(__cdecl *)(void *);
-using DomainAssembliesFn = const void **(__cdecl *)(void *, size_t *);
 
 // ini state: -1 = off, 0..2 = the value held
 volatile LONG g_want = 2;
@@ -32,24 +31,6 @@ LONG g_hold_fix = 0, g_logged_fix = 0, g_last_fix_logged = 0, g_ticks = 0;
 void *g_cached_module = nullptr;
 void *g_cached_class = nullptr;
 
-void *FindClass(const char *space, const char *name) {
-  HMODULE game = g_managed.game_assembly;
-  auto domain_get = reinterpret_cast<DomainGet>(GetProcAddress(game, "il2cpp_domain_get"));
-  auto assembly_image = reinterpret_cast<AssemblyImage>(GetProcAddress(game, "il2cpp_assembly_get_image"));
-  auto class_from_name = reinterpret_cast<ClassFromName>(GetProcAddress(game, "il2cpp_class_from_name"));
-  auto assemblies = reinterpret_cast<DomainAssembliesFn>(GetProcAddress(game, "il2cpp_domain_get_assemblies"));
-  if (!domain_get || !assembly_image || !class_from_name || !assemblies)
-    return nullptr;
-  size_t count = 0;
-  const void **list = assemblies(domain_get(), &count);
-  for (size_t i = 0; list && i < count && i < 4096; ++i) {
-    const void *image = list[i] ? assembly_image(list[i]) : nullptr;
-    if (void *klass = image ? class_from_name(image, space, name) : nullptr)
-      return klass;
-  }
-  return nullptr;
-}
-
 bool Resolve() {
   if (S.tried)
     return S.ok;
@@ -57,8 +38,8 @@ bool Resolve() {
   HMODULE game = g_managed.game_assembly;
   if (!game || !g_managed.runtime_invoke)
     return false;
-  S.module_class = FindClass("UnityEngine.InputSystem.UI", "InputSystemUIInputModule");
-  S.event_system_class = FindClass("UnityEngine.EventSystems", "EventSystem");
+  S.module_class = FindClassAnywhere("UnityEngine.InputSystem.UI", "InputSystemUIInputModule");
+  S.event_system_class = FindClassAnywhere("UnityEngine.EventSystems", "EventSystem");
   if (!S.module_class || !S.event_system_class)
     return false;  // the Input System is not loaded yet: asked again on the next pump
   S.tried = true;
@@ -131,9 +112,20 @@ void Tick() {
   if (g_want < 0 || !Resolve())
     return;
   ++g_ticks;
+  std::vector<void *> modules;
   if (void *module = ActiveModule()) {
     g_cached_module = module;
     g_cached_class = *static_cast<void **>(module);
+    modules.push_back(module);
+  }
+  if (g_ticks % 40 == 1) {  // about every 10 s: any other instance of the module (a scene can hold more than one EventSystem)
+    void **items = nullptr;
+    const size_t n = FindObjects(S.module_class, &items);
+    for (size_t i = 0; i < n; ++i)
+      if (items[i] && std::find(modules.begin(), modules.end(), items[i]) == modules.end())
+        modules.push_back(items[i]);
+  }
+  for (void *module : modules) {
     const int value = ReadValue(module);
     if (value != g_want) {
       const bool ok = WriteValue(module, static_cast<int>(g_want));
