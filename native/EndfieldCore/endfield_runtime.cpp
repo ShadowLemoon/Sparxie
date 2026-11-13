@@ -89,10 +89,6 @@ void Log(const char *format, ...) {
 volatile LONG g_pm_want =
     2; // ui_pointers=all|0|1|2|off: the pointerBehavior the UI input module is
        // held at (2 = AllPointersAsIs); -1 = off
-volatile LONG g_pm_guard = 1; // pointer_guard=on|off: the module's setter drops
-                              // changes away from the held value
-volatile LONG g_pm_probe =
-    0; // pointer_probe=on|off: log who changes the value (call sites, callers)
 volatile LONG g_drop_touch_mouse =
     1; // touch_mouse=drop (default) | off: the mouse messages Windows makes
        // from a touch are taken out of the game thread's queue

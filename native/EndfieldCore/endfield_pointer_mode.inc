@@ -169,8 +169,6 @@ void HoldFast() {
 
 LONG g_pm_ticks = 0;
 void Tick(LONG pump_no) {
-  if (g_pm_want < 0 && !g_pm_probe)
-    return;
   if (!Resolve())
     return;
   ++g_pm_ticks;
