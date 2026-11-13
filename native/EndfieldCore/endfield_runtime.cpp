@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cwchar>
+#include <cstring>
 #include <string>
 
 #include "endfield_shared.h"
@@ -253,6 +254,51 @@ void EnsureFrameRate() {
   }
 }
 
+// ---- endfield-ui.ini beside the DLL, re-read about every 5 s (every 20th pump)
+std::wstring g_ini_path;
+std::string ReadWholeFile(const std::wstring &path) {
+  if (path.empty())
+    return "";
+  HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (file == INVALID_HANDLE_VALUE)
+    return "";
+  char text[2048] = {};
+  DWORD got = 0;
+  ReadFile(file, text, sizeof(text) - 1, &got, nullptr);
+  CloseHandle(file);
+  return text;
+}
+std::string ReadIniText() {
+  if (g_ini_path.empty() && g_module) {
+    wchar_t path[MAX_PATH] = {};
+    GetModuleFileNameW(g_module, path, MAX_PATH);
+    std::wstring dir = path;
+    const size_t slash = dir.find_last_of(L"\\/");
+    g_ini_path = (slash == std::wstring::npos ? std::wstring() : dir.substr(0, slash + 1)) + L"endfield-ui.ini";
+  }
+  return ReadWholeFile(g_ini_path);
+}
+
+#include "endfield_pointer_mode.inc"
+
+
+
+void ReadIni() {
+  LONG want = 2;  // the default when the key (or the file) is missing
+  std::string text = ReadIniText();
+  for (char *line = strtok(text.data(), "\r\n"); line; line = strtok(nullptr, "\r\n")) {
+    while (*line == ' ' || *line == '\t')
+      ++line;
+    if (_strnicmp(line, "ui_pointers=", 12) == 0) {
+      const char *v = line + 12;
+      want = _strnicmp(v, "off", 3) == 0 ? -1 : ((v[0] >= '0' && v[0] <= '2') ? v[0] - '0' : 2);
+    }
+  }
+  if (want != pm::g_want)
+    Log("endfield-ui.ini: ui_pointers=%ld (-1 off, 0 SingleMouseOrPenButMultiTouchAndTrack, 1 SingleUnifiedPointer, 2 AllPointersAsIs)", want);
+  pm::g_want = want;
+}
+
 void Pump() {
   if (!g_shared || !g_shared->alive)
     return;
@@ -260,8 +306,12 @@ void Pump() {
   if (n == 1)
     Log("first pump runs on the game's main thread (tid %lu)", GetCurrentThreadId());
   EnsureFrameRate();
-  if (g_shared->touch_ui_enabled)
+  if (g_shared->touch_ui_enabled) {
     EnsureTouch();
+    if (n == 1 || n % 20 == 1)
+      ReadIni();
+    pm::Tick();
+  }
 }
 
 LONG g_hook_calls = 0;
@@ -300,6 +350,7 @@ LRESULT CALLBACK GetMsgProc(int code, WPARAM wparam, LPARAM lparam) {
   }
   if (code == HC_ACTION && (wparam & PM_REMOVE)) {
     const MSG *message = reinterpret_cast<const MSG *>(lparam);
+    pm::HoldFast();
     if (message && message->message == g_pump_message && g_pump_message != 0) {
       g_pumped_by_hook = true;
       RunPump();

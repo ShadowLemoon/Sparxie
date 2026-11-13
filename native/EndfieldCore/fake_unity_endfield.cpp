@@ -34,18 +34,20 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   auto game_sets_input = Sym<SetValue>(assembly, "fake_game_sets_input");
   auto input = Sym<GetValue>(assembly, "fake_input");
   auto game_sets_fps = Sym<SetValue>(unity, "fake_game_sets_fps");
+  auto game_sets_pointer = Sym<SetValue>(assembly, "fake_game_sets_pointer");
+  auto pointer = Sym<GetValue>(assembly, "fake_pointer");
 
   WNDCLASSW cls{};
   cls.lpfnWndProc = Proc;
   cls.hInstance = instance;
   cls.lpszClassName = L"UnityWndClass";
   RegisterClassW(&cls);
-  CreateWindowExW(0, L"UnityWndClass", L"Endfield", WS_OVERLAPPED, 0, 0, 64, 64, nullptr, nullptr, instance, nullptr);
+  HWND window = CreateWindowExW(0, L"UnityWndClass", L"Endfield", WS_OVERLAPPED, 0, 0, 64, 64, nullptr, nullptr, instance, nullptr);
 
   const DWORD life = static_cast<DWORD>(_wtoi(Env(L"ECL_FAKE_LIFE_MS").c_str()));
   const DWORD start = GetTickCount();
   DWORD next_flip = start + 600;  // the game's own start-up sets Keyboard
-  int touch_before_flip = 0, flips = 0, samples = 0;
+  int touch_before_flip = 0, flips = 0, samples = 0, pointer_late = 0, pointer_late_wrong = 0;
   std::wstring history;
   MSG message;
   while (GetTickCount() - start < (life ? life : 6000)) {
@@ -62,6 +64,16 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       }
       game_sets_input(0);   // keyboard or mouse input arrived: the game switches to Keyboard
       game_sets_fps(60);    // and keeps its own frame-rate setting
+      game_sets_pointer(1); // and switches the UI to one shared pointer (SingleUnifiedPointer) by writing the field
+      PostMessageW(window, WM_USER + 7, 0, 0);  // the next touch / mouse message: the Runtime's hook runs when it is retrieved, before the game reads the touch it carries
+      while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
+        TranslateMessage(&message);
+        DispatchMessageW(&message);
+      }
+      if (flips >= 3) {     // the Runtime has found the module by now
+        ++pointer_late;
+        if (pointer() != 2) ++pointer_late_wrong;
+      }
       ++flips;
       next_flip += 1000;
     }
@@ -81,6 +93,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       out << L"fps_off_thread_calls=" << Sym<GetValue>(unity, "fake_fps_off_thread_calls")() << L"\n";
       out << L"flips=" << flips << L"\n";
       out << L"samples=" << samples << L"\n";
+      out << L"pointer_final=" << pointer() << L"\n";
+      out << L"pointer_late=" << pointer_late << L"\n";
+      out << L"pointer_late_wrong=" << pointer_late_wrong << L"\n";
       out << L"touch_before_flip=" << touch_before_flip << L"\n";
       out << L"history=" << history << L"\n";
     }

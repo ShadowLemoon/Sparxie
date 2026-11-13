@@ -16,6 +16,19 @@ volatile LONG g_get_calls = 0;
 DWORD g_main_thread = 0;
 int g_domain, g_assembly, g_image, g_class;
 int g_change_method, g_get_method;
+// the UI input module: an object with the field the game's setter stores to (offset 0x138, like the real class), the class of the EventSystem that hands it out
+constexpr int kPointerField = 0x138;
+struct ModuleObject {
+  void *klass;
+  unsigned char pad[kPointerField - sizeof(void *)];
+  int32_t pointer_behavior;
+} g_module_object;
+int g_module_class, g_event_system_class, g_event_system_object, g_pointer_field_info, g_assemblies_dummy;
+int g_get_pb_method, g_current_method, g_current_module_method;
+struct MethodInfoLike {  // MethodInfo.methodPointer is the first member
+  void *method_pointer;
+} g_set_pb_method;
+volatile LONG g_pointer_setter_calls = 0;
 struct Boxed {
   void *klass;
   void *monitor;
@@ -23,20 +36,66 @@ struct Boxed {
 } g_boxed;
 }  // namespace
 
+// like the compiled C++ of IL2CPP: a plain field store, called directly by the game's own code
+extern "C" __declspec(noinline) void FakeSetPointerBehavior(ModuleObject *self, int32_t value) {
+  self->pointer_behavior = value;
+}
+
 EXPORT void *il2cpp_domain_get() { return &g_domain; }
+EXPORT const void **il2cpp_domain_get_assemblies(void *, size_t *count) {
+  static const void *list[1] = {&g_assembly};
+  *count = 1;
+  return list;
+}
 EXPORT const void *il2cpp_domain_assembly_open(void *, const char *name) { return name && strcmp(name, "Common.Beyond") == 0 ? &g_assembly : nullptr; }
 EXPORT const void *il2cpp_assembly_get_image(const void *) { return &g_image; }
 EXPORT void *il2cpp_class_from_name(const void *, const char *space, const char *name) {
-  return space && name && strcmp(space, "Beyond") == 0 && strcmp(name, "DeviceInfo") == 0 ? &g_class : nullptr;
+  if (!space || !name) return nullptr;
+  if (strcmp(space, "Beyond") == 0 && strcmp(name, "DeviceInfo") == 0) return &g_class;
+  if (strcmp(space, "UnityEngine.InputSystem.UI") == 0 && strcmp(name, "InputSystemUIInputModule") == 0) return &g_module_class;
+  if (strcmp(space, "UnityEngine.EventSystems") == 0 && strcmp(name, "EventSystem") == 0) return &g_event_system_class;
+  return nullptr;
 }
+EXPORT void *il2cpp_class_get_field_from_name(void *klass, const char *name) {
+  return klass == &g_module_class && name && strcmp(name, "m_PointerBehavior") == 0 ? &g_pointer_field_info : nullptr;
+}
+EXPORT int il2cpp_field_get_offset(void *field) { return field == &g_pointer_field_info ? kPointerField : -1; }
 EXPORT const void *il2cpp_class_get_method_from_name(void *klass, const char *name, int argc) {
-  if (klass != &g_class || !name) return nullptr;
+  if (!name) return nullptr;
+  if (klass == &g_module_class) {
+    if (strcmp(name, "get_pointerBehavior") == 0 && argc == 0) return &g_get_pb_method;
+    if (strcmp(name, "set_pointerBehavior") == 0 && argc == 1) {
+      g_set_pb_method.method_pointer = reinterpret_cast<void *>(&FakeSetPointerBehavior);
+      return &g_set_pb_method;
+    }
+    return nullptr;
+  }
+  if (klass == &g_event_system_class) {
+    if (strcmp(name, "get_current") == 0 && argc == 0) return &g_current_method;
+    if (strcmp(name, "get_currentInputModule") == 0 && argc == 0) return &g_current_module_method;
+    return nullptr;
+  }
+  if (klass != &g_class) return nullptr;
   if (strcmp(name, "ChangeInputType") == 0 && argc == 1) return &g_change_method;
   if (strcmp(name, "get_inputType") == 0 && argc == 0) return &g_get_method;
   return nullptr;
 }
-EXPORT void *il2cpp_runtime_invoke(const void *method, void *, void **args, void **exception) {
+EXPORT void *il2cpp_runtime_invoke(const void *method, void *self, void **args, void **exception) {
   if (exception) *exception = nullptr;
+  if (method == &g_current_method) return &g_event_system_object;
+  if (method == &g_current_module_method) {
+    g_module_object.klass = &g_module_class;
+    return &g_module_object;
+  }
+  if (method == &g_get_pb_method) {
+    g_boxed.value = static_cast<ModuleObject *>(self)->pointer_behavior;
+    return &g_boxed;
+  }
+  if (method == &g_set_pb_method) {  // what the invoker does: call methodPointer
+    InterlockedIncrement(&g_pointer_setter_calls);
+    reinterpret_cast<void (*)(ModuleObject *, int32_t)>(g_set_pb_method.method_pointer)(static_cast<ModuleObject *>(self), *static_cast<int32_t *>(args[0]));
+    return nullptr;
+  }
   if (method == &g_change_method) {
     InterlockedIncrement(&g_change_calls);
     if (GetCurrentThreadId() != g_main_thread) InterlockedIncrement(&g_off_thread_calls);
@@ -59,5 +118,9 @@ EXPORT int fake_input() { return g_input_type; }
 EXPORT int fake_change_calls() { return g_change_calls; }
 EXPORT int fake_off_thread_calls() { return g_off_thread_calls; }
 EXPORT int fake_get_calls() { return g_get_calls; }
+// the game's own code writes the field itself (the setter is inlined at its call sites: it is never called)
+EXPORT void fake_game_sets_pointer(int value) { g_module_object.pointer_behavior = value; }
+EXPORT int fake_pointer() { return g_module_object.pointer_behavior; }
+EXPORT int fake_pointer_setter_calls() { return g_pointer_setter_calls; }
 
 BOOL WINAPI DllMain(HINSTANCE, DWORD, LPVOID) { return TRUE; }
