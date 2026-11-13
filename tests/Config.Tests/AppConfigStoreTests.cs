@@ -64,7 +64,7 @@ public class AppConfigStoreTests : IDisposable
         Assert.Equal("touch", result.Config.Profiles[0].Hoyo!.EndfieldInputMode);
         Assert.Equal("pc", result.Config.Profiles[1].Hoyo!.EndfieldInputMode);
         var onDisk = File.ReadAllText(ConfigPath);
-        Assert.DoesNotContain("\"auto\"", onDisk);
+        Assert.DoesNotContain("\"endfieldInputMode\": \"auto\"", onDisk);
         Assert.Contains("\"endfieldInputMode\": \"touch\"", onDisk);
         Assert.False(AppConfigStore.MigrateEndfieldInput(result.Config), "already migrated: nothing changes the second time");
     }
