@@ -27,29 +27,45 @@ using FieldOffsetFn = int(__cdecl *)(void *);
 
 struct State {
   bool tried = false, ok = false;
-  void *klass = nullptr, *event_system_class = nullptr;
-  const void *get_b = nullptr, *set_b = nullptr, *es_current = nullptr,
-             *es_module = nullptr;
+  void *klass = nullptr;
+  const void *get_b = nullptr, *set_b = nullptr;
   int field_off = -1;
+  unsigned char *setter_fn = nullptr;
+  bool guard_tried = false;
+  uintptr_t ga_lo = 0, ga_hi = 0;
 };
 State S;
 
-LONG g_hold_fix = 0, g_logged_fix = 0;
+volatile LONG g_guard_installed = 0;
+LONG g_set_total = 0, g_blocked = 0, g_hold_fix = 0, g_logged_block = 0,
+     g_logged_fix = 0;
 void *g_cached_module = nullptr;
 void *g_cached_class = nullptr;
+
+struct Caller {
+  uintptr_t ret;
+  LONG count;
+  LONG blocked;
+  int last_value;
+  bool logged;
+};
+constexpr int kMaxCallers = 32;
+Caller g_callers[kMaxCallers];
+volatile LONG g_caller_n = 0;
 
 // ---- resolving
 bool Resolve() {
   if (S.tried)
     return S.ok;
+  if (!ResolveDrag())
+    return false;
   FindModules();
   HMODULE game = g_managed.game_assembly;
   if (!game)
     return false;
   S.klass =
       FindClassIn("UnityEngine.InputSystem.UI", "InputSystemUIInputModule");
-  S.event_system_class = FindClassIn("UnityEngine.EventSystems", "EventSystem");
-  if (!S.klass || !S.event_system_class)
+  if (!S.klass)
     return false; // the Input System is not loaded yet: asked again on the next
                   // pump
   S.tried = true;
@@ -69,14 +85,21 @@ bool Resolve() {
   void *field =
       field_from_name ? field_from_name(S.klass, "m_PointerBehavior") : nullptr;
   S.field_off = (field && field_offset) ? field_offset(field) : -1;
-  S.es_current = method_from_name(S.event_system_class, "get_current", 0);
-  S.es_module =
-      method_from_name(S.event_system_class, "get_currentInputModule", 0);
-  Log("pointer: InputSystemUIInputModule=%p EventSystem=%p get/set "
-      "pointerBehavior=%d/%d field offset %d current/module=%d/%d",
-      S.klass, S.event_system_class, S.get_b != nullptr, S.set_b != nullptr,
-      S.field_off, S.es_current != nullptr, S.es_module != nullptr);
-  S.ok = S.get_b && S.set_b && S.es_current && S.es_module;
+  const unsigned char *base = reinterpret_cast<const unsigned char *>(game);
+  const IMAGE_NT_HEADERS *nt = reinterpret_cast<const IMAGE_NT_HEADERS *>(
+      base + reinterpret_cast<const IMAGE_DOS_HEADER *>(base)->e_lfanew);
+  S.ga_lo = reinterpret_cast<uintptr_t>(base);
+  S.ga_hi = S.ga_lo + nt->OptionalHeader.SizeOfImage;
+  S.setter_fn =
+      S.set_b ? *reinterpret_cast<unsigned char *const *>(S.set_b) : nullptr;
+  Log("pointer: InputSystemUIInputModule=%p get_pointerBehavior=%d "
+      "set_pointerBehavior=%d field m_PointerBehavior offset %d; setter code "
+      "at GameAssembly+0x%llx",
+      S.klass, S.get_b != nullptr, S.set_b != nullptr, S.field_off,
+      S.setter_fn ? static_cast<unsigned long long>(
+                        reinterpret_cast<uintptr_t>(S.setter_fn) - S.ga_lo)
+                  : 0ull);
+  S.ok = S.get_b && S.set_b;
   return S.ok;
 }
 
@@ -99,17 +122,26 @@ bool WriteValue(void *module, int value) {
 }
 
 void *ActiveModule(void **event_system_out) {
-  if (!S.es_current || !S.es_module)
+  if (!g_drag.get_current)
     return nullptr;
   void *exception = nullptr;
-  void *current =
-      g_managed.runtime_invoke(S.es_current, nullptr, nullptr, &exception);
+  void *current = g_managed.runtime_invoke(g_drag.get_current, nullptr, nullptr,
+                                           &exception);
   if (exception || !current)
     return nullptr;
   if (event_system_out)
     *event_system_out = current;
-  void *module =
-      g_managed.runtime_invoke(S.es_module, current, nullptr, &exception);
+  static const void *getter = nullptr;
+  if (!getter) {
+    auto method_from_name = reinterpret_cast<MethodFromName>(GetProcAddress(
+        g_managed.game_assembly, "il2cpp_class_get_method_from_name"));
+    getter = method_from_name ? method_from_name(g_drag.es_class,
+                                                 "get_currentInputModule", 0)
+                              : nullptr;
+  }
+  if (!getter)
+    return nullptr;
+  void *module = g_managed.runtime_invoke(getter, current, nullptr, &exception);
   return exception ? nullptr : module;
 }
 
@@ -136,28 +168,38 @@ void HoldFast() {
 }
 
 LONG g_pm_ticks = 0;
-void Tick(LONG) {
-  if (g_pm_want < 0)
+void Tick(LONG pump_no) {
+  if (g_pm_want < 0 && !g_pm_probe)
     return;
   if (!Resolve())
     return;
   ++g_pm_ticks;
-  void *es = nullptr;
-  void *module = ActiveModule(&es);
-  std::vector<void *> modules;
-  if (module && S.klass) {
-    g_cached_module = module;
-    g_cached_class = *static_cast<void **>(module);
-    modules.push_back(module);
-  }
-  for (void *m : modules) {
-    const int value = ReadValue(m);
-    if (value != g_pm_want) {
-      const bool ok = WriteValue(m, static_cast<int>(g_pm_want));
-      if (InterlockedIncrement(&g_logged_fix) <= 20)
-        Log("pointer: module %p pointerBehavior was %d, set to %ld through the "
-            "game's setter (%s)",
-            m, value, g_pm_want, ok ? "ok" : "RAISED");
+  if (g_pm_want >= 0) {
+    void *es = nullptr;
+    void *module = ActiveModule(&es);
+    std::vector<void *> modules;
+    if (module && S.klass) {
+      g_cached_module = module;
+      g_cached_class = *static_cast<void **>(module);
+      modules.push_back(module);
+    }
+    if (g_pm_ticks % 40 == 1) { // every ~10 s: any other module instance
+      void **items = nullptr;
+      const size_t n = DragFindObjects(S.klass, &items);
+      for (size_t i = 0; i < n; ++i)
+        if (items[i] && std::find(modules.begin(), modules.end(), items[i]) ==
+                            modules.end())
+          modules.push_back(items[i]);
+    }
+    for (void *m : modules) {
+      const int value = ReadValue(m);
+      if (value != g_pm_want) {
+        const bool ok = WriteValue(m, static_cast<int>(g_pm_want));
+        if (InterlockedIncrement(&g_logged_fix) <= 20)
+          Log("pointer: module %p pointerBehavior was %d, set to %ld through "
+              "the game's setter (%s)",
+              m, value, g_pm_want, ok ? "ok" : "RAISED");
+      }
     }
   }
 }

@@ -1,8 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
-// clang-format off
-#include <Windows.h>
 #include <TlHelp32.h>
-// clang-format on
+#include <Windows.h>
 
 #include <algorithm>
 #include <array>
@@ -58,6 +56,7 @@ bool g_log_lock_ready = false;
 UINT g_pump_message = 0;
 DWORD g_main_thread = 0;
 HHOOK g_hook = nullptr;
+HWND g_game_window = nullptr;
 LONG g_log_lines = 0;
 
 void Log(const char *format, ...) {
@@ -377,20 +376,11 @@ int g_drag_target = 0;
 int g_drag_last_logged_target = -1;
 std::unordered_map<void *, int>
     g_es_seen; // EventSystem object -> value we last set
-LONG g_es_resets = 0, g_drag_pumps = 0;
-volatile LONG g_pm_want = 2;
-volatile LONG g_drop_touch_mouse = 1;
-LONG g_dropped_mouse = 0;
-using IntFn = int(__cdecl *)();
-IntFn g_screen_width = nullptr, g_screen_height = nullptr;
-struct RectF {
-  float x, y, w, h;
-};
-bool IsTouchMadeMouse(UINT message, unsigned long extra_info) {
-  return (message == WM_LBUTTONDOWN || message == WM_LBUTTONUP ||
-          message == WM_LBUTTONDBLCLK || message == WM_MOUSEMOVE) &&
-         (extra_info & 0xFFFFFF00ul) == 0xFF515700ul;
-}
+LONG g_es_resets = 0, g_drag_pumps = 0, g_survey_stage = 0;
+bool g_drag_scan_full =
+    false; // drag_scan=full: the last build's FindObjectsOfType over all
+           // EventSystems every second (heavy on the game thread); default:
+           // EventSystem.current, full scan every 30 s
 
 void *FindClassIn(const char *ns, const char *name) {
   HMODULE game = g_managed.game_assembly;
@@ -570,6 +560,31 @@ bool NumberAsDouble(int kind, const unsigned char *raw, double *out) {
   }
   return false;
 }
+bool StaticGetter(void *klass, const char *name, double *out) {
+  auto method_from_name = reinterpret_cast<MethodFromName>(GetProcAddress(
+      g_managed.game_assembly, "il2cpp_class_get_method_from_name"));
+  const void *m = method_from_name(klass, name, 0);
+  if (!m)
+    return false;
+  const int kind = g_drag.type_kind(g_drag.ret_type(m));
+  void *exception = nullptr;
+  void *boxed = g_managed.runtime_invoke(m, nullptr, nullptr, &exception);
+  if (exception || !boxed)
+    return false;
+  const void *raw = g_managed.object_unbox
+                        ? g_managed.object_unbox(boxed)
+                        : static_cast<const char *>(boxed) + 2 * sizeof(void *);
+  return raw &&
+         NumberAsDouble(kind, static_cast<const unsigned char *>(raw), out);
+}
+bool StaticConst(void *klass, const char *name, double *out) {
+  void *field = g_drag.field_by_name(klass, name);
+  if (!field)
+    return false;
+  unsigned char raw[16] = {};
+  g_drag.static_get(field, raw);
+  return NumberAsDouble(g_drag.type_kind(g_drag.field_type(field)), raw, out);
+}
 // 0.1 inch of the client device in stream pixels: ppi by stream size (landscape
 // W x H)
 struct PpiRow {
@@ -584,8 +599,6 @@ const PpiRow kPpi[] = {
 
 void ReadDragSetting() {
   g_drag_setting = "auto";
-  g_drop_touch_mouse = 1;
-  g_pm_want = 2;
   char env[64] = {};
   if (GetEnvironmentVariableA("ENDFIELD_DRAG_PX", env, sizeof(env)) > 0)
     g_drag_setting = env;
@@ -608,11 +621,6 @@ void ReadDragSetting() {
   if (f) {
     char line[256];
     while (fgets(line, sizeof(line), f)) {
-      char *trimmed = line;
-      while (*trimmed == ' ' || *trimmed == '\t')
-        ++trimmed;
-      if (trimmed != line)
-        memmove(line, trimmed, strlen(trimmed) + 1);
       if (_strnicmp(line, "touch_mouse=", 12) == 0) {
         const LONG want = _strnicmp(line + 12, "off", 3) == 0 ? 0 : 1;
         if (want != g_drop_touch_mouse)
@@ -638,6 +646,8 @@ void ReadDragSetting() {
         g_pm_want = want;
         seen_pointers = true;
       }
+      if (_strnicmp(line, "drag_scan=", 10) == 0)
+        g_drag_scan_full = _strnicmp(line + 10, "full", 4) == 0;
       if (_strnicmp(line, "drag_px=", 8) == 0) {
         g_drag_setting = line + 8;
         while (!g_drag_setting.empty() &&
@@ -696,41 +706,6 @@ int ComputeDragTarget(int original, std::string *basis) {
   return target;
 }
 
-int ComputeDragTarget(const char *setting, int original, int w, int h,
-                      std::string *basis) {
-  if (_stricmp(setting, "off") == 0)
-    return 0;
-  char *end = nullptr;
-  const double manual = strtod(setting, &end);
-  if (end != setting && manual >= 1 && manual <= 400)
-    return static_cast<int>(manual + 0.5);
-  const int W = w > h ? w : h, H = w > h ? h : w;
-  double px = 0;
-  char text[160];
-  for (const PpiRow &r : kPpi) {
-    if (r.w == W && r.h == H) {
-      px = 0.1 * r.ppi;
-      snprintf(text, sizeof(text),
-               "auto: 0.1 inch at %d ppi (table, stream %d x %d)", r.ppi, W, H);
-      *basis = text;
-      break;
-    }
-  }
-  if (px == 0) {
-    px = 0.015 * H;
-    snprintf(
-        text, sizeof(text),
-        "auto: 1.5%% of the stream height %d (device not in the ppi table)", H);
-    *basis = text;
-  }
-  if (px < 8)
-    px = 8;
-  if (px > 100)
-    px = 100;
-  const int target = static_cast<int>(px + 0.5);
-  return target < original ? original : target;
-}
-
 void EnsureDrag() {
   const LONG n = InterlockedIncrement(&g_drag_pumps);
   if (n != 1 && n % 4 != 1)
@@ -757,7 +732,8 @@ void EnsureDrag() {
   // FindObjectsOfType(EventSystem, includeInactive) walks every MonoBehaviour
   // in the game: with a big scene that is a hitch every second.
   // EventSystem.current is one static read.
-  const bool full_scan = n == 1 || n % 120 == 1 || (!current && n % 16 == 1);
+  const bool full_scan =
+      g_drag_scan_full || n == 1 || n % 120 == 1 || (!current && n % 16 == 1);
   void **systems = nullptr;
   void *single[1] = {current};
   size_t count = 0;
@@ -827,7 +803,6 @@ void EnsureDrag() {
     for (auto &entry : now)
       g_es_seen[entry.first] = entry.second;
 }
-
 #include "endfield_pointer_mode.inc"
 
 // ---- EXPERIMENT (endfield-touch-ui-scale-exp): make the touch UI bigger ----
@@ -1011,11 +986,10 @@ struct ProfileSpec {
   std::string device, cls;
   float width_pt = 0, l_pt = -1, r_pt = -1, t_pt = -1, b_pt = -1;
   float l_px = 0, r_px = 0, t_px = 0, b_px = 0;
-  bool given = false;
   bool Any() const {
-    return given || !device.empty() || !cls.empty() || width_pt > 0 ||
-           l_pt >= 0 || r_pt >= 0 || t_pt >= 0 || b_pt >= 0 || l_px > 0 ||
-           r_px > 0 || t_px > 0 || b_px > 0;
+    return !device.empty() || !cls.empty() || width_pt > 0 || l_pt >= 0 ||
+           r_pt >= 0 || t_pt >= 0 || b_pt >= 0 || l_px > 0 || r_px > 0 ||
+           t_px > 0 || b_px > 0;
   }
 };
 struct Profile {
@@ -1281,17 +1255,6 @@ void ReadUiConfig() {
   }
 }
 
-void ReadIni() {
-  if (g_drag_ini_path.empty() && !g_ini_path.empty()) {
-    char path[MAX_PATH * 3] = {};
-    WideCharToMultiByte(CP_ACP, 0, g_ini_path.c_str(), -1, path,
-                        sizeof(path) - 1, nullptr, nullptr);
-    g_drag_ini_path = path;
-  }
-  ReadDragSetting();
-  ReadUiConfig();
-}
-
 const Dev *FindDeviceByKey(const std::string &key) {
   for (const Dev &d : kDevices)
     if (_stricmp(d.key, key.c_str()) == 0)
@@ -1391,15 +1354,6 @@ Profile BuildProfile(int w, int h) {
 }
 
 // insets in screen pixels for a screen of w x h (landscape)
-
-Profile BuildProfile(const ProfileSpec &spec, int w, int h) {
-  const ProfileSpec saved = g_spec_ini;
-  g_spec_ini = spec;
-  Profile result = BuildProfile(w, h);
-  g_spec_ini = saved;
-  return result;
-}
-
 void ComputeInsets(const Profile &p, int w, int h, float *l, float *r, float *t,
                    float *b) {
   if (p.use_px) {
@@ -3352,10 +3306,43 @@ void EnsureNotch() {
   ForceRelayout("the notch padding setting was written");
 }
 
-// ===================== device profile =====================
-// The profile (ini > host > table > fallback) is always computed and logged.
-// The Screen.safeArea override is OFF unless safearea_override=1: in exp2 it
-// was suspected of breaking taps.
+// ===================== device profile (+ optional safe-area override)
+// ===================== The profile (ini > host > table > fallback) is always
+// computed and logged. The Screen.safeArea override is OFF unless
+// safearea_override=1: in exp2 it was suspected of breaking taps.
+struct RectF {
+  float x, y, w, h;
+};
+using IntFn = int(__cdecl *)();
+IntFn g_screen_width = nullptr, g_screen_height = nullptr;
+bool g_safe_hooked = false, g_safe_hook_failed = false;
+LONG g_safe_calls = 0;
+RectF g_safe_last = {-1, -1, -1, -1};
+LONG g_safe_hooked_at_pump = 0;
+bool g_safe_noread_noted = false;
+
+void __cdecl SafeAreaHook(RectF *out) {
+  const int w = g_screen_width ? g_screen_width() : 0,
+            h = g_screen_height ? g_screen_height() : 0;
+  float l = 0, r = 0, t = 0, b = 0;
+  ComputeInsets(g_profile, w, h, &l, &r, &t, &b);
+  RectF rect{l, b, static_cast<float>(w) - l - r,
+             static_cast<float>(h) - t - b};
+  if (w <= 0 || h <= 0 || rect.w <= 0 || rect.h <= 0)
+    rect = {0, 0, static_cast<float>(w), static_cast<float>(h)};
+  if (out)
+    *out = rect;
+  const LONG calls = InterlockedIncrement(&g_safe_calls);
+  if (calls <= 6 || rect.x != g_safe_last.x || rect.y != g_safe_last.y ||
+      rect.w != g_safe_last.w || rect.h != g_safe_last.h) {
+    if (calls <= 40)
+      Log("safeArea READ BY THE GAME (call %ld): returned Rect(x %.0f, y %.0f, "
+          "w %.0f, h %.0f) on a %d x %d screen",
+          calls, rect.x, rect.y, rect.w, rect.h, w, h);
+    g_safe_last = rect;
+  }
+}
+
 void EnsureProfile() {
   static LONG k = 0;
   ++k;
@@ -3401,15 +3388,58 @@ void EnsureProfile() {
       g_have_profile = true;
       g_last_w = w;
       g_last_h = h;
+      LogGameThresholds();
     }
   }
+  if (!g_flag_safe_override)
+    return;
+  if (g_safe_hooked && !g_safe_noread_noted && g_safe_calls == 0 &&
+      g_pumps > g_safe_hooked_at_pump + 80) {
+    g_safe_noread_noted = true;
+    Log("safeArea: the override has been installed for 20 s and the game has "
+        "NOT read the safe area since");
+  }
+  if (g_safe_hooked || g_safe_hook_failed || !ProfileHasInsets(g_profile))
+    return;
+  void *target = g_managed.resolve_icall(
+      "UnityEngine.Screen::get_safeArea_Injected(UnityEngine.Rect&)");
+  if (!target) {
+    g_safe_hook_failed = true;
+    Log("safeArea: icall get_safeArea_Injected not found; no override");
+    return;
+  }
+  unsigned char *code = static_cast<unsigned char *>(target);
+  Log("safeArea: get_safeArea_Injected at %p, first bytes %02x %02x %02x %02x "
+      "%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
+      target, code[0], code[1], code[2], code[3], code[4], code[5], code[6],
+      code[7], code[8], code[9], code[10], code[11], code[12], code[13],
+      code[14], code[15]);
+  unsigned char patch[14] = {0xFF, 0x25, 0, 0, 0, 0};
+  void *destination = reinterpret_cast<void *>(&SafeAreaHook);
+  memcpy(patch + 6, &destination, 8);
+  DWORD old = 0;
+  if (!VirtualProtect(target, sizeof(patch), PAGE_EXECUTE_READWRITE, &old)) {
+    g_safe_hook_failed = true;
+    Log("safeArea: VirtualProtect failed (error %lu); no override",
+        GetLastError());
+    return;
+  }
+  memcpy(target, patch, sizeof(patch));
+  VirtualProtect(target, sizeof(patch), old, &old);
+  FlushInstructionCache(GetCurrentProcess(), target, sizeof(patch));
+  g_safe_hooked = true;
+  g_safe_hooked_at_pump = g_pumps;
+  Log("safeArea: override installed (safearea_override=1)");
+  ForceRelayout("the safe-area override was installed");
 }
 
 #include "endfield_cloud.inc"
 
 void Pump() {
   if (g_finalizing) {
-    RestoreNotch();
+    RestoreNotch(); // the session was released: the original notch padding goes
+                    // back through the game's own setter (on this, the game's
+                    // main thread)
     return;
   }
   if (!g_shared || !g_shared->alive)
@@ -3418,13 +3448,11 @@ void Pump() {
   if (n == 1)
     Log("first pump runs on the game's main thread (tid %lu)",
         GetCurrentThreadId());
-  EnsureFrameRate();
   if (g_shared->touch_ui_enabled) {
-    EnsureTouch();
-    EnsureDrag();
     pm::Tick(n);
     if (n == 1 || n % 20 == 1)
       ReadUiConfig();
+    EnsureUiScale(); // legacy_scaler=1 only
     EnsureProfile();
     cl::Tick();
     EnsureUiKnob();
@@ -3449,7 +3477,10 @@ void RunPump() {
   }
 }
 
-// The fallback when the message hook never sees the pump message.
+// The fallback when the message hook never sees the pump message: the window's
+// own procedure, replaced for the Runtime's one message (the window belongs to
+// this process, so the replacement is allowed from any thread, and the message
+// is handled on the window's thread like the hook would).
 LRESULT CALLBACK PumpWndProc(HWND window, UINT message, WPARAM wparam,
                              LPARAM lparam) {
   if (message == g_pump_message && g_pump_message != 0) {
@@ -3549,6 +3580,7 @@ DWORD WINAPI RuntimeThread(void *) {
       WindowSearch search{pid, nullptr};
       EnumWindows(FindUnityWindow, reinterpret_cast<LPARAM>(&search));
       window = search.window;
+      g_game_window = window;
       if (window) {
         const DWORD thread = GetWindowThreadProcessId(window, nullptr);
         if (thread != g_main_thread) {
