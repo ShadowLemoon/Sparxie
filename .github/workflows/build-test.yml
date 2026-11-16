@@ -54,6 +54,9 @@ jobs:
         run: |
           Copy-Item "native/HoyoTouchCore/build/Release/HoyoTouchCore.dll" "tests/HoyoAbi.Tests/bin/Release/net10.0/" -Force
 
+      - name: 打包审计脚本单元测试
+        run: python -m unittest discover -s build -p "test_audit_package.py" -v
+
       - name: 打包桌面应用（壳 + app-版本目录，含已校验 ZZZ Runtime）
         shell: pwsh
         run: ./build/package_desktop.ps1 -Version 0.0.0-ci -RuntimeDirectory runtime/zzz -OutputDirectory artifacts
