@@ -29,6 +29,12 @@ public sealed class DesktopDataService
             throw new InvalidOperationException(result.Error?.Message ?? "配置加载失败");
         }
 
+        // what the load repaired, left out or restored (the original is kept beside config.json); the log is the record
+        foreach (var change in result.Changes)
+        {
+            DesktopLog.Write($"配置 {result.State}: {change}");
+        }
+
         Config = result.Config;
     }
 

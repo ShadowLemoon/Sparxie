@@ -370,9 +370,13 @@ public sealed class ProfileManagerViewModel : ObservableObject
     {
         if (sender is not ProfileEditorViewModel editor
             || e.PropertyName is nameof(ProfileEditorViewModel.IsHoyoGame) or nameof(ProfileEditorViewModel.IsGenshin)
+                or nameof(ProfileEditorViewModel.IsEndfield)
                 or nameof(ProfileEditorViewModel.PathHint) or nameof(ProfileEditorViewModel.HasPathHint)
                 or nameof(ProfileEditorViewModel.CommandLinePreview) or nameof(ProfileEditorViewModel.ResolutionControlsEnabled)
-                or nameof(ProfileEditorViewModel.PresetEnabled) or nameof(ProfileEditorViewModel.CustomEnabled))
+                or nameof(ProfileEditorViewModel.PresetEnabled) or nameof(ProfileEditorViewModel.CustomEnabled)
+                or nameof(ProfileEditorViewModel.EndfieldUiScaleModeIndex) or nameof(ProfileEditorViewModel.EndfieldUiScaleManual)
+                or nameof(ProfileEditorViewModel.EndfieldUiScaleText)
+                or nameof(ProfileEditorViewModel.EndfieldSafeAreaModeIndex) or nameof(ProfileEditorViewModel.EndfieldSafeManual))
         {
             return;
         }
@@ -469,6 +473,16 @@ public sealed class ProfileEditorViewModel : ObservableObject
     private double _genshinPreset60Fps = 1000;
     private bool _genshinTouchUiScaleOverrideEnabled;
     private double _genshinTouchUiScalePercent = 400;
+    private string _endfieldInputMode = "touch";
+    private bool _endfieldAutoResolution = true;
+    private double _endfieldWidth = 1920;
+    private double _endfieldHeight = 1080;
+    private double _endfieldRefreshRate = 60;
+    private string _endfieldUiScaleMode = EndfieldUiSettings.Auto;
+    private double _endfieldUiScalePercent = EndfieldUiSettings.DefaultScalePercent;
+    private string _endfieldSafeAreaMode = EndfieldUiSettings.Auto;
+    private double _endfieldSafeLeft;
+    private double _endfieldSafeRight;
     private bool _fullscreen = true;
     private bool _borderless;
     private bool _customResolution;
@@ -503,6 +517,7 @@ public sealed class ProfileEditorViewModel : ObservableObject
             OnPropertyChanged(nameof(PathHint));
             OnPropertyChanged(nameof(HasPathHint));
             OnPropertyChanged(nameof(IsGenshin));
+            OnPropertyChanged(nameof(IsEndfield));
         }
     }
     public string ExecutablePath
@@ -734,6 +749,96 @@ public sealed class ProfileEditorViewModel : ObservableObject
 
     public bool IsHoyoGame => Game != GameType.ZenlessZoneZero;
     public bool IsGenshin => Game == GameType.Genshin;
+    public bool IsEndfield => Game == GameType.Endfield;
+    public static string[] EndfieldInputModes { get; } = ["touch", "pc"];
+    public string EndfieldInputMode { get => _endfieldInputMode; set => SetProperty(ref _endfieldInputMode, value); }
+    public bool EndfieldAutoResolution
+    {
+        get => _endfieldAutoResolution;
+        set
+        {
+            if (SetProperty(ref _endfieldAutoResolution, value))
+            {
+                OnPropertyChanged(nameof(EndfieldFixedResolution));
+            }
+        }
+    }
+    public bool EndfieldFixedResolution { get => !_endfieldAutoResolution; set => EndfieldAutoResolution = !value; }
+    public double EndfieldWidth { get => _endfieldWidth; set => SetProperty(ref _endfieldWidth, value); }
+    public double EndfieldHeight { get => _endfieldHeight; set => SetProperty(ref _endfieldHeight, value); }
+    public double EndfieldRefreshRate { get => _endfieldRefreshRate; set => SetProperty(ref _endfieldRefreshRate, value); }
+
+    // 触控界面缩放：自动 / 手动（滑块 1.00–1.80）。RadioButtons 绑定下标；-1 是控件重建时的瞬时值，忽略。
+    public string EndfieldUiScaleMode
+    {
+        get => _endfieldUiScaleMode;
+        set
+        {
+            if (SetProperty(ref _endfieldUiScaleMode, EndfieldUiSettings.NormalizeScaleMode(value)))
+            {
+                OnPropertyChanged(nameof(EndfieldUiScaleModeIndex));
+                OnPropertyChanged(nameof(EndfieldUiScaleManual));
+            }
+        }
+    }
+
+    public int EndfieldUiScaleModeIndex
+    {
+        get => _endfieldUiScaleMode == EndfieldUiSettings.Manual ? 1 : 0;
+        set
+        {
+            if (value >= 0)
+            {
+                EndfieldUiScaleMode = value == 1 ? EndfieldUiSettings.Manual : EndfieldUiSettings.Auto;
+            }
+        }
+    }
+
+    public bool EndfieldUiScaleManual => _endfieldUiScaleMode == EndfieldUiSettings.Manual;
+
+    public double EndfieldUiScalePercent
+    {
+        get => _endfieldUiScalePercent;
+        set
+        {
+            if (SetProperty(ref _endfieldUiScalePercent, EndfieldUiSettings.NormalizeScalePercent(ToFps(value, EndfieldUiSettings.DefaultScalePercent))))
+            {
+                OnPropertyChanged(nameof(EndfieldUiScaleText));
+            }
+        }
+    }
+
+    public string EndfieldUiScaleText => (_endfieldUiScalePercent / 100.0).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + "×";
+
+    // 安全边距（刘海）：自动 / 关闭 / 手动（左右像素）。
+    public string EndfieldSafeAreaMode
+    {
+        get => _endfieldSafeAreaMode;
+        set
+        {
+            if (SetProperty(ref _endfieldSafeAreaMode, EndfieldUiSettings.NormalizeSafeAreaMode(value)))
+            {
+                OnPropertyChanged(nameof(EndfieldSafeAreaModeIndex));
+                OnPropertyChanged(nameof(EndfieldSafeManual));
+            }
+        }
+    }
+
+    public int EndfieldSafeAreaModeIndex
+    {
+        get => _endfieldSafeAreaMode switch { EndfieldUiSettings.Off => 1, EndfieldUiSettings.Manual => 2, _ => 0 };
+        set
+        {
+            if (value >= 0)
+            {
+                EndfieldSafeAreaMode = value switch { 1 => EndfieldUiSettings.Off, 2 => EndfieldUiSettings.Manual, _ => EndfieldUiSettings.Auto };
+            }
+        }
+    }
+
+    public bool EndfieldSafeManual => _endfieldSafeAreaMode == EndfieldUiSettings.Manual;
+    public double EndfieldSafeLeft { get => _endfieldSafeLeft; set => SetProperty(ref _endfieldSafeLeft, EndfieldUiSettings.NormalizeInset(ToFps(value, 0))); }
+    public double EndfieldSafeRight { get => _endfieldSafeRight; set => SetProperty(ref _endfieldSafeRight, EndfieldUiSettings.NormalizeInset(ToFps(value, 0))); }
 
     /// <summary>新建编辑项。ID 与名称预填可用默认值，立即保存即可用。</summary>
     public static ProfileEditorViewModel New(IEnumerable<string> existingIds, GameType game, IEnumerable<string>? existingNames = null)
@@ -773,6 +878,16 @@ public sealed class ProfileEditorViewModel : ObservableObject
         GenshinPreset60Fps = profile.Hoyo?.GenshinPreset60Fps ?? 1000,
         GenshinTouchUiScaleOverrideEnabled = profile.Hoyo?.GenshinTouchUiScaleOverrideEnabled ?? false,
         GenshinTouchUiScalePercent = profile.Hoyo?.GenshinTouchUiScalePercent ?? 400,
+        EndfieldInputMode = profile.Hoyo?.EndfieldInputMode == "pc" ? "pc" : "touch",
+        EndfieldAutoResolution = profile.Hoyo?.EndfieldAutoResolution ?? true,
+        EndfieldWidth = profile.Hoyo?.EndfieldWidth ?? 1920,
+        EndfieldHeight = profile.Hoyo?.EndfieldHeight ?? 1080,
+        EndfieldRefreshRate = profile.Hoyo?.EndfieldRefreshRate ?? 60,
+        EndfieldUiScaleMode = profile.Hoyo?.EndfieldUiScaleMode ?? EndfieldUiSettings.Auto,
+        EndfieldUiScalePercent = profile.Hoyo?.EndfieldUiScalePercent ?? EndfieldUiSettings.DefaultScalePercent,
+        EndfieldSafeAreaMode = profile.Hoyo?.EndfieldSafeAreaMode ?? EndfieldUiSettings.Auto,
+        EndfieldSafeLeft = profile.Hoyo?.EndfieldSafeLeft ?? 0,
+        EndfieldSafeRight = profile.Hoyo?.EndfieldSafeRight ?? 0,
     }.WithLaunch(profile.Launch);
 
     private ProfileEditorViewModel WithLaunch(LaunchSettings? launch)
@@ -800,10 +915,20 @@ public sealed class ProfileEditorViewModel : ObservableObject
         GenshinPreset60Fps: IsGenshin ? ToFps(GenshinPreset60Fps, 1000) : null,
         GenshinTouchUiScaleOverrideEnabled: IsGenshin ? GenshinTouchUiScaleOverrideEnabled : null,
         GenshinTouchUiScalePercent: IsGenshin ? ToFps(GenshinTouchUiScalePercent, 400) : null,
+        EndfieldInputMode: IsEndfield ? EndfieldInputMode : null,
+        EndfieldAutoResolution: IsEndfield ? EndfieldAutoResolution : null,
+        EndfieldWidth: IsEndfield ? ToFps(EndfieldWidth, 1920) : null,
+        EndfieldHeight: IsEndfield ? ToFps(EndfieldHeight, 1080) : null,
+        EndfieldRefreshRate: IsEndfield ? ToFps(EndfieldRefreshRate, 60) : null,
+        EndfieldUiScaleMode: IsEndfield ? EndfieldUiScaleMode : null,
+        EndfieldUiScalePercent: IsEndfield ? ToFps(EndfieldUiScalePercent, EndfieldUiSettings.DefaultScalePercent) : null,
+        EndfieldSafeAreaMode: IsEndfield ? EndfieldSafeAreaMode : null,
+        EndfieldSafeLeft: IsEndfield ? ToFps(EndfieldSafeLeft, 0) : null,
+        EndfieldSafeRight: IsEndfield ? ToFps(EndfieldSafeRight, 0) : null,
         Launch: BuildLaunch());
 
     /// <summary>NumberBox 被清空时值为 NaN，直接 Convert.ToInt32 会抛 OverflowException。</summary>
-    private static int ToFps(double value, int fallback) =>
+    internal static int ToFps(double value, int fallback) =>
         double.IsNaN(value) || double.IsInfinity(value) ? fallback : Convert.ToInt32(value);
 }
 

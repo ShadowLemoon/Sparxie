@@ -149,4 +149,27 @@ public class ProfileSnapshotValidatorTests
         profile.Launch = new LaunchSettings { Width = width, Height = height, Fullscreen = fullscreen, ExtraArguments = extra };
         Assert.NotNull(ProfileSnapshotValidator.Validate(profile));
     }
+
+    [Fact]
+    public void 终末地快照通过()
+    {
+        var profile = Valid();
+        profile.Game = "endfield";
+        profile.ExecutablePath = @"D:\Games\Endfield.exe";
+        profile.Hoyo = new HoyoSettings
+        {
+            TargetFps = 120,
+            BackgroundFps = 10,
+            ProcessPriority = "normal",
+            GenshinPreset30Fps = 60,
+            GenshinPreset60Fps = 1000,
+            GenshinTouchUiScalePercent = 400,
+            EndfieldInputMode = "touch",
+            EndfieldAutoResolution = true,
+            EndfieldWidth = 1920,
+            EndfieldHeight = 1080,
+            EndfieldRefreshRate = 60,
+        };
+        Assert.Null(ProfileSnapshotValidator.Validate(profile));
+    }
 }

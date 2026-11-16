@@ -42,6 +42,15 @@
 - 说明：仅分发固定版本成品，不包含源码；版本/哈希/分发边界见
   `docs/RUNTIME-NOTICE.md`，对应 RUNTIME-NOTICE 随发布包分发
 
+## Endfield FPS / 启动行为参考
+
+- 项目：EndField.Fps.UnlockerIsland
+- 许可：MIT；原项目另有“for learning and research, no commercial use”说明。
+- 来源：https://github.com/isxlan0/EndField.Fps.UnlockerIsland
+- 说明：Sparxie 的 Endfield Runtime 使用公开行为重新实现直接启动、目标帧率热调和
+  运行时注入流程，没有复制其源文件；若随发布包分发其 MIT 代码或资源，必须同时保留
+  原项目的版权与许可证声明。该功能仅用于免费产品，并保留现有注入风险提示。
+
 ---
 
 发布门禁检查项：
