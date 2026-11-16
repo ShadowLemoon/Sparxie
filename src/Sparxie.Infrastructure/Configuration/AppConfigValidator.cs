@@ -10,6 +10,12 @@ public static class AppConfigValidator
     public const int MaxFps = 1000;
     public const int MinTouchUiScalePercent = 100;
     public const int MaxTouchUiScalePercent = 500;
+    public const int MinEndfieldWidth = 320;
+    public const int MaxEndfieldWidth = 7680;
+    public const int MinEndfieldHeight = 240;
+    public const int MaxEndfieldHeight = 4320;
+    public const int MinEndfieldRefreshRate = 24;
+    public const int MaxEndfieldRefreshRate = 1000;
 
     public static IReadOnlyList<string> Validate(AppConfig config)
     {
@@ -88,11 +94,34 @@ public static class AppConfigValidator
                 {
                     errors.Add($"profile {profile.Id} 的 processPriority 非法");
                 }
+
+                if (profile.Game == GameType.Endfield)
+                {
+                    if (hoyo.EndfieldInputMode is not ("touch" or "pc"))
+                    {
+                        errors.Add($"profile {profile.Id} 的 EndfieldInputMode 非法");
+                    }
+
+                    // 分辨率只在固定尺寸时才有意义；跟随串流（auto）时尺寸字段不参与校验，
+                    // 客户端用 0×0 表示"跟随"，这样的尺寸不应让整份配置被判为损坏。
+                    if (!hoyo.EndfieldAutoResolution && !IsEndfieldSizeValid(hoyo.EndfieldWidth, hoyo.EndfieldHeight))
+                    {
+                        errors.Add($"profile {profile.Id} 的 Endfield 分辨率非法");
+                    }
+
+                    if (hoyo.EndfieldRefreshRate is < MinEndfieldRefreshRate or > MaxEndfieldRefreshRate)
+                    {
+                        errors.Add($"profile {profile.Id} 的 Endfield 刷新率非法");
+                    }
+                }
             }
         }
 
         return errors;
     }
+
+    public static bool IsEndfieldSizeValid(int width, int height) =>
+        width is >= MinEndfieldWidth and <= MaxEndfieldWidth && height is >= MinEndfieldHeight and <= MaxEndfieldHeight;
 
     private static void ValidateFps(List<string> errors, string profileId, string field, int value)
     {

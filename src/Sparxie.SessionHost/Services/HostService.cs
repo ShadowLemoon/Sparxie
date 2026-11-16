@@ -123,6 +123,7 @@ public sealed class HostService : SparxieHost.SparxieHostBase
     private static IGameController CreateController(HostOptions options) => options.Profile.Game switch
     {
         "zenlessZoneZero" => new ZzzGameController(options.SessionId),
+        "endfield" => new EndfieldGameController(),
         // Hoyo（原神/星铁）：bootstrap 已实现；SessionHost 已禁用 CET
         // （上游 asm_syscall 不兼容 shadow stack），DLL 加载不再崩溃。
         _ => new HoyoGameController(),

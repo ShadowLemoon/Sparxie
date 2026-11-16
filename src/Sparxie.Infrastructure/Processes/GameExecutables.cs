@@ -10,6 +10,7 @@ public static class GameExecutables
         GameType.Genshin => ["YuanShen.exe", "GenshinImpact.exe"],
         GameType.StarRail => ["StarRail.exe"],
         GameType.ZenlessZoneZero => ["ZenlessZoneZero.exe", "ZenlessZoneZeroBeta.exe"],
+        GameType.Endfield => ["Endfield.exe"],
         _ => [],
     };
 
