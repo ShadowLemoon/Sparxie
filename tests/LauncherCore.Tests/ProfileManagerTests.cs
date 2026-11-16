@@ -203,6 +203,24 @@ public sealed class ProfileManagerTests
         Assert.Equal(string.Empty, updated.ExecutablePath);
     }
 
+    [Fact]
+    public void 终末地设置可修改且仅限终末地()
+    {
+        var config = new AppConfig();
+        ProfileManager.Add(config, Create("endfield-cn", "终末地", GameType.Endfield, @"D:\Games\Endfield.exe"));
+
+        var updated = ProfileManager.Update(config, "endfield-cn", new ProfileMutation(
+            EndfieldInputMode: "pc",
+            EndfieldAutoResolution: false,
+            EndfieldWidth: 2560,
+            EndfieldHeight: 1440,
+            EndfieldRefreshRate: 144));
+
+        Assert.Equal("pc", updated.Hoyo!.EndfieldInputMode);
+        Assert.False(updated.Hoyo.EndfieldAutoResolution);
+        Assert.Equal((2560, 1440, 144), (updated.Hoyo.EndfieldWidth, updated.Hoyo.EndfieldHeight, updated.Hoyo.EndfieldRefreshRate));
+    }
+
     private static ProfileMutation Create(
         string id,
         string name,

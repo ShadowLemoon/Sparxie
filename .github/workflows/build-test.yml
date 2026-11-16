@@ -41,6 +41,25 @@ jobs:
             throw "native 构建缺少 HoyoTouchCore.dll"
           }
 
+      - name: 构建 native EndfieldCore 并运行它的 native 测试
+        shell: pwsh
+        run: |
+          $cmake = Get-ChildItem "C:/Program Files/Microsoft Visual Studio" -Recurse -Filter cmake.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match 'CMake\\CMake\\bin' } | Select-Object -First 1
+          if (-not $cmake) { throw "未找到 VS 自带 cmake" }
+          & $cmake.FullName -G "Visual Studio 18 2026" -A x64 -S native/EndfieldCore -B native/EndfieldCore/build
+          if ($LASTEXITCODE -ne 0) { throw "EndfieldCore CMake 配置失败" }
+          & $cmake.FullName --build native/EndfieldCore/build --config Release
+          if ($LASTEXITCODE -ne 0) { throw "EndfieldCore 构建失败" }
+          foreach ($dll in "EndfieldCore.dll", "EndfieldRuntime.dll") {
+            if (-not (Test-Path "native/EndfieldCore/build/Release/$dll")) { throw "native 构建缺少 $dll" }
+          }
+          foreach ($test in Get-ChildItem "native/EndfieldCore/build/Release" -Filter "*Test*.exe") {
+            Write-Host "运行 $($test.Name)"
+            & $test.FullName
+            if ($LASTEXITCODE -ne 0) { throw "$($test.Name) 失败" }
+          }
+
       - name: 还原并构建
         run: dotnet build Sparxie.slnx -c Release --nologo
 

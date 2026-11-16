@@ -49,8 +49,21 @@ public sealed class AppConfigStore
             return Fail(ErrorCode.ConfigReadFailed, "无法读取 config.json", ex);
         }
 
-        if (TryParse(bytes, out var config, out _))
+        if (TryParse(bytes, out var config, out _, out var migrated))
         {
+            if (migrated)
+            {
+                // the one-time migration of the removed Endfield input 自动 is kept: the next start reads the new value
+                try
+                {
+                    Save(config);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+                {
+                    // read-only folder: the value is migrated in memory on every load
+                }
+            }
+
             return new AppConfigLoadResult(ConfigLoadState.Loaded, config, null, null);
         }
 
@@ -97,8 +110,28 @@ public sealed class AppConfigStore
         Profiles = [],
     };
 
-    private bool TryParse(byte[] bytes, out AppConfig config, out string error)
+    /// <summary>
+    /// Endfield's input used to have a third choice, 自动 ("auto": by the client's device). It is gone: a stored "auto" becomes "touch" (a Sparxie session is a touch
+    /// session unless the person chose keyboard, mouse and gamepad). True when something changed.
+    /// </summary>
+    public static bool MigrateEndfieldInput(AppConfig config)
     {
+        var changed = false;
+        foreach (var profile in config.Profiles)
+        {
+            if (profile.Game == GameType.Endfield && profile.Hoyo is { } hoyo && hoyo.EndfieldInputMode is not ("touch" or "pc"))
+            {
+                hoyo.EndfieldInputMode = "touch";
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    private bool TryParse(byte[] bytes, out AppConfig config, out string error, out bool migrated)
+    {
+        migrated = false;
         try
         {
             var parsed = JsonSerializer.Deserialize<AppConfig>(bytes, ConfigJsonOptions.Read);
@@ -108,6 +141,8 @@ public sealed class AppConfigStore
                 config = null!;
                 return false;
             }
+
+            migrated = MigrateEndfieldInput(parsed);
 
             var validationErrors = AppConfigValidator.Validate(parsed);
             if (validationErrors.Count > 0)

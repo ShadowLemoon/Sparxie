@@ -56,6 +56,8 @@ public class ReleaseArtifactAuditTests
             "Sparxie.Broker.exe",
             "Sparxie.SessionHost.exe",
             "HoyoTouchCore.dll",
+            "EndfieldCore.dll",
+            "EndfieldRuntime.dll",
             "ZZZTouchCore.dll",
             "ZZZTouchRuntime.dll",
             "LICENSE",

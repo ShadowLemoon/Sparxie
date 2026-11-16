@@ -6,4 +6,5 @@ public enum GameType
     Genshin,
     StarRail,
     ZenlessZoneZero,
+    Endfield,
 }
