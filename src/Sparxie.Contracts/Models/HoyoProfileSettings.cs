@@ -34,4 +34,18 @@ public sealed class HoyoProfileSettings
     public int EndfieldHeight { get; set; } = 1080;
 
     public int EndfieldRefreshRate { get; set; } = 60;
+
+    // Endfield touch interface (written to endfield-ui.ini before launch and while the session runs). Every field is optional in config.json: a missing or
+    // unreadable value means the default, and none of them is validated as a reason to drop a profile (see ConfigRepair).
+    // Scale: "auto" (the client device decides) or "manual" with EndfieldUiScalePercent (100–180 = 1.00–1.80).
+    public string EndfieldUiScaleMode { get; set; } = EndfieldUiSettings.Auto;
+
+    public int EndfieldUiScalePercent { get; set; } = EndfieldUiSettings.DefaultScalePercent;
+
+    // Safe margins for notched screens: "auto" (device table by stream size), "off", or "manual" with the left and right inset in pixels.
+    public string EndfieldSafeAreaMode { get; set; } = EndfieldUiSettings.Auto;
+
+    public int EndfieldSafeLeft { get; set; }
+
+    public int EndfieldSafeRight { get; set; }
 }

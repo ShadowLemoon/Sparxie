@@ -77,6 +77,13 @@ void TestRuntimeKeepsTouchOnTheMainThread() {
   CHECK(log.find(L"first pump runs on the game's main thread") != std::wstring::npos);
   CHECK(log.find(L"ChangeInputType(Touch) returned") != std::wstring::npos);
   CHECK(log.find(L"target frame rate was 60, set to 144") != std::wstring::npos);
+  // the pointer mode: held at AllPointersAsIs (2) although the game writes SingleUnifiedPointer (1) every second; after the next message the hook has put it back
+  CHECK(log.find(L"pointer: InputSystemUIInputModule") != std::wstring::npos);
+  CHECK(Number(record, L"pointer_final") == 2);
+  CHECK(Number(record, L"pointer_late") >= 1);
+  CHECK(Number(record, L"pointer_late_wrong") == 0);
+  // no endfield-ui.ini beside the Runtime: the shipped defaults
+  CHECK(log.find(L"config: cloud_mode is on") != std::wstring::npos);
 }
 
 void TestRuntimeLeavesTheKeyboardUiAlone() {
@@ -85,6 +92,7 @@ void TestRuntimeLeavesTheKeyboardUiAlone() {
   const std::wstring record = ReadWide(fx.record);
   CHECK(Number(record, L"change_calls") == 0);
   CHECK(Number(record, L"input_final") == 0);
+  CHECK(Number(record, L"pointer_final") == 1);       // the game's own pointer mode is left alone
   CHECK(Number(record, L"fps_final") == 144 || Number(record, L"fps_final") == 60);
   CHECK(fx.Log().find(L"EndfieldRuntime attached: touch_ui=0") != std::wstring::npos);
 }

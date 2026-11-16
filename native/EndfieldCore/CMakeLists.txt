@@ -15,6 +15,9 @@ target_compile_options(EndfieldCore PRIVATE /utf-8)
 target_compile_options(EndfieldRuntime PRIVATE /utf-8)
 # decoy parent: WinVerifyTrust, CryptQueryObject / CryptHashCertificate2, UuidCreate
 target_link_libraries(EndfieldCore PRIVATE wintrust crypt32 bcrypt rpcrt4)
+# the Runtime guards its reads of game memory (objects the game may have freed, the hot-fix slot page) with __try / __except: the handlers must also see faults of plain
+# loads, which clang-cl only guarantees with asynchronous exceptions (MSVC catches them either way)
+target_compile_options(EndfieldRuntime PRIVATE /EHa)
 
 # Core tests: request validation and session guards; no game is started.
 # Built with EndfieldCore; run: build\Release\EndfieldCoreTests.exe
@@ -58,5 +61,12 @@ target_compile_options(FakeEndfield PRIVATE /utf-8)
 target_link_libraries(FakeEndfield PRIVATE wintrust crypt32 bcrypt rpcrt4)
 target_link_options(FakeEndfield PRIVATE /ENTRY:wWinMainCRTStartup)
 target_link_libraries(EndfieldDecoyTests PRIVATE EndfieldCore wintrust crypt32 bcrypt rpcrt4)
+# Runtime self-test without a game: pointer-mode hold, ini keys and defaults, drag threshold, device profile, the UI-size thunk, the cloud-mode slots and fallback.
+# Run: build\Release\EndfieldRuntimeSelfTest.exe
+add_executable(EndfieldRuntimeSelfTest endfield_runtime_selftest.cpp)
+set_target_properties(EndfieldRuntimeSelfTest PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES MSVC_RUNTIME_LIBRARY "MultiThreaded")
+target_compile_definitions(EndfieldRuntimeSelfTest PRIVATE ENDFIELD_RUNTIME_BUILD=1)
+target_compile_options(EndfieldRuntimeSelfTest PRIVATE /utf-8 /EHa)
+target_link_libraries(EndfieldRuntimeSelfTest PRIVATE user32)
 
 install(TARGETS EndfieldCore EndfieldRuntime RUNTIME DESTINATION .)
