@@ -33,4 +33,13 @@
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.251106002" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.4948" />
   </ItemGroup>
+
+  <!-- WinAppSDK 总包带入 .AI/.ML 子包的组件，本项目未使用，发布后删除（约 40 MB）。 -->
+  <Target Name="RemoveUnusedAiMlBinaries" AfterTargets="Publish">
+    <ItemGroup>
+      <_AiMlFile Include="$(PublishDir)DirectML.dll;$(PublishDir)onnxruntime*.dll;$(PublishDir)Microsoft.ML.OnnxRuntime.dll" />
+      <_AiMlFile Include="$(PublishDir)Microsoft.Windows.AI.*;$(PublishDir)Microsoft.Windows.Workloads*;$(PublishDir)Microsoft.Windows.Private.Workloads*;$(PublishDir)workloads*.json" />
+    </ItemGroup>
+    <Delete Files="@(_AiMlFile)" />
+  </Target>
 </Project>

@@ -1,7 +1,7 @@
 # THIRD-PARTY NOTICES
 
 本文件列出 Sparxie 发布包中包含的第三方组件及其许可证。各组件保留其原始
-版权与许可证条款，不受根目录 `LICENSE` 专有许可约束。清单随依赖变动持续更新，
+版权与许可证条款，不受根目录 `LICENSE`（GPLv3）的约束，各自适用原始许可证；它们的许可与 GPLv3 兼容（MIT、BSD-3-Clause、Apache-2.0 均可并入 GPLv3 作品），私有 Runtime 除外，见下。清单随依赖变动持续更新，
 发布前必须复核本文件、`docs/RUNTIME-NOTICE.md` 与 `native/HoyoTouchCore/adapter/licenses/`
 均与发布目录实际内容一致。
 
@@ -38,7 +38,7 @@
 ## 绝区零私有 Runtime
 
 - 组件：ZZZTouchCore.dll、ZZZTouchFilterHook.dll 及必要配套文件
-- 许可：闭源私有，已取得随 Sparxie 成品分发的授权
+- 许可：闭源私有，已取得随 Sparxie 成品分发的授权；与 GPLv3 不兼容，因此通过 `LICENSE-EXCEPTION.txt`（GPLv3 第 7 条附加许可）声明它是独立的闭源组件
 - 说明：仅分发固定版本成品，不包含源码；版本/哈希/分发边界见
   `docs/RUNTIME-NOTICE.md`，对应 RUNTIME-NOTICE 随发布包分发
 
@@ -46,7 +46,8 @@
 
 发布门禁检查项：
 
-- [ ] 根目录 `LICENSE`（专有许可）不覆盖任何第三方组件；
+- [ ] 根目录 `LICENSE`（GPLv3）与 `LICENSE-EXCEPTION.txt` 随发布包分发，且不覆盖任何第三方组件；
+- [ ] 向他人分发二进制时，同时提供对应源码（GPLv3 第 6 条）：发布页链接到对应提交的源码，或随包附书面要约；
 - [ ] `native/HoyoTouchCore/upstream/LICENSE`（Hoyo MIT）随 subtree 保留；
 - [ ] `native/HoyoTouchCore/adapter/licenses/inih-LICENSE.txt` 与发布目录一致；
 - [ ] `docs/RUNTIME-NOTICE.md` 版本/哈希与 `build/zzz-runtime.json` 一致；

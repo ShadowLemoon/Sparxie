@@ -59,7 +59,7 @@ public sealed class LauncherProcessIntegrationTests
                 }
             }
 
-            Assert.Contains("Failed", states);
+            Assert.True(states.Contains("Failed"), $"没收到 Failed 终态，实际事件序列：{string.Join(" → ", states)}");
         }
         finally
         {

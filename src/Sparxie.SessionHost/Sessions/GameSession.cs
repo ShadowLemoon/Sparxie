@@ -270,10 +270,10 @@ public sealed class GameSession : IAsyncDisposable
                 }
             }
         }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
+        catch (Exception)
         {
-            // 恢复失败：保留备份文件，下次启动前再试一次。
-            _ = ex;
+            // 恢复失败（权限、路径、注册表、备份文件损坏…任何原因）：保留备份文件，下次启动前再试一次。
+            // 这是会话收尾路径，绝不能因此抛出而冲掉已经发出的终态事件。
         }
     }
 
