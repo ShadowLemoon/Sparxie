@@ -13,12 +13,6 @@ public static class ProfileSnapshotValidator
     public const int MinTouchUiScalePercent = 100;
     public const int MaxTouchUiScalePercent = 500;
 
-    private static readonly HashSet<string> ValidGames = new(StringComparer.Ordinal)
-    {
-        "genshin",
-        "starRail",
-        "zenlessZoneZero",
-    };
 
     private static readonly HashSet<string> ValidPriorities = new(StringComparer.Ordinal)
     {
@@ -46,7 +40,7 @@ public static class ProfileSnapshotValidator
             return (ErrorCode.InvalidArgument, "profile.displayName 不能为空");
         }
 
-        if (!ValidGames.Contains(profile.Game))
+        if (BuiltInGameCatalog.Instance.Find(profile.Game) is null || profile.Game != GameIds.Normalize(profile.Game))
         {
             return (ErrorCode.InvalidArgument, $"profile.game 非法: {profile.Game}");
         }
@@ -58,12 +52,7 @@ public static class ProfileSnapshotValidator
 
         // EXE 白名单：原神仅 YuanShen.exe/GenshinImpact.exe，星铁仅 StarRail.exe，
         // 绝区零仅 ZenlessZoneZero.exe/ZenlessZoneZeroBeta.exe
-        if (!GameExecutables.IsAllowed(profile.Game switch
-            {
-                "genshin" => GameType.Genshin,
-                "starRail" => GameType.StarRail,
-                _ => GameType.ZenlessZoneZero,
-            }, profile.ExecutablePath))
+        if (!GameExecutables.IsAllowed(profile.Game, profile.ExecutablePath))
         {
             return (ErrorCode.InvalidArgument, $"executablePath 不在 {profile.Game} 白名单: {Path.GetFileName(profile.ExecutablePath)}");
         }

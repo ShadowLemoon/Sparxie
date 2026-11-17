@@ -47,7 +47,7 @@ public sealed class GameSession : IAsyncDisposable
                 return;
             }
 
-            if (GameProcessDetector.IsGameRunning(_options.Profile.ToGameType()))
+            if (GameProcessDetector.IsGameRunning(_options.Profile.Game))
             {
                 await FailAsync((StageCode.Mutex, ErrorCode.GameAlreadyRunning, "对应游戏已在运行，拒绝接管"), cancellationToken).ConfigureAwait(false);
                 return;
@@ -175,7 +175,7 @@ public sealed class GameSession : IAsyncDisposable
             return false;
         }
 
-        if (!GameExecutables.IsAllowed(profile.ToGameType(), profile.ExecutablePath))
+        if (!GameExecutables.IsAllowed(profile.Game, profile.ExecutablePath))
         {
             error = (StageCode.Validation, ErrorCode.InvalidExecutableName, $"EXE 名称不在白名单: {Path.GetFileName(profile.ExecutablePath)}");
             return false;
@@ -187,7 +187,7 @@ public sealed class GameSession : IAsyncDisposable
 
     private bool TryAcquireMutex(out (StageCode Stage, ErrorCode Code, string Message) error)
     {
-        var name = $"Local\\Sparxie.Mutex.{_options.Profile.ToGameType().ToString().ToLowerInvariant()}";
+        var name = $"Local\\Sparxie.Mutex.{_options.Profile.Game.ToLowerInvariant()}";
         _mutex = new Mutex(initiallyOwned: true, name, out var createdNew);
 
         if (!createdNew)

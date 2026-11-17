@@ -32,6 +32,7 @@ public class ProfileSnapshotValidatorTests
     [InlineData("")]
     [InlineData("wow")]
     [InlineData("Genshin")]
+    [InlineData("ext.acme.demo")]
     public void 非法game被拒绝(string game)
     {
         var profile = Valid();
