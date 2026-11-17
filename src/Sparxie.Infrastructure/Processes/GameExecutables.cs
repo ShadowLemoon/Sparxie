@@ -13,6 +13,16 @@ public static class GameExecutables
         _ => [],
     };
 
+    /// <summary>按游戏 id 查白名单；未知 id 返回空（一律拒绝）。</summary>
+    public static IReadOnlyList<string> For(string? gameId) =>
+        GameIds.TryGetBuiltIn(gameId, out var game) ? For(game) : [];
+
+    public static bool IsAllowed(string? gameId, string executablePath)
+    {
+        var name = Path.GetFileName(executablePath);
+        return For(gameId).Contains(name, StringComparer.OrdinalIgnoreCase);
+    }
+
     public static bool IsAllowed(GameType game, string executablePath)
     {
         var name = Path.GetFileName(executablePath);

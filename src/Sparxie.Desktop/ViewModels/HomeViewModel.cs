@@ -253,7 +253,7 @@ public sealed class HomeViewModel : ObservableObject
     {
         try
         {
-            _data.Preferences.SelectedGame = game.ToString();
+            _data.Preferences.SelectedGame = GameIds.ToId(game);
             _data.SavePreferences();
         }
         catch
@@ -585,7 +585,7 @@ public sealed class HomeViewModel : ObservableObject
 
     /// <summary>恢复上次选中的游戏标签；无记录或值非法时回退到所选 Profile 的游戏。</summary>
     private GameType? RestoreSelectedGame() =>
-        Enum.TryParse<GameType>(_data.Preferences.SelectedGame, out var saved) ? saved : null;
+        GameIds.TryGetBuiltIn(_data.Preferences.SelectedGame, out var saved) ? saved : null;
 
     private void RefreshProfiles()
     {
@@ -643,7 +643,7 @@ public sealed class HomeViewModel : ObservableObject
     private string? ResolveProfileId(GameType game)
     {
         var inGame = _data.Config.Profiles.Where(item => item.Game == game).ToList();
-        if (_data.Preferences.LastProfileByGame.TryGetValue(game.ToString(), out var saved)
+        if (TryGetRememberedProfile(game, out var saved)
             && inGame.Any(item => item.Id == saved))
         {
             return saved;
@@ -652,15 +652,21 @@ public sealed class HomeViewModel : ObservableObject
         return inGame.FirstOrDefault()?.Id;
     }
 
+    private bool TryGetRememberedProfile(GameType game, out string? profileId) =>
+        _data.Preferences.LastProfileByGame.TryGetValue(GameIds.ToId(game), out profileId)
+        || _data.Preferences.LastProfileByGame.TryGetValue(game.ToString(), out profileId);
+
     private void RememberProfile(GameProfile? profile)
     {
         if (profile is null
-            || (_data.Preferences.LastProfileByGame.TryGetValue(profile.Game.ToString(), out var current) && current == profile.Id))
+            || (TryGetRememberedProfile(profile.Game, out var current) && current == profile.Id))
         {
             return;
         }
 
-        _data.Preferences.LastProfileByGame[profile.Game.ToString()] = profile.Id;
+        // 旧版本以 PascalCase 名存键；写回统一用 id，并清掉旧键避免两份不一致。
+        _data.Preferences.LastProfileByGame.Remove(profile.Game.ToString());
+        _data.Preferences.LastProfileByGame[GameIds.ToId(profile.Game)] = profile.Id;
         try
         {
             _data.SavePreferences();

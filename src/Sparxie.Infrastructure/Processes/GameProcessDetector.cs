@@ -18,6 +18,9 @@ public static class GameProcessDetector
         return found.ToArray();
     }
 
+    public static bool IsGameRunning(string? gameId) =>
+        GameIds.TryGetBuiltIn(gameId, out var game) && IsGameRunning(game);
+
     public static bool IsGameRunning(GameType game)
     {
         var names = GameExecutables.For(game)
