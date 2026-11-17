@@ -23,7 +23,12 @@ public enum ExecutablePathIssue
 /// <summary>游戏 EXE 路径的即时检查：设置页输入提示与主页「定位游戏」共用，规则与 ProfileManager / 会话边界一致。</summary>
 public static class ExecutablePathCheck
 {
-    public static ExecutablePathIssue Check(GameType game, string? path, Func<string, bool>? fileExists = null)
+    public static ExecutablePathIssue Check(GameType game, string? path, Func<string, bool>? fileExists = null) =>
+        Check(GameIds.ToId(game), path, fileExists);
+
+    public static string Describe(GameType game, ExecutablePathIssue issue) => Describe(GameIds.ToId(game), issue);
+
+    public static ExecutablePathIssue Check(string? game, string? path, Func<string, bool>? fileExists = null)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -45,7 +50,7 @@ public static class ExecutablePathCheck
     }
 
     /// <summary>面向用户的提示文案；<see cref="ExecutablePathIssue.None"/> 返回空串。</summary>
-    public static string Describe(GameType game, ExecutablePathIssue issue) => issue switch
+    public static string Describe(string? game, ExecutablePathIssue issue) => issue switch
     {
         ExecutablePathIssue.Empty => "尚未设置游戏路径",
         ExecutablePathIssue.NotFullyQualified => "请填写完整路径（如 D:\\Games\\…\\" + Example(game) + "）",
@@ -54,5 +59,5 @@ public static class ExecutablePathCheck
         _ => string.Empty,
     };
 
-    private static string Example(GameType game) => GameExecutables.For(game).FirstOrDefault() ?? "game.exe";
+    private static string Example(string? game) => GameExecutables.For(game).FirstOrDefault() ?? "game.exe";
 }

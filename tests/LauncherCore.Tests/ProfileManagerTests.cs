@@ -36,7 +36,7 @@ public sealed class ProfileManagerTests
             GenshinTouchUiScalePercent: 350));
 
         Assert.Equal("genshin-cn", updated.Id);
-        Assert.Equal(GameType.Genshin, updated.Game);
+        Assert.Equal(GameIds.Genshin, updated.Game);
         Assert.Equal(@"D:\Games\YuanShen.exe", updated.ExecutablePath);
         Assert.Equal("新名称", updated.DisplayName);
         Assert.Equal(144, updated.Hoyo!.TargetFps);
@@ -148,9 +148,9 @@ public sealed class ProfileManagerTests
 
         var toStarRail = ProfileManager.Update(config, "main", new ProfileMutation(Game: GameType.StarRail));
 
-        Assert.Equal(GameType.StarRail, toStarRail.Game);
+        Assert.Equal(GameIds.StarRail, toStarRail.Game);
         Assert.Equal(string.Empty, toStarRail.ExecutablePath);
-        Assert.Equal(GameType.StarRail, ProfileSelector.Select(config, "main").Game);
+        Assert.Equal(GameIds.StarRail, ProfileSelector.Select(config, "main").Game);
     }
 
     [Fact]
@@ -198,7 +198,7 @@ public sealed class ProfileManagerTests
             Game: GameType.ZenlessZoneZero));
 
         Assert.Equal("绝区零", updated.DisplayName);
-        Assert.Equal(GameType.ZenlessZoneZero, updated.Game);
+        Assert.Equal(GameIds.ZenlessZoneZero, updated.Game);
         Assert.Null(updated.Hoyo);
         Assert.Equal(string.Empty, updated.ExecutablePath);
     }

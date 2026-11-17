@@ -36,6 +36,12 @@ public static class GameIds
         return false;
     }
 
+    private static readonly System.Text.RegularExpressions.Regex ThirdPartyId = new("^ext\\.[a-z0-9-]{2,32}\\.[a-z0-9-]{2,32}\\z", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>id 语法合法：内置三款，或第三方 <c>ext.{vendor}.{game}</c>（同时防止 id 被用于拼文件名时注入）。</summary>
+    public static bool IsValidId(string? id) =>
+        id is not null && (TryGetBuiltIn(id, out _) || ThirdPartyId.IsMatch(id));
+
     /// <summary>内置游戏规范化为标准 id；其他非空值原样保留（去首尾空白）；空返回 null。</summary>
     public static string? Normalize(string? id)
     {

@@ -80,7 +80,7 @@ public sealed class LaunchSettingsProfileTests
         {
             Id = "z",
             DisplayName = "绝区零",
-            Game = GameType.ZenlessZoneZero,
+            Game = GameIds.ZenlessZoneZero,
             ExecutablePath = @"D:\Z\ZenlessZoneZero.exe",
             Launch = new LaunchSettings { Fullscreen = true, Borderless = true, ExtraArguments = " -x " },
         };

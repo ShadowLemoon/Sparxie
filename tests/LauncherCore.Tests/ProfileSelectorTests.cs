@@ -48,7 +48,7 @@ public sealed class ProfileSelectorTests
     {
         Id = id,
         DisplayName = name,
-        Game = GameType.StarRail,
+        Game = GameIds.StarRail,
         ExecutablePath = @"D:\Games\StarRail.exe",
         Hoyo = new HoyoProfileSettings(),
     };

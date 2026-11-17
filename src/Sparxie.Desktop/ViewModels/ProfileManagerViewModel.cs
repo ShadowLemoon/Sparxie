@@ -170,7 +170,7 @@ public sealed class ProfileManagerViewModel : ObservableObject
     /// <summary>进入 Profile 页时若一个 Profile 都没有，则自动落一个占位 Profile 供右侧补全。</summary>
     public void EnsureDefaultIfEmpty(GameType game)
     {
-        if (_data.Config.Profiles.Any(item => item.Game == game))
+        if (_data.Config.Profiles.Any(item => item.BuiltInGame == game))
         {
             return;
         }
@@ -184,7 +184,7 @@ public sealed class ProfileManagerViewModel : ObservableObject
                 id = $"{game.ToString().ToLowerInvariant()}-{n}";
             }
 
-            var names = _data.Config.Profiles.Where(item => item.Game == game).Select(item => item.DisplayName);
+            var names = _data.Config.Profiles.Where(item => item.BuiltInGame == game).Select(item => item.DisplayName);
             _data.AddProfile(new ProfileMutation(Id: id, DisplayName: ProfileNames.NextDefault(names), Game: game));
             ReportInfo("请先选择游戏 EXE 路径");
         }
@@ -207,7 +207,7 @@ public sealed class ProfileManagerViewModel : ObservableObject
         try
         {
             Profiles.Clear();
-            foreach (var profile in _data.Config.Profiles.Where(item => item.Game == _scope))
+            foreach (var profile in _data.Config.Profiles.Where(item => item.BuiltInGame == _scope))
             {
                 Profiles.Add(Track(ProfileEditorViewModel.From(profile)));
             }
@@ -239,7 +239,7 @@ public sealed class ProfileManagerViewModel : ObservableObject
             var created = ProfileEditorViewModel.New(
                 _data.Config.Profiles.Select(profile => profile.Id),
                 _scope,
-                _data.Config.Profiles.Where(profile => profile.Game == _scope).Select(profile => profile.DisplayName));
+                _data.Config.Profiles.Where(profile => profile.BuiltInGame == _scope).Select(profile => profile.DisplayName));
             var saved = _data.AddProfile(created.ToMutation());
             StatusMessage = string.Empty;
             _selectedProfile = null;
@@ -761,7 +761,7 @@ public sealed class ProfileEditorViewModel : ObservableObject
     {
         Id = profile.Id,
         DisplayName = profile.DisplayName,
-        Game = profile.Game,
+        Game = profile.BuiltInGame ?? default,
         ExecutablePath = profile.ExecutablePath,
         FpsUnlockEnabled = profile.Hoyo?.FpsUnlockEnabled ?? true,
         TargetFps = profile.Hoyo?.TargetFps ?? 120,

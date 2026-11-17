@@ -485,7 +485,7 @@ public sealed class HomeViewModel : ObservableObject
 
     public string CurrentProfileDetails => SelectedProfile is null
         ? "尚未设置游戏路径，点击设置"
-        : $"{FormatGame(SelectedProfile.Game)} · {SelectedProfile.ExecutablePath}";
+        : $"{FormatGame(SelectedProfile.BuiltInGame ?? default)} · {SelectedProfile.ExecutablePath}";
 
     /// <summary>主页状态条：仅调试模式下显示（设置里开启，或环境变量 SPARXIE_DEBUG=1）；平时隐藏，失败原因仍写入 desktop.log。</summary>
     public bool HasStatusMessage => IsDebugMode && !string.IsNullOrWhiteSpace(StatusMessage) && StatusMessage != "准备就绪";
@@ -522,7 +522,7 @@ public sealed class HomeViewModel : ObservableObject
     }
 
     /// <summary>当前选中的游戏已有会话在运行（同款游戏同一时间只允许一个会话）。</summary>
-    public bool IsSelectedGameActive => SelectedProfile is { } profile && (_activeGames.Contains(profile.Game) || (_watchedProcess is not null && _watchedGame == profile.Game));
+    public bool IsSelectedGameActive => SelectedProfile is { } profile && (profile.BuiltInGame is { } active && _activeGames.Contains(active) || (_watchedProcess is not null && _watchedGame == profile.BuiltInGame));
 
     /// <summary>启动按钮文字：启动中 / 运行中 / 启动游戏。</summary>
     public string LaunchLabel => IsLaunching ? "启动中…" : IsSelectedGameActive ? "运行中" : "启动游戏";
@@ -537,8 +537,8 @@ public sealed class HomeViewModel : ObservableObject
     public string PathIssueMessage => SelectedProfile is { } profile
         ? PathIssue switch
         {
-            ExecutablePathIssue.Empty => $"还没有设置 {GameNames.Display(profile.Game)} 的游戏路径",
-            ExecutablePathIssue.NotFound => $"找不到 {GameNames.Display(profile.Game)}，游戏可能已移动或卸载",
+            ExecutablePathIssue.Empty => $"还没有设置 {GameNames.Display(profile.BuiltInGame ?? default)} 的游戏路径",
+            ExecutablePathIssue.NotFound => $"找不到 {GameNames.Display(profile.BuiltInGame ?? default)}，游戏可能已移动或卸载",
             var issue => ExecutablePathCheck.Describe(profile.Game, issue),
         }
         : string.Empty;
@@ -568,8 +568,8 @@ public sealed class HomeViewModel : ObservableObject
     {
         var selected = _data.TryGetSelectedProfile();
         _selectedGame = RestoreSelectedGame()
-            ?? selected?.Game
-            ?? _data.Config.Profiles.FirstOrDefault()?.Game
+            ?? selected?.BuiltInGame
+            ?? _data.Config.Profiles.FirstOrDefault()?.BuiltInGame
             ?? GameType.Genshin;
         OnPropertyChanged(nameof(SelectedGame));
         RefreshProfiles();
@@ -590,7 +590,7 @@ public sealed class HomeViewModel : ObservableObject
     private void RefreshProfiles()
     {
         Profiles.Clear();
-        foreach (var profile in _data.Config.Profiles.Where(item => item.Game == SelectedGame))
+        foreach (var profile in _data.Config.Profiles.Where(item => item.BuiltInGame == SelectedGame))
         {
             Profiles.Add(new ProfileListItemViewModel(profile));
         }
@@ -642,7 +642,7 @@ public sealed class HomeViewModel : ObservableObject
     /// <summary>某游戏点标题时会用到的配置：偏好里记住的 → 否则该游戏第一个。</summary>
     private string? ResolveProfileId(GameType game)
     {
-        var inGame = _data.Config.Profiles.Where(item => item.Game == game).ToList();
+        var inGame = _data.Config.Profiles.Where(item => item.BuiltInGame == game).ToList();
         if (TryGetRememberedProfile(game, out var saved)
             && inGame.Any(item => item.Id == saved))
         {
@@ -659,14 +659,14 @@ public sealed class HomeViewModel : ObservableObject
     private void RememberProfile(GameProfile? profile)
     {
         if (profile is null
-            || (TryGetRememberedProfile(profile.Game, out var current) && current == profile.Id))
+            || (profile.BuiltInGame is { } remembered && TryGetRememberedProfile(remembered, out var current) && current == profile.Id))
         {
             return;
         }
 
         // 旧版本以 PascalCase 名存键；写回统一用 id，并清掉旧键避免两份不一致。
-        _data.Preferences.LastProfileByGame.Remove(profile.Game.ToString());
-        _data.Preferences.LastProfileByGame[GameIds.ToId(profile.Game)] = profile.Id;
+        if (profile.BuiltInGame is { } legacy) { _data.Preferences.LastProfileByGame.Remove(legacy.ToString()); }
+        _data.Preferences.LastProfileByGame[profile.Game] = profile.Id;
         try
         {
             _data.SavePreferences();
@@ -703,7 +703,7 @@ public sealed class HomeViewModel : ObservableObject
         GameEntries.Clear();
         foreach (var game in Games)
         {
-            var profiles = _data.Config.Profiles.Where(item => item.Game == game).ToList();
+            var profiles = _data.Config.Profiles.Where(item => item.BuiltInGame == game).ToList();
             var chips = profiles
                 .Select(profile => new ProfileChipViewModel(
                     profile,
@@ -749,8 +749,8 @@ public sealed class HomeViewModel : ObservableObject
             StatusMessage = $"已启动 {profile.DisplayName}，会话 {session.SessionId[..Math.Min(8, session.SessionId.Length)]}";
 
             // 会话存续期间该游戏的启动按钮禁用并显示“运行中”，直到收到终态事件。
-            SetGameActive(profile.Game, true);
-            _ = ObserveSessionAsync(session, profile.Game);
+            SetGameActive(profile.BuiltInGame ?? default, true);
+            _ = ObserveSessionAsync(session, profile.BuiltInGame ?? default);
         }
         catch (Exception ex)
         {

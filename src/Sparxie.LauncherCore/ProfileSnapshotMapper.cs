@@ -14,15 +14,11 @@ public static class ProfileSnapshotMapper
         {
             ProfileId = profile.Id,
             DisplayName = profile.DisplayName,
-            Game = profile.Game switch
-            {
-                GameType.Genshin => "genshin",
-                GameType.StarRail => "starRail",
-                GameType.ZenlessZoneZero => "zenlessZoneZero",
-                _ => throw new LauncherException(
+            Game = GameIds.IsValidId(profile.Game)
+                ? profile.Game
+                : throw new LauncherException(
                     LauncherFailureKind.ProfileSelection,
                     $"不支持的游戏类型: {profile.Game}"),
-            },
             ExecutablePath = profile.ExecutablePath,
             Launch = profile.Launch is null || profile.Launch.IsEmpty
                 ? null

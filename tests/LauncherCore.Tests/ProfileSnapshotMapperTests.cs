@@ -12,7 +12,7 @@ public sealed class ProfileSnapshotMapperTests
         {
             Id = "p1",
             DisplayName = "原神",
-            Game = GameType.Genshin,
+            Game = GameIds.Genshin,
             ExecutablePath = @"D:\Games\GenshinImpact.exe",
             Hoyo = new HoyoProfileSettings
             {
@@ -46,7 +46,7 @@ public sealed class ProfileSnapshotMapperTests
         {
             Id = "p1",
             DisplayName = "绝区零",
-            Game = GameType.ZenlessZoneZero,
+            Game = GameIds.ZenlessZoneZero,
             ExecutablePath = @"D:\Games\ZenlessZoneZero.exe",
         };
 

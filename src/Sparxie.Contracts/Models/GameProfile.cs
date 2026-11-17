@@ -5,11 +5,22 @@ namespace Sparxie.Contracts.Models;
 /// <summary>一个用户可管理的游戏安装 Profile。完整 EXE 路径是安装身份的唯一持久化真相源。</summary>
 public sealed class GameProfile
 {
+    private string _game = string.Empty;
+
     public required string Id { get; set; }
 
     public required string DisplayName { get; set; }
 
-    public required GameType Game { get; set; }
+    /// <summary>游戏 id（见 <see cref="GameIds"/>）。内置游戏写入时规范化为 camelCase，config.json 内容与枚举时代一致。</summary>
+    public required string Game
+    {
+        get => _game;
+        set => _game = GameIds.Normalize(value) ?? string.Empty;
+    }
+
+    /// <summary>内置游戏的枚举形式；第三方 / 未知 id 为 null。仅用于内置游戏的专用逻辑。</summary>
+    [JsonIgnore]
+    public GameType? BuiltInGame => GameIds.TryGetBuiltIn(_game, out var game) ? game : null;
 
     public required string ExecutablePath { get; set; }
 

@@ -72,7 +72,7 @@ public class AppConfigStoreTests : IDisposable
                 {
                     Id = "done",
                     DisplayName = "已完成",
-                    Game = GameType.Genshin,
+                    Game = GameIds.Genshin,
                     ExecutablePath = @"D:\Games\YuanShen.exe",
                     Hoyo = new HoyoProfileSettings(),
                 },
@@ -80,7 +80,7 @@ public class AppConfigStoreTests : IDisposable
                 {
                     Id = "placeholder",
                     DisplayName = "待补全",
-                    Game = GameType.StarRail,
+                    Game = GameIds.StarRail,
                     ExecutablePath = string.Empty,
                     Hoyo = new HoyoProfileSettings(),
                 },
@@ -109,7 +109,7 @@ public class AppConfigStoreTests : IDisposable
                 {
                     Id = "p1",
                     DisplayName = "原神 · 国服",
-                    Game = GameType.Genshin,
+                    Game = GameIds.Genshin,
                     ExecutablePath = @"D:\Games\Genshin Impact Game\YuanShen.exe",
                     Hoyo = new HoyoProfileSettings { TargetFps = 120 },
                 },
@@ -121,7 +121,7 @@ public class AppConfigStoreTests : IDisposable
         Assert.Equal(ConfigLoadState.Loaded, result.State);
         var profile = Assert.Single(result.Config.Profiles);
         Assert.Equal("p1", profile.Id);
-        Assert.Equal(GameType.Genshin, profile.Game);
+        Assert.Equal(GameIds.Genshin, profile.Game);
         Assert.Equal(120, profile.Hoyo!.TargetFps);
     }
 
@@ -225,7 +225,7 @@ public class AppConfigStoreTests : IDisposable
                 {
                     Id = "p1",
                     DisplayName = "星铁",
-                    Game = GameType.StarRail,
+                    Game = GameIds.StarRail,
                     ExecutablePath = @"D:\Games\StarRail\StarRail.exe",
                     Hoyo = new HoyoProfileSettings { FpsUnlockEnabled = false, TargetFps = 120 },
                 },
@@ -256,7 +256,7 @@ public class AppConfigStoreTests : IDisposable
                 {
                     Id = "p1",
                     DisplayName = "x",
-                    Game = GameType.Genshin,
+                    Game = GameIds.Genshin,
                     ExecutablePath = @"C:\x.exe",
                     Hoyo = new HoyoProfileSettings { TargetFps = 9999 },
                 },
@@ -278,7 +278,7 @@ public class AppConfigStoreTests : IDisposable
                 {
                     Id = "p1",
                     DisplayName = "x",
-                    Game = GameType.Genshin,
+                    Game = GameIds.Genshin,
                     ExecutablePath = @"C:\Games\notepad.exe",
                     Hoyo = new HoyoProfileSettings { TargetFps = 120 },
                 },
@@ -301,7 +301,7 @@ public class AppConfigStoreTests : IDisposable
                 {
                     Id = "p1",
                     DisplayName = "x",
-                    Game = GameType.ZenlessZoneZero,
+                    Game = GameIds.ZenlessZoneZero,
                     ExecutablePath = @"C:\Games\ZenlessZoneZeroBeta.exe",
                 },
             ],
@@ -366,7 +366,7 @@ public class AppConfigStoreTests : IDisposable
                 {
                     Id = "p1",
                     DisplayName = "原神",
-                    Game = GameType.Genshin,
+                    Game = GameIds.Genshin,
                     ExecutablePath = @"D:\Games\Genshin Impact Game\YuanShen.exe",
                 },
             ],
@@ -378,7 +378,7 @@ public class AppConfigStoreTests : IDisposable
         Assert.Equal(ConfigLoadState.Loaded, reloaded.State);
         var profile = Assert.Single(reloaded.Config.Profiles);
         Assert.Equal(@"D:\Games\Genshin Impact Game\YuanShen.exe", profile.ExecutablePath);
-        Assert.Equal(GameType.Genshin, profile.Game);
+        Assert.Equal(GameIds.Genshin, profile.Game);
     }
 
     [Fact]

@@ -86,7 +86,7 @@ public class LaunchSettingsRulesTests
                 {
                     Id = "p",
                     DisplayName = "原神",
-                    Game = GameType.Genshin,
+                    Game = GameIds.Genshin,
                     ExecutablePath = @"D:\Games\YuanShen.exe",
                     Hoyo = new HoyoProfileSettings(),
                     Launch = new LaunchSettings { Width = 1920 },

@@ -44,7 +44,9 @@ public static class AppConfigValidator
                 errors.Add($"profile {profile.Id} 的 displayName 不能为空");
             }
 
-            if (!Enum.IsDefined(profile.Game))
+            // 只有 id 语法非法才算损坏；语法合法但目录里没有（插件缺失）的 id 保留配置，
+            // 只跳过白名单与内置专用设置检查，避免一个未知游戏让整份配置被重置。
+            if (!GameIds.IsValidId(profile.Game))
             {
                 errors.Add($"profile {profile.Id} 的 game 非法: {profile.Game}");
             }
@@ -55,7 +57,7 @@ public static class AppConfigValidator
                 // 启动时由 SessionHost 边界拒绝（ExecutableNotFound）。
                 // 非空时必须通过游戏类型 EXE 白名单。
             }
-            else if (!GameExecutables.IsAllowed(profile.Game, profile.ExecutablePath))
+            else if (profile.BuiltInGame is not null && !GameExecutables.IsAllowed(profile.Game, profile.ExecutablePath))
             {
                 errors.Add($"profile {profile.Id} 的 EXE 名称不在白名单: {Path.GetFileName(profile.ExecutablePath)}");
             }
@@ -65,7 +67,11 @@ public static class AppConfigValidator
                 errors.Add($"profile {profile.Id} 的启动设置不合法：{launchError}");
             }
 
-            if (profile.Game == GameType.ZenlessZoneZero)
+            if (profile.BuiltInGame is null)
+            {
+                // 非内置游戏：不识别 hoyo 段，原样保留。
+            }
+            else if (profile.BuiltInGame == GameType.ZenlessZoneZero)
             {
                 if (profile.Hoyo is not null)
                 {

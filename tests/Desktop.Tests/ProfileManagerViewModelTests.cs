@@ -42,7 +42,7 @@ public sealed class ProfileManagerViewModelTests : IDisposable
         var (_, manager) = Create(GameType.StarRail);
 
         Assert.Single(manager.Profiles);
-        Assert.Single(Reload().Profiles, p => p.Game == GameType.StarRail);
+        Assert.Single(Reload().Profiles, p => p.BuiltInGame == GameType.StarRail);
     }
 
     [Fact]
@@ -64,7 +64,7 @@ public sealed class ProfileManagerViewModelTests : IDisposable
         manager.NewCommand.Execute(null);
 
         Assert.Equal(2, manager.Profiles.Count);
-        Assert.Equal(2, Reload().Profiles.Count(p => p.Game == GameType.Genshin));
+        Assert.Equal(2, Reload().Profiles.Count(p => p.BuiltInGame == GameType.Genshin));
         Assert.True(manager.HasMultiple);
         Assert.Equal(manager.Profiles[1].Id, manager.SelectedProfile!.Id);
     }

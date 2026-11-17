@@ -43,7 +43,7 @@ public sealed class LauncherProcessIntegrationTests
             {
                 Id = "integration",
                 DisplayName = "不存在的星铁",
-                Game = GameType.StarRail,
+                Game = GameIds.StarRail,
                 ExecutablePath = Path.Combine(Path.GetTempPath(), "StarRail.exe"),
                 Hoyo = new HoyoProfileSettings(),
             };

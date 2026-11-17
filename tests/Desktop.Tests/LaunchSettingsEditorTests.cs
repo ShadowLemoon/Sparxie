@@ -212,7 +212,7 @@ public sealed class LaunchSettingsEditorTests : IDisposable
         manager.SelectedProfile!.Borderless = true;
         manager.Flush();
 
-        var launch = new AppConfigStore(ConfigPath).Load().Config.Profiles.Single(p => p.Game == GameType.ZenlessZoneZero).Launch!;
+        var launch = new AppConfigStore(ConfigPath).Load().Config.Profiles.Single(p => p.BuiltInGame == GameType.ZenlessZoneZero).Launch!;
         Assert.True(launch.Borderless);
     }
 }

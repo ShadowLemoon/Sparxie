@@ -30,8 +30,8 @@ public static class ProfileManager
         {
             Id = id,
             DisplayName = RequireText(mutation.DisplayName, "Profile 名称"),
-            Game = game,
-            ExecutablePath = NormalizeOptionalExecutablePath(game, mutation.ExecutablePath),
+            Game = GameIds.ToId(game),
+            ExecutablePath = NormalizeOptionalExecutablePath(GameIds.ToId(game), mutation.ExecutablePath),
             Hoyo = game == GameType.ZenlessZoneZero ? null : new HoyoProfileSettings(),
         };
 
@@ -67,9 +67,9 @@ public static class ProfileManager
         }
 
         // 改游戏类型必须先落到 updated.Game，后续路径归一化与设置校验才按新游戏的规则执行。
-        if (mutation.Game is { } game && game != updated.Game)
+        if (mutation.Game is { } game && GameIds.ToId(game) != updated.Game)
         {
-            updated.Game = game;
+            updated.Game = GameIds.ToId(game);
             updated.Hoyo = game == GameType.ZenlessZoneZero ? null : updated.Hoyo ?? new HoyoProfileSettings();
 
             // 原路径属于旧游戏白名单，换游戏后必然非法；调用方未同时给出新路径时清空回占位状态。
@@ -146,7 +146,7 @@ public static class ProfileManager
     {
         if (mutation.HasHoyoSettings)
         {
-            if (profile.Game == GameType.ZenlessZoneZero)
+            if (profile.BuiltInGame == GameType.ZenlessZoneZero)
             {
                 throw Fail("绝区零 Profile 不支持 Hoyo FPS 或进程优先级设置");
             }
@@ -181,7 +181,7 @@ public static class ProfileManager
 
         if (mutation.HasGenshinSettings)
         {
-            if (profile.Game != GameType.Genshin)
+            if (profile.BuiltInGame != GameType.Genshin)
             {
                 throw Fail("原神专属设置只能用于原神 Profile");
             }
@@ -229,7 +229,7 @@ public static class ProfileManager
     }
 
     /// <summary>空白输入表示「未填写路径」，保留占位状态；非空则强制完整路径与游戏白名单。</summary>
-    private static string NormalizeOptionalExecutablePath(GameType game, string? executablePath)
+    private static string NormalizeOptionalExecutablePath(string game, string? executablePath)
     {
         if (string.IsNullOrWhiteSpace(executablePath))
         {
@@ -239,7 +239,7 @@ public static class ProfileManager
         return NormalizeExecutablePath(game, executablePath);
     }
 
-    private static string NormalizeExecutablePath(GameType game, string executablePath)
+    private static string NormalizeExecutablePath(string game, string executablePath)
     {
         var input = executablePath.Trim();
         if (!Path.IsPathFullyQualified(input))
@@ -259,7 +259,7 @@ public static class ProfileManager
 
         if (!GameExecutables.IsAllowed(game, fullPath))
         {
-            throw Fail($"EXE 名称不属于 {FormatGame(game)} 白名单: {Path.GetFileName(fullPath)}");
+            throw Fail($"EXE 名称不属于 {game} 白名单: {Path.GetFileName(fullPath)}");
         }
 
         return fullPath;
@@ -299,13 +299,6 @@ public static class ProfileManager
         return value.Trim();
     }
 
-    private static string FormatGame(GameType game) => game switch
-    {
-        GameType.Genshin => "genshin",
-        GameType.StarRail => "starRail",
-        GameType.ZenlessZoneZero => "zenlessZoneZero",
-        _ => game.ToString(),
-    };
 
     private static LauncherException Fail(string message) =>
         new(LauncherFailureKind.ProfileManagement, message);
