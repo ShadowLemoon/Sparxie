@@ -37,7 +37,7 @@
 
 ## 绝区零私有 Runtime
 
-- 组件：ZZZTouchCore.dll、ZZZTouchFilterHook.dll 及必要配套文件
+- 组件：ZZZTouchCore.dll、ZZZTouchRuntime.dll 及必要配套文件
 - 许可：闭源私有，已取得随 Sparxie 成品分发的授权；与 GPLv3 不兼容，因此通过 `LICENSE-EXCEPTION.txt`（GPLv3 第 7 条附加许可）声明它是独立的闭源组件
 - 说明：仅分发固定版本成品，不包含源码；版本/哈希/分发边界见
   `docs/RUNTIME-NOTICE.md`，对应 RUNTIME-NOTICE 随发布包分发

@@ -19,9 +19,9 @@
 
 | 项 | 值 |
 |---|---|
-| Runtime 版本 | v1.0.0 |
-| Release 资产名 | ZZZTouchRuntime-v1.0.0-win-x64.zip |
-| SHA-256 | e8fba7e8b237ecd9806a225bdaced97cc0f1eb8ae22b344ae0d3f47439e4f1c2 |
+| Runtime 版本 | v2.0.0 |
+| Release 资产名 | ZZZTouchRuntime-v2.0.0-win-x64.zip |
+| SHA-256 | b89f982538288b1b76fcc3319e6ef410d673da975244671abd7ae9964021a150 |
 | 包含文件 | ZZZTouchCore.dll、ZZZTouchRuntime.dll |
 
 ## 使用与分发边界

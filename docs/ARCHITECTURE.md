@@ -80,7 +80,7 @@ docs/                      # 架构、第三方许可证
 ## 发布
 
 - 自包含 `win-x64` 桌面 ZIP（`Sparxie.exe` 壳 + `app-<版本>\`）；`config.json` 跟随壳；
-- CI 先构建 `HoyoTouchCore.dll`，下载固定 `v1.0.0` ZZZ Runtime 并校验 SHA-256，再由 build/package_desktop.ps1 发布 Desktop、Broker、SessionHost 并打包；
+- CI 先构建 `HoyoTouchCore.dll`，下载固定 `v2.0.0` ZZZ Runtime 并校验 SHA-256，再由 build/package_desktop.ps1 发布 Desktop、Broker、SessionHost 并打包；
 - 发布 staging 只复制 manifest 声明的 ZZZ DLL，不含调试符号、CI 凭据或私库痕迹；
 - 许可证：根 LICENSE（GPLv3）覆盖自有代码，LICENSE-EXCEPTION.txt 说明与闭源 ZZZ Runtime 的关系；THIRD-PARTY-NOTICES.md 与
   `adapter/licenses/` 覆盖 Hoyo(MIT)、inih(BSD-3-Clause)、gRPC(Apache-2.0)、.NET(MIT)；
