@@ -111,7 +111,7 @@ HOYO_API HoyoTouchError hoyo_create_session(
     void** session_out);
 
 // 启动游戏进程并执行注入（挂起创建 → 扫描 → Patch → 恢复主线程）。
-// 调用方传入 game_pid；SessionHost 已创建进程。
+// 调用方传入 game_pid；游戏进程由 Runtime 的 bootstrap 创建，SessionHost 不预先创建。
 HOYO_API HoyoTouchError hoyo_launch(
     void* session,
     uint32_t game_pid,
