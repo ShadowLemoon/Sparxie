@@ -130,8 +130,14 @@ public sealed class HoyoGameController : IGameController
         }
     }
 
-    public async Task SetTargetFpsAsync(int targetFps, CancellationToken cancellationToken)
+    public async Task SetParamAsync(string key, long value, CancellationToken cancellationToken)
     {
+        if (key != GameParams.TargetFps)
+        {
+            throw new NotSupportedException($"不支持的热调参数: {key}");
+        }
+
+        var targetFps = checked((int)value);
         if (_session == IntPtr.Zero)
         {
             throw new InvalidOperationException("Hoyo 会话未激活");

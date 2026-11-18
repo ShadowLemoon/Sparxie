@@ -131,7 +131,7 @@ public sealed class ZzzGameController : IGameController
     public Task WaitExitAsync(CancellationToken cancellationToken)
         => Task.CompletedTask; // ZZZ 由 SessionHost 预创建并等待
 
-    public Task SetTargetFpsAsync(int targetFps, CancellationToken cancellationToken)
+    public Task SetParamAsync(string key, long value, CancellationToken cancellationToken)
         => throw new NotSupportedException("绝区零不提供 FPS 热调");
 
     public void Dispose()

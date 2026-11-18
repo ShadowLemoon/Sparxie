@@ -156,7 +156,7 @@ public sealed class GameSession : IAsyncDisposable
             throw new InvalidOperationException("会话尚未进入 Running");
         }
 
-        _controller.SetTargetFpsAsync(targetFps, CancellationToken.None).GetAwaiter().GetResult();
+        _controller.SetParamAsync(GameParams.TargetFps, targetFps, CancellationToken.None).GetAwaiter().GetResult();
     }
 
     private bool TryValidate(out (StageCode Stage, ErrorCode Code, string Message) error)

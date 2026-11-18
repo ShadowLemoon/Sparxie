@@ -32,6 +32,12 @@ public interface IGameController : IDisposable
     /// <summary>等待 Runtime 创建的进程退出（仅 CreatesProcess=true 时由 GameSession 调用）。</summary>
     Task WaitExitAsync(CancellationToken cancellationToken);
 
-    /// <summary>热调主目标 FPS；纯触屏或未启用 FPS 时抛 NotSupportedException。</summary>
-    Task SetTargetFpsAsync(int targetFps, CancellationToken cancellationToken);
+    /// <summary>热调参数（目前只有 <see cref="GameParams.TargetFps"/>）；不支持的 key 或纯触屏/未启用 FPS 时抛 NotSupportedException。</summary>
+    Task SetParamAsync(string key, long value, CancellationToken cancellationToken);
+}
+
+/// <summary>热调参数 key。</summary>
+public static class GameParams
+{
+    public const string TargetFps = "targetFps";
 }
