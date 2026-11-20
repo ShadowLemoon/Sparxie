@@ -15,11 +15,39 @@ public class HoyoAbiSmokeTests
     private const int HOYO_OK = 0;
     private const int HOYO_ERR_INVALID_ARGUMENT = 1;
     private const int HOYO_ERR_ABI_MISMATCH = 2;
+    private const int HOYO_ERR_CONFIG_INVALID = 3;
+    private const uint HOYO_STAGE_SCAN_TOUCH = 2;
+    private const uint HOYO_STAGE_LOAD_ENGINE = 7;
     private const int HOYO_ERR_SESSION_NOT_ACTIVE = 8;
     private const int HOYO_ERR_NOT_SUPPORTED = 9;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct HoyoLaunchRequest
+    {
+        public uint Size;
+        public uint AbiVersion;
+        public int GameType;
+        public int FpsUnlockEnabled;
+        public int TargetFps;
+        public int BackgroundFpsLimitEnabled;
+        public int BackgroundFps;
+        public int ProcessPriority;
+        public int GenshinFollowInGamePreset;
+        public int GenshinPreset30Fps;
+        public int GenshinPreset60Fps;
+        public int GenshinTouchUiScaleOverrideEnabled;
+        public int GenshinTouchUiScalePercent;
+        public IntPtr GameExecutablePath;
+        public uint GameExecutablePathChars;
+        public IntPtr GameArguments;
+        public uint GameArgumentsChars;
+        public int TouchUiDisabled;
+        public int Reserved0;
+    }
+
+    // 追加 touch_ui_disabled 之前的布局（x64：88 字节）：旧 SessionHost 的请求结构。
+    [StructLayout(LayoutKind.Sequential)]
+    private struct HoyoLaunchRequestV2
     {
         public uint Size;
         public uint AbiVersion;
@@ -53,6 +81,9 @@ public class HoyoAbiSmokeTests
 
     [DllImport("HoyoTouchCore.dll", CallingConvention = CallingConvention.Cdecl)]
     private static extern int hoyo_get_abi_version(out uint version, out uint size);
+
+    [DllImport("HoyoTouchCore.dll", CallingConvention = CallingConvention.Cdecl, EntryPoint = "hoyo_create_session")]
+    private static extern int hoyo_create_session_v2(ref HoyoLaunchRequestV2 request, ref HoyoResult result, out IntPtr session);
 
     [DllImport("HoyoTouchCore.dll", CallingConvention = CallingConvention.Cdecl)]
     private static extern int hoyo_create_session(ref HoyoLaunchRequest request, ref HoyoResult result, out IntPtr session);
@@ -471,6 +502,196 @@ public class HoyoAbiSmokeTests
         finally
         {
             Marshal.FreeHGlobal(request.GameExecutablePath);
+        }
+    }
+
+    // ---- touch_ui_enabled（PC 界面会话）----
+
+    private static HoyoLaunchRequest NewRequest(string path, int touchUiDisabled, int fps, int gameType = 1) => new()
+    {
+        Size = (uint)Marshal.SizeOf<HoyoLaunchRequest>(),
+        AbiVersion = ABI_VERSION,
+        GameType = gameType,
+        FpsUnlockEnabled = fps,
+        TargetFps = 120,
+        BackgroundFps = 10,
+        ProcessPriority = 1,
+        TouchUiDisabled = touchUiDisabled,
+        GameExecutablePath = Marshal.StringToHGlobalUni(path),
+        GameExecutablePathChars = (uint)path.Length,
+    };
+
+    [Fact]
+    public void 请求结构大小为96字节且每个字段偏移与C头的offsetof一致()
+    {
+        // hoyo_touch_core_abi.h 的 offsetof 值（x64，头文件里有同样数值的 static_assert）：偏移错位时 native 会从别的字段里读 touch_ui_disabled 和 game_arguments
+        var expected = new (string Field, int Offset)[]
+        {
+            (nameof(HoyoLaunchRequest.Size), 0),
+            (nameof(HoyoLaunchRequest.AbiVersion), 4),
+            (nameof(HoyoLaunchRequest.GameType), 8),
+            (nameof(HoyoLaunchRequest.FpsUnlockEnabled), 12),
+            (nameof(HoyoLaunchRequest.TargetFps), 16),
+            (nameof(HoyoLaunchRequest.BackgroundFpsLimitEnabled), 20),
+            (nameof(HoyoLaunchRequest.BackgroundFps), 24),
+            (nameof(HoyoLaunchRequest.ProcessPriority), 28),
+            (nameof(HoyoLaunchRequest.GenshinFollowInGamePreset), 32),
+            (nameof(HoyoLaunchRequest.GenshinPreset30Fps), 36),
+            (nameof(HoyoLaunchRequest.GenshinPreset60Fps), 40),
+            (nameof(HoyoLaunchRequest.GenshinTouchUiScaleOverrideEnabled), 44),
+            (nameof(HoyoLaunchRequest.GenshinTouchUiScalePercent), 48),
+            (nameof(HoyoLaunchRequest.GameExecutablePath), 56),
+            (nameof(HoyoLaunchRequest.GameExecutablePathChars), 64),
+            (nameof(HoyoLaunchRequest.GameArguments), 72),
+            (nameof(HoyoLaunchRequest.GameArgumentsChars), 80),
+            (nameof(HoyoLaunchRequest.TouchUiDisabled), 84),
+            (nameof(HoyoLaunchRequest.Reserved0), 88),
+        };
+        Assert.Equal(96, Marshal.SizeOf<HoyoLaunchRequest>());
+        Assert.Equal(88, Marshal.SizeOf<HoyoLaunchRequestV2>());
+        foreach (var (field, offset) in expected)
+        {
+            Assert.Equal(offset, (int)Marshal.OffsetOf<HoyoLaunchRequest>(field));
+        }
+    }
+
+    [Theory]
+    [InlineData(0, 1)] // 触屏 + FPS 解锁（既有行为）
+    [InlineData(1, 1)] // PC 界面 + FPS 解锁
+    [InlineData(0, 0)] // 纯触屏（既有行为）
+    [InlineData(1, 0)] // 没有可安装内容：被拒绝
+    public void 触屏开关组合的会话创建(int touchUiDisabled, int fps)
+    {
+        EnsureDllAvailable();
+        var request = NewRequest(Path.Combine(Path.GetTempPath(), "sparxie-abi-test", "StarRail.exe"), touchUiDisabled, fps);
+        var result = new HoyoResult();
+        try
+        {
+            var rc = hoyo_create_session(ref request, ref result, out var session);
+            if (touchUiDisabled == 1 && fps == 0)
+            {
+                Assert.Equal(HOYO_ERR_CONFIG_INVALID, rc);
+                Assert.Equal(IntPtr.Zero, session);
+            }
+            else
+            {
+                Assert.Equal(HOYO_OK, rc);
+                Assert.Equal(HOYO_OK, hoyo_release(session));
+            }
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(request.GameExecutablePath);
+        }
+    }
+
+    [Fact]
+    public void 触屏开关非0或1被拒绝()
+    {
+        EnsureDllAvailable();
+        var request = NewRequest(Path.Combine(Path.GetTempPath(), "sparxie-abi-test", "StarRail.exe"), 2, 1);
+        var result = new HoyoResult();
+        try
+        {
+            Assert.Equal(HOYO_ERR_INVALID_ARGUMENT, hoyo_create_session(ref request, ref result, out _));
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(request.GameExecutablePath);
+        }
+    }
+
+    [Fact]
+    public void 旧V2大小请求被接受且按触屏开启处理_FPS关闭也成功()
+    {
+        EnsureDllAvailable();
+        var path = Path.Combine(Path.GetTempPath(), "sparxie-abi-test", "StarRail.exe");
+        var request = new HoyoLaunchRequestV2
+        {
+            Size = (uint)Marshal.SizeOf<HoyoLaunchRequestV2>(),
+            AbiVersion = ABI_VERSION,
+            GameType = 1,
+            FpsUnlockEnabled = 0, // 旧调用方的「纯触屏」：缺省触屏载荷开启（不是 PC 界面 + 无 FPS）
+            TargetFps = 120,
+            GameExecutablePath = Marshal.StringToHGlobalUni(path),
+            GameExecutablePathChars = (uint)path.Length,
+        };
+        var result = new HoyoResult();
+        try
+        {
+            var rc = hoyo_create_session_v2(ref request, ref result, out var session);
+            Assert.Equal(HOYO_OK, rc);
+            Assert.Equal(HOYO_OK, hoyo_release(session));
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(request.GameExecutablePath);
+        }
+    }
+
+    [Fact]
+    public void 小于V2的请求大小被拒绝()
+    {
+        EnsureDllAvailable();
+        var path = Path.Combine(Path.GetTempPath(), "sparxie-abi-test", "StarRail.exe");
+        var request = new HoyoLaunchRequestV2
+        {
+            Size = 80,
+            AbiVersion = ABI_VERSION,
+            GameType = 1,
+            FpsUnlockEnabled = 1,
+            TargetFps = 120,
+            GameExecutablePath = Marshal.StringToHGlobalUni(path),
+            GameExecutablePathChars = (uint)path.Length,
+        };
+        var result = new HoyoResult();
+        try
+        {
+            Assert.Equal(HOYO_ERR_ABI_MISMATCH, hoyo_create_session_v2(ref request, ref result, out _));
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(request.GameExecutablePath);
+        }
+    }
+
+    /// <summary>
+    /// 开关确实抵达 Runtime 并改变行为：假星铁目录（真实可执行文件，无 GameAssembly.dll/UnityPlayer.dll）。
+    /// 触屏载荷开启时星铁先取 Bootui（需要 GameAssembly.dll）→ 失败于触屏扫描阶段；
+    /// PC 界面会话跳过 Bootui，直接进入引擎模块加载 → 失败于加载引擎阶段（不同阶段 = 开关生效）。
+    /// </summary>
+    [Theory]
+    [InlineData(0, HOYO_STAGE_SCAN_TOUCH)]
+    [InlineData(1, HOYO_STAGE_LOAD_ENGINE)]
+    public void 星铁假目录_开关改变失败阶段(int touchUiDisabled, uint expectedStage)
+    {
+        EnsureDllAvailable();
+        var dir = Path.Combine(Path.GetTempPath(), "sparxie-abi-fake-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var exe = Path.Combine(dir, "StarRail.exe");
+        File.Copy(Path.Combine(Environment.SystemDirectory, "hostname.exe"), exe);
+        var request = NewRequest(exe, touchUiDisabled, 1);
+        try
+        {
+            var result = new HoyoResult();
+            Assert.Equal(HOYO_OK, hoyo_create_session(ref request, ref result, out var session));
+
+            result = new HoyoResult();
+            var rc = hoyo_launch(session, 0, ref result);
+            Assert.NotEqual(HOYO_OK, rc);
+            Assert.Equal(expectedStage, result.Stage);
+
+            Assert.Equal(HOYO_OK, hoyo_release(session));
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(request.GameExecutablePath);
+            // bootstrap 终止的挂起进程可能还在退出，目录删除重试几次
+            for (var attempt = 0; attempt < 20; attempt++)
+            {
+                try { Directory.Delete(dir, recursive: true); break; }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Thread.Sleep(250); }
+            }
         }
     }
 }

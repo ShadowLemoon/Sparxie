@@ -1,4 +1,5 @@
 using Sparxie.Contracts.Models;
+using Sparxie.Contracts.Rpc;
 using Sparxie.LauncherCore;
 
 namespace LauncherCore.Tests;
@@ -37,6 +38,40 @@ public sealed class ProfileSnapshotMapperTests
         Assert.Equal("high", snapshot.Hoyo.ProcessPriority);
         Assert.True(snapshot.Hoyo.GenshinFollowInGamePreset);
         Assert.Equal(350, snapshot.Hoyo.GenshinTouchUiScalePercent);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void 触屏载荷开关映射到快照并经JSON往返保留(bool touchUiEnabled)
+    {
+        var profile = new GameProfile
+        {
+            Id = "p1",
+            DisplayName = "星铁",
+            Game = GameType.StarRail,
+            ExecutablePath = @"D:\Games\StarRail.exe",
+            Hoyo = new HoyoProfileSettings { TouchUiEnabled = touchUiEnabled },
+        };
+
+        var snapshot = ProfileSnapshotMapper.Map(profile);
+        Assert.True(snapshot.Hoyo!.HasTouchUiEnabled);
+        Assert.Equal(touchUiEnabled, snapshot.Hoyo.TouchUiEnabled);
+
+        // Broker → SessionHost 经环境变量传 protobuf JSON：字段（含显式 false）必须保留。
+        var parsed = ProfileJson.Parse(ProfileJson.Format(snapshot));
+        Assert.True(parsed.Hoyo.HasTouchUiEnabled);
+        Assert.Equal(touchUiEnabled, parsed.Hoyo.TouchUiEnabled);
+    }
+
+    [Fact]
+    public void 默认Profile触屏载荷开启且旧快照缺省字段保持缺省()
+    {
+        Assert.True(new HoyoProfileSettings().TouchUiEnabled);
+
+        // 旧客户端的快照没有 touch_ui_enabled：线上缺省，由接收方按「开启」解释。
+        var legacy = ProfileJson.Parse("{\"profileId\":\"p\",\"game\":\"starRail\",\"hoyo\":{\"fpsUnlockEnabled\":true,\"targetFps\":120}}");
+        Assert.False(legacy.Hoyo.HasTouchUiEnabled);
     }
 
     [Fact]
