@@ -56,6 +56,16 @@ foreach ($n in $notices) { Copy-Item $n[0] (Join-Path $app $n[1]) -Force }
 
 Get-ChildItem $app -Recurse -File -Include *.pdb, workloads*.json | Remove-Item -Force
 
+# Package audit: every native export a P/Invoke declaration needs must exist, and the native DLLs must be different files
+function Invoke-PackageAudit([string[]]$AuditArguments) {
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $python) { $python = Get-Command py -ErrorAction SilentlyContinue }
+    if (-not $python) { throw 'python is required for the package audit (build/audit_package.py)' }
+    & $python.Source (Join-Path $PSScriptRoot 'audit_package.py') --repo $repo @AuditArguments
+    if ($LASTEXITCODE -ne 0) { throw 'package audit failed' }
+}
+Invoke-PackageAudit @('--app', $app)
+
 & (Join-Path $PSScriptRoot 'build-shell.ps1') -OutputDirectory $root
 if ($LASTEXITCODE -ne 0) { throw 'shell build failed' }
 [System.IO.File]::WriteAllText((Join-Path $root 'version.ini'), "exe_path=app-$Version\Sparxie.Desktop.exe`r`n")
@@ -63,6 +73,7 @@ if ($LASTEXITCODE -ne 0) { throw 'shell build failed' }
 $zip = Join-Path $OutputDirectory "Sparxie-desktop-$Version-win-x64.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -Path $root -DestinationPath $zip -CompressionLevel Optimal
+Invoke-PackageAudit @('--zip', $zip)
 Remove-Item $work -Recurse -Force
 Write-Host "Package folder: $root"
 Write-Host "Package zip:    $zip"
