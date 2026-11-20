@@ -73,6 +73,27 @@ public class ReleaseArtifactAuditTests
     }
 
     [Fact]
+    public void 发布ZIP不含第三方插件及其信任记录()
+    {
+        var zip = FindZip();
+        if (zip is null)
+        {
+            return; // 未构建发布产物，跳过
+        }
+
+        using var archive = ZipFile.OpenRead(zip);
+        var names = archive.Entries.Select(e => e.FullName.Replace('\\', '/')).ToList();
+
+        // 第三方插件只由用户自己放进数据目录，主发布包不得携带任何插件、信任记录或插件数据。
+        Assert.DoesNotContain(names, n => n.Contains("/plugins/", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(names, n => n.Contains("/plugin-data/", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(names, n => n.EndsWith("/plugin-trust.json", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(names, n => n.EndsWith("/plugin.json", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(names, n => n.EndsWith("/module.dll", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(names, n => n.Contains("mock_game_module", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void 发布ZIP不含凭据或私库痕迹()
     {
         var zip = FindZip();
