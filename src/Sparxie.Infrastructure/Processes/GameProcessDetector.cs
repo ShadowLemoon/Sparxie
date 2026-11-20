@@ -18,6 +18,12 @@ public static class GameProcessDetector
         return found.ToArray();
     }
 
+    public static bool IsAnyRunning(IEnumerable<string> exeNames)
+    {
+        var names = exeNames.Select(n => Path.GetFileNameWithoutExtension(n)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return names.Count > 0 && names.Any(name => Process.GetProcessesByName(name).Length > 0);
+    }
+
     public static bool IsGameRunning(string? gameId) =>
         GameIds.TryGetBuiltIn(gameId, out var game) && IsGameRunning(game);
 

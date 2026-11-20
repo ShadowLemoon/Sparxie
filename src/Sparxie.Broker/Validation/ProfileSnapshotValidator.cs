@@ -1,6 +1,7 @@
 using Sparxie.Contracts.Errors;
 using Sparxie.Contracts.Models;
 using Sparxie.Contracts.Rpc;
+using Sparxie.Infrastructure.Plugins;
 using Sparxie.Infrastructure.Processes;
 
 namespace Sparxie.Broker.Validation;
@@ -8,6 +9,8 @@ namespace Sparxie.Broker.Validation;
 /// <summary>Broker 边界的 Profile 快照重新验证：路径、枚举、数值范围。</summary>
 public static class ProfileSnapshotValidator
 {
+    private static readonly CombinedGameCatalog Builtin = new(new PluginCatalog(string.Empty, new PluginTrustStore(string.Empty)));
+
     public const int MinFps = 10;
     public const int MaxFps = 1000;
     public const int MinTouchUiScalePercent = 100;
@@ -23,7 +26,7 @@ public static class ProfileSnapshotValidator
     };
 
     /// <summary>返回 null 表示通过；否则为拒绝原因（稳定错误码 + 用户可读消息）。</summary>
-    public static (ErrorCode Code, string Message)? Validate(ProfileSnapshot profile)
+    public static (ErrorCode Code, string Message)? Validate(ProfileSnapshot profile, CombinedGameCatalog? catalog = null)
     {
         if (profile is null)
         {
@@ -40,7 +43,7 @@ public static class ProfileSnapshotValidator
             return (ErrorCode.InvalidArgument, "profile.displayName 不能为空");
         }
 
-        if (BuiltInGameCatalog.Instance.Find(profile.Game) is null || profile.Game != GameIds.Normalize(profile.Game))
+        if ((catalog ?? Builtin).Find(profile.Game) is null || profile.Game != GameIds.Normalize(profile.Game))
         {
             return (ErrorCode.InvalidArgument, $"profile.game 非法: {profile.Game}");
         }
@@ -52,7 +55,7 @@ public static class ProfileSnapshotValidator
 
         // EXE 白名单：原神仅 YuanShen.exe/GenshinImpact.exe，星铁仅 StarRail.exe，
         // 绝区零仅 ZenlessZoneZero.exe/ZenlessZoneZeroBeta.exe
-        if (!GameExecutables.IsAllowed(profile.Game, profile.ExecutablePath))
+        if (!(catalog ?? Builtin).IsAllowed(profile.Game, profile.ExecutablePath))
         {
             return (ErrorCode.InvalidArgument, $"executablePath 不在 {profile.Game} 白名单: {Path.GetFileName(profile.ExecutablePath)}");
         }

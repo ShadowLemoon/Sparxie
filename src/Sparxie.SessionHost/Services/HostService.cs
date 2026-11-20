@@ -3,6 +3,7 @@ using Grpc.Core;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Sparxie.Contracts.Rpc;
+using Sparxie.Infrastructure.Plugins;
 using Sparxie.SessionHost.Hosting;
 using Sparxie.SessionHost.Sessions;
 using HostOptions = Sparxie.SessionHost.Hosting.HostOptions;
@@ -120,5 +121,17 @@ public sealed class HostService : SparxieHost.SparxieHostBase
         }
     }
 
-    private static IGameController CreateController(HostOptions options) => GameModuleTable.BuiltIn.CreateController(options);
+    private static IGameController CreateController(HostOptions options)
+    {
+        if (GameModuleTable.BuiltIn.Find(options.Profile.Game) is { } builtIn)
+        {
+            return builtIn.CreateController(options);
+        }
+
+        // 第三方插件：每次会话重新扫描，只接受仍处于 Ready（manifest 合法且哈希与确认记录一致）的插件。
+        var entry = CombinedGameCatalog.CreateDefault().Plugins.Scan()
+            .FirstOrDefault(item => item.Id == options.Profile.Game && item.Availability == PluginAvailability.Ready)
+            ?? throw new InvalidOperationException($"未知 game 或插件未就绪: {options.Profile.Game}");
+        return new NativeGameController(entry);
+    }
 }

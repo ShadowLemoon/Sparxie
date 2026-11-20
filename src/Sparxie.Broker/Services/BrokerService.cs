@@ -6,6 +6,7 @@ using Sparxie.Broker.Sessions;
 using Sparxie.Broker.Validation;
 using Sparxie.Contracts.Errors;
 using Sparxie.Contracts.Rpc;
+using Sparxie.Infrastructure.Plugins;
 
 namespace Sparxie.Broker.Services;
 
@@ -57,7 +58,7 @@ public sealed class BrokerService : SparxieBroker.SparxieBrokerBase
             return Task.FromResult(Reject(StageCode.Validation, error.Value));
         }
 
-        var profileError = ProfileSnapshotValidator.Validate(request.Profile);
+        var profileError = ProfileSnapshotValidator.Validate(request.Profile, CombinedGameCatalog.CreateDefault());
         if (profileError is not null)
         {
             _logger.LogWarning("StartSession 校验拒绝: {Message}", profileError.Value.Message);

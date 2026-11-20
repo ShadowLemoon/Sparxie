@@ -3,6 +3,7 @@ using Sparxie.Contracts.Errors;
 using Sparxie.Contracts.Models;
 using Sparxie.Contracts.Rpc;
 using Sparxie.Infrastructure.Jobs;
+using Sparxie.Infrastructure.Plugins;
 using Sparxie.Infrastructure.Processes;
 using Sparxie.SessionHost.Hosting;
 
@@ -23,6 +24,7 @@ public sealed class GameSession : IAsyncDisposable
     private PreRunningJob? _job;
     private Process? _gameProcess;
     private bool _announcedRunning;
+    private bool _failed;
 
     public GameSession(HostOptions options, IGameController controller, Func<HostEvent, Task> onEvent)
     {
@@ -47,7 +49,7 @@ public sealed class GameSession : IAsyncDisposable
                 return;
             }
 
-            if (GameProcessDetector.IsGameRunning(_options.Profile.Game))
+            if (IsGameRunning())
             {
                 await FailAsync((StageCode.Mutex, ErrorCode.GameAlreadyRunning, "对应游戏已在运行，拒绝接管"), cancellationToken).ConfigureAwait(false);
                 return;
@@ -120,6 +122,19 @@ public sealed class GameSession : IAsyncDisposable
         }
         finally
         {
+            // 第三方插件的 abort 必须在释放会话（Dispose）之前调用；内置控制器的收尾顺序保持不变（见下方原有调用）。
+            if (_failed && _controller is NativeGameController)
+            {
+                try
+                {
+                    await _controller.AbortAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                    // 插件收尾失败不改变会话终态
+                }
+            }
+
             Cleanup();
 
             // 失败路径收尾（Hoyo 释放 native 会话；ZZZ 不再有配置需要回滚）
@@ -175,7 +190,7 @@ public sealed class GameSession : IAsyncDisposable
             return false;
         }
 
-        if (!GameExecutables.IsAllowed(profile.Game, profile.ExecutablePath))
+        if (!CombinedGameCatalog.CreateDefault().IsAllowed(profile.Game, profile.ExecutablePath))
         {
             error = (StageCode.Validation, ErrorCode.InvalidExecutableName, $"EXE 名称不在白名单: {Path.GetFileName(profile.ExecutablePath)}");
             return false;
@@ -212,6 +227,12 @@ public sealed class GameSession : IAsyncDisposable
         return true;
     }
 
+    /// <summary>内置游戏按进程名检测；插件游戏取 manifest 里的 EXE 名。</summary>
+    private bool IsGameRunning() =>
+        GameIds.TryGetBuiltIn(_options.Profile.Game, out _)
+            ? GameProcessDetector.IsGameRunning(_options.Profile.Game)
+            : GameProcessDetector.IsAnyRunning(CombinedGameCatalog.CreateDefault().Find(_options.Profile.Game)?.ExeNames ?? []);
+
     private GameRegistryBackup? _registryBackup;
 
     /// <summary>备份落盘位置（按游戏区分）：进程被强杀 / 断电后，下次启动先用它把游戏设置恢复回去。</summary>
@@ -226,6 +247,11 @@ public sealed class GameSession : IAsyncDisposable
     {
         try
         {
+            if (!GameIds.TryGetBuiltIn(_options.Profile.Game, out _))
+            {
+                return null; // 插件游戏的注册表设置（manifest 的 registry 段）尚未实现，先不写
+            }
+
             RestoreGameRegistrySettings(includeLeftover: true); // 上次异常退出遗留的备份先恢复，免得把我们自己写的值当成“原值”备份
             var registry = new CurrentUserGameRegistry();
             var (result, backup) = GameRegistrySettings.ApplyWithBackup(
@@ -280,7 +306,7 @@ public sealed class GameSession : IAsyncDisposable
     private async Task<Process> StartGameProcessAsync(CancellationToken cancellationToken)
     {
         // 绝区零 Steam 版：经 Steam 拉起（目录里有 steam_appid.txt），其余直接运行 EXE。
-        if (_options.Profile.ToGameType() == GameType.ZenlessZoneZero && SteamLaunch.IsSteamInstall(_options.Profile.ExecutablePath))
+        if (GameIds.TryGetBuiltIn(_options.Profile.Game, out var steamGame) && steamGame == GameType.ZenlessZoneZero && SteamLaunch.IsSteamInstall(_options.Profile.ExecutablePath))
         {
             return await SteamLaunch.StartAsync(
                 SteamLaunch.ZenlessZoneZeroAppId,
@@ -324,6 +350,7 @@ public sealed class GameSession : IAsyncDisposable
 
     private async Task FailAsync((StageCode Stage, ErrorCode Code, string Message) error, CancellationToken cancellationToken)
     {
+        _failed = true;
         await EmitAsync(SessionStates.Failed, error.Stage, error.Code, error.Message, cancellationToken).ConfigureAwait(false);
     }
 
