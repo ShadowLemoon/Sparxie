@@ -54,6 +54,9 @@ public class HoyoAbiSmokeTests
     [DllImport("HoyoTouchCore.dll", CallingConvention = CallingConvention.Cdecl)]
     private static extern int hoyo_get_abi_version(out uint version, out uint size);
 
+    [DllImport("HoyoTouchCore.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+    private static extern int hoyo_get_launch_command(IntPtr session, [Out] char[]? buffer, uint capacityChars, out uint charsOut);
+
     [DllImport("HoyoTouchCore.dll", CallingConvention = CallingConvention.Cdecl)]
     private static extern int hoyo_create_session(ref HoyoLaunchRequest request, ref HoyoResult result, out IntPtr session);
 
@@ -471,6 +474,101 @@ public class HoyoAbiSmokeTests
         finally
         {
             Marshal.FreeHGlobal(request.GameExecutablePath);
+        }
+    }
+
+    // ---- 屏幕参数：交给游戏进程的命令行 ----
+
+    private static HoyoLaunchRequest NewArgsRequest(string path, string? arguments) => new()
+    {
+        Size = (uint)Marshal.SizeOf<HoyoLaunchRequest>(),
+        AbiVersion = ABI_VERSION,
+        GameType = 1,
+        FpsUnlockEnabled = 1,
+        TargetFps = 120,
+        BackgroundFps = 10,
+        ProcessPriority = 1,
+        GenshinPreset30Fps = 60,
+        GenshinPreset60Fps = 1000,
+        GenshinTouchUiScalePercent = 400,
+        GameExecutablePath = Marshal.StringToHGlobalUni(path),
+        GameExecutablePathChars = (uint)path.Length,
+        GameArguments = arguments is null ? IntPtr.Zero : Marshal.StringToHGlobalUni(arguments),
+        GameArgumentsChars = arguments is null ? 0u : (uint)arguments.Length,
+    };
+
+    private static string LaunchCommandOf(string? arguments)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "sparxie-abi-args-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var exe = Path.Combine(dir, "StarRail.exe");
+        File.Copy(Path.Combine(Environment.SystemDirectory, "hostname.exe"), exe);
+        var request = NewArgsRequest(exe, arguments);
+        try
+        {
+            var result = new HoyoResult();
+            Assert.Equal(HOYO_OK, hoyo_create_session(ref request, ref result, out var session));
+            result = new HoyoResult();
+            // the dummy is not a game: the launch fails in the scan stage, after CreateProcessW has been given the command line
+            Assert.NotEqual(HOYO_OK, hoyo_launch(session, 0, ref result));
+            Assert.Equal(HOYO_OK, hoyo_get_launch_command(session, null, 0, out var chars));
+            var buffer = new char[chars + 1];
+            Assert.Equal(HOYO_OK, hoyo_get_launch_command(session, buffer, (uint)buffer.Length, out _));
+            Assert.Equal(HOYO_OK, hoyo_release(session));
+            var text = new string(buffer, 0, (int)chars);
+            return text.Replace(exe, "<EXE>");
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(request.GameExecutablePath);
+            if (request.GameArguments != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(request.GameArguments);
+            }
+
+            for (var attempt = 0; attempt < 20; attempt++)
+            {
+                try { Directory.Delete(dir, recursive: true); break; }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Thread.Sleep(250); }
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("-screen-width 1280 -screen-height 720 -screen-fullscreen 0")]
+    [InlineData("-screen-width 1920 -screen-height 1080 -screen-fullscreen 0 -popupwindow")]
+    public void 屏幕参数交给游戏进程的命令行(string arguments)
+    {
+        EnsureDllAvailable();
+        Assert.Equal("\"<EXE>\" " + arguments, LaunchCommandOf(arguments));
+    }
+
+    [Fact]
+    public void 没有屏幕参数时游戏命令行为空()
+    {
+        EnsureDllAvailable();
+        Assert.Equal(string.Empty, LaunchCommandOf(null));
+    }
+
+    [Fact]
+    public void 参数指针与字符数不一致或过长被拒绝()
+    {
+        EnsureDllAvailable();
+        var path = Path.Combine(Path.GetTempPath(), "sparxie-abi-test", "StarRail.exe");
+        var result = new HoyoResult();
+        var nullWithChars = NewArgsRequest(path, null);
+        nullWithChars.GameArgumentsChars = 5;
+        var tooLong = NewArgsRequest(path, new string('x', 513));
+        try
+        {
+            Assert.Equal(HOYO_ERR_INVALID_ARGUMENT, hoyo_create_session(ref nullWithChars, ref result, out _));
+            Assert.Equal(HOYO_ERR_INVALID_ARGUMENT, hoyo_create_session(ref tooLong, ref result, out _));
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(nullWithChars.GameExecutablePath);
+            Marshal.FreeHGlobal(tooLong.GameExecutablePath);
+            Marshal.FreeHGlobal(tooLong.GameArguments);
         }
     }
 }

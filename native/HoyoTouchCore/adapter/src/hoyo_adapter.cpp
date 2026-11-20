@@ -12,6 +12,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <cwchar>
 
 
 namespace
@@ -62,6 +63,9 @@ extern "C" int __stdcall sparxie_hoyo_bootstrap(
     uint32_t* out_pid,
     uint32_t* out_fps_value_addr);
 
+// upstream 导出：最近一次 CreateProcessW 的命令行（main.cpp g_sparxie_last_command）
+extern "C" int __stdcall sparxie_hoyo_last_command(wchar_t* out, uint32_t capacity_chars, uint32_t* chars_out);
+
 extern "C" {
 
 HoyoTouchError hoyo_get_abi_version(uint32_t* version, uint32_t* size)
@@ -109,11 +113,12 @@ HoyoTouchError hoyo_create_session(
         result->message_chars = 22;
         return HOYO_ERR_INVALID_ARGUMENT;
     }
-    if (request->game_arguments_chars > 0 && request->game_arguments == nullptr)
+    if ((request->game_arguments == nullptr) != (request->game_arguments_chars == 0) ||
+        request->game_arguments_chars > HOYO_MAX_GAME_ARGUMENT_CHARS)
     {
         result->error_code = HOYO_ERR_INVALID_ARGUMENT;
-        result->message = L"game_arguments 为空但长度非 0";
-        result->message_chars = 27;
+        result->message = L"game_arguments 与字符数不一致或过长";
+        result->message_chars = static_cast<uint32_t>(wcslen(result->message));
         return HOYO_ERR_INVALID_ARGUMENT;
     }
     if (request->target_fps < 10 || request->target_fps > 1000)
@@ -351,6 +356,15 @@ HoyoTouchError hoyo_wait_game_exit(void* session_handle, uint32_t timeout_ms, Ho
     result->message = L"等待超时";
     result->message_chars = 9;
     return HOYO_ERR_NOT_SUPPORTED;
+}
+
+HoyoTouchError hoyo_get_launch_command(void* session_handle, wchar_t* buffer, uint32_t capacity_chars, uint32_t* chars_out)
+{
+    if (session_handle == nullptr || chars_out == nullptr)
+    {
+        return HOYO_ERR_INVALID_ARGUMENT;
+    }
+    return sparxie_hoyo_last_command(buffer, capacity_chars, chars_out) == 0 ? HOYO_OK : HOYO_ERR_INVALID_ARGUMENT;
 }
 
 HoyoTouchError hoyo_release(void* session_handle)

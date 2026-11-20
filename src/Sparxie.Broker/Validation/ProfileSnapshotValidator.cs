@@ -76,6 +76,11 @@ public static class ProfileSnapshotValidator
             }
         }
 
+        if (ScreenArguments.Validate(profile.Screen) is { } screenError)
+        {
+            return (ErrorCode.InvalidArgument, screenError);
+        }
+
         if (profile.Hoyo is { } hoyo)
         {
             if (hoyo.TargetFps is < MinFps or > MaxFps)

@@ -2542,6 +2542,32 @@ __Continue:
 // 此补丁是"无法在 subtree 外实现的入口条件"，属于计划允许的最小上游差异。
 // ============================================================================
 
+// 最近一次 CreateProcessW 的命令行（空 = lpCommandLine 为 NULL）。固定缓冲、不分配，SEH 友好。
+static wchar_t g_sparxie_last_command[1100] = {};
+static volatile LONG g_sparxie_last_command_chars = 0;
+
+static void sparxie_hoyo_remember_command(const std::wstring& command)
+{
+    const size_t n = command.size() < 1099 ? command.size() : 1099;
+    memcpy(g_sparxie_last_command, command.c_str(), n * sizeof(wchar_t));
+    g_sparxie_last_command[n] = 0;
+    InterlockedExchange(&g_sparxie_last_command_chars, (LONG)n);
+}
+
+extern "C" __declspec(dllexport) int __stdcall sparxie_hoyo_last_command(wchar_t* out, uint32_t capacity_chars, uint32_t* chars_out)
+{
+    if (!chars_out) return 1;
+    const uint32_t n = (uint32_t)g_sparxie_last_command_chars;
+    *chars_out = n;
+    if (out && capacity_chars > 0)
+    {
+        const uint32_t copy = n < capacity_chars - 1 ? n : capacity_chars - 1;
+        memcpy(out, g_sparxie_last_command, copy * sizeof(wchar_t));
+        out[copy] = 0;
+    }
+    return 0;
+}
+
 static int __stdcall sparxie_hoyo_bootstrap_impl(
     const wchar_t* game_executable_path,
     const wchar_t* game_arguments, // 附加命令行参数（可为 NULL/空）；Sparxie 自动注入的无边框与用户参数
@@ -2613,21 +2639,25 @@ static int __stdcall sparxie_hoyo_bootstrap_impl(
     PROCESS_INFORMATION* pi = (PROCESS_INFORMATION*)boot_info;
     memset(boot_info, 0, bootsize);
 
-    // Game_Arg：透传调用方构造的启动参数；此处为空（SessionHost 负责游戏参数）
-    std::wstring sparxieCommandLine;
-    if (game_arguments && game_arguments[0] != L'\0')
+    // Game_Arg：SessionHost 只传固定令牌与整数（屏幕参数）。有参数时命令行为 "<exe>" <参数>，CreateProcessW 需要可写缓冲；
+    // 没有参数时 lpCommandLine 仍为 NULL（既有行为）。真实命令行记入 g_sparxie_last_command，供 hoyo_get_launch_command 取出核对。
+    std::wstring commandLine;
+    if (game_arguments && game_arguments[0] != 0)
     {
-        sparxieCommandLine = L"\"" + gamePath + L"\" " + game_arguments;
+        commandLine = L"\"" + gamePath + L"\" " + game_arguments;
     }
+    sparxie_hoyo_remember_command(commandLine);
+    std::vector<wchar_t> commandBuffer(commandLine.begin(), commandLine.end());
+    commandBuffer.push_back(0);
     if (!((CreateProcessW_pWin64)~(DWORD64)CreateProcessW_p)(
-            gamePath.c_str(), sparxieCommandLine.empty() ? NULL : &sparxieCommandLine[0], NULL, NULL, FALSE,
+            gamePath.c_str(), commandLine.empty() ? NULL : commandBuffer.data(), NULL, NULL, FALSE,
             CREATE_SUSPENDED | GamePriorityClass, NULL, processDir.c_str(), si, pi))
     {
         free(boot_info);
         return 4; // HOYO_ERR_INTERNAL
     }
 
-    // ---- Game_Arg 已由 SessionHost 归一化：无命令行参数 ----
+    // ---- Game_Arg 已由 SessionHost 归一化：只有屏幕参数（可为空） ----
     // ---- Running 前失效保护：把挂起游戏进程 Assign 到 SessionHost 提供的 Job ----
     if (job_handle)
     {
