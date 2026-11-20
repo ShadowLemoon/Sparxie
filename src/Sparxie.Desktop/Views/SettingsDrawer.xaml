@@ -71,6 +71,35 @@
                             <Button Content="打开程序目录" HorizontalAlignment="Stretch" MinHeight="48" Command="{Binding Settings.OpenInstallFolderCommand}" />
                         </StackPanel>
                     </Border>
+                    <Border Style="{StaticResource GlassCard}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="第三方游戏插件" Style="{StaticResource SectionHeading}" />
+                            <TextBlock Text="把插件文件夹放进程序目录的 plugins 文件夹后，在这里确认才会启用。插件未经 Sparxie 审计，会以管理员权限运行。" TextWrapping="Wrap" Style="{StaticResource CaptionText}" />
+                            <TextBlock Text="没有找到插件。" Style="{StaticResource CaptionText}"
+                                       Visibility="{Binding Settings.Plugins.IsEmpty, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            <ItemsControl ItemsSource="{Binding Settings.Plugins.Items}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Spacing="6" Margin="0,0,0,12">
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Status}" Style="{StaticResource CaptionText}" />
+                                            <TextBlock Text="{Binding Detail}" Style="{StaticResource CaptionText}" TextWrapping="Wrap" />
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Button Content="{Binding EnableLabel}" Command="{Binding EnableCommand}" MinHeight="40"
+                                                        Visibility="{Binding CanEnable, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                <Button Content="停用" Command="{Binding DisableCommand}" MinHeight="40"
+                                                        Visibility="{Binding CanDisable, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                <Button Content="删除" Command="{Binding DeleteCommand}" MinHeight="40" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="{Binding Settings.Plugins.Message}" TextWrapping="Wrap"
+                                       Visibility="{Binding Settings.Plugins.HasMessage, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            <Button Content="刷新插件列表" HorizontalAlignment="Stretch" MinHeight="48" Command="{Binding Settings.Plugins.RefreshCommand}" />
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

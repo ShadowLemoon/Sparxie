@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Reflection;
 using Sparxie.Desktop.Services;
+using Sparxie.Infrastructure.Configuration;
 using Sparxie.Infrastructure.Diagnostics;
+using Sparxie.Infrastructure.Plugins;
 
 namespace Sparxie.Desktop.ViewModels;
 
@@ -25,10 +27,18 @@ public sealed class SettingsViewModel : ObservableObject
         OpenLogsFolderCommand = new RelayCommand(() => OpenFolder(AppPaths.LogsDirectory));
         OpenInstallFolderCommand = new RelayCommand(() => OpenFolder(AppContext.BaseDirectory));
         ExportDiagnosticsCommand = new RelayCommand(ExportDiagnostics);
+        Plugins = new PluginsViewModel(
+            new PluginCatalog(CombinedGameCatalog.PluginsDirectory, new PluginTrustStore(CombinedGameCatalog.TrustFilePath)),
+            new PluginTrustStore(CombinedGameCatalog.TrustFilePath),
+            AppDataDirectory.Resolve(),
+            ForgetGame);
     }
 
     /// <summary>设置保存成功后触发，让主页、托盘等依赖偏好的部分刷新。</summary>
     public event Action? Saved;
+
+    /// <summary>第三方游戏插件管理（读 plugin.json，不加载插件代码）。</summary>
+    public PluginsViewModel Plugins { get; }
 
     public RelayCommand OpenDataFolderCommand { get; }
 
@@ -138,6 +148,26 @@ public sealed class SettingsViewModel : ObservableObject
         {
             DesktopLog.Write("导出诊断包失败", ex);
             ToolMessage = $"导出诊断包失败：{ex.Message}";
+        }
+    }
+
+    /// <summary>插件被删除后，清掉偏好里记住的该游戏（配置本身保留，只是置灰）。</summary>
+    private void ForgetGame(string gameId)
+    {
+        try
+        {
+            _data.Preferences.LastProfileByGame.Remove(gameId);
+            if (_data.Preferences.SelectedGame == gameId)
+            {
+                _data.Preferences.SelectedGame = null;
+            }
+
+            _data.SavePreferences();
+            Saved?.Invoke();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DesktopLog.Write("清理插件相关偏好失败", ex);
         }
     }
 
