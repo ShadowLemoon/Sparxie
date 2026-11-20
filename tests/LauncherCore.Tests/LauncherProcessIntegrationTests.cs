@@ -79,7 +79,7 @@ public sealed class LauncherProcessIntegrationTests
     private static string LocateProjectExe(string project, string executable)
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);
-        while (root is not null && root.Name != "Sparxie")
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "Sparxie.slnx")))
         {
             root = root.Parent;
         }

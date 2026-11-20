@@ -61,7 +61,7 @@ public sealed class BrokerPipeIntegrationTests : IAsyncLifetime
     {
         var dir = AppContext.BaseDirectory;
         var root = new DirectoryInfo(dir);
-        while (root is not null && root.Name != "Sparxie")
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "Sparxie.slnx")))
         {
             root = root.Parent;
         }
