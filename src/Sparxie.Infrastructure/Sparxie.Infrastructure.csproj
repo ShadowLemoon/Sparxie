@@ -7,6 +7,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Zzz.Tests" />
     <InternalsVisibleTo Include="Broker.Tests" />
+    <InternalsVisibleTo Include="Config.Tests" />
   </ItemGroup>
 
   <ItemGroup>
