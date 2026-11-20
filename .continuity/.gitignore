@@ -1,0 +1,13 @@
+# Continuity runtime and generated projections
+state.sqlite3
+state.sqlite3-*
+artifacts/
+checkpoint-ref.json
+resume-packet.json
+status-projection.json
+STATUS.current.md
+STATUS.current.en.md
+interaction-cursors/
+skill-locks/
+# One-off generated attach proposal (timestamped, hash of sources)
+attach-proposal.json
