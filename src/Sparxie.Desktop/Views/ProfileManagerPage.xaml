@@ -320,6 +320,35 @@
                                            Visibility="{Binding HasPathHint, Converter={StaticResource BoolToVisibilityConverter}}" />
                             </StackPanel>
                         </Border>
+                        <Border Style="{StaticResource GlassCard}"
+                                Visibility="{Binding HasPluginFields, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <StackPanel Spacing="14">
+                                <TextBlock Text="游戏设置" Style="{StaticResource SectionHeading}" />
+                                <ItemsControl ItemsSource="{Binding PluginFields}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Spacing="6" Margin="0,0,0,10"
+                                                        Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <ToggleSwitch Header="{Binding Label}" IsOn="{Binding BoolValue, Mode=TwoWay}"
+                                                              Visibility="{Binding IsBool, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                <NumberBox Header="{Binding Label}" Value="{Binding NumberValue, Mode=TwoWay}"
+                                                           Minimum="{Binding Minimum}" Maximum="{Binding Maximum}" SmallChange="{Binding Step}"
+                                                           SpinButtonPlacementMode="Compact"
+                                                           Visibility="{Binding IsNumber, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                <ComboBox Header="{Binding Label}" ItemsSource="{Binding Options}" DisplayMemberPath="Label"
+                                                          SelectedValuePath="Value" SelectedValue="{Binding TextValue, Mode=TwoWay}"
+                                                          HorizontalAlignment="Stretch" MinHeight="48"
+                                                          Visibility="{Binding IsChoice, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                <TextBox Header="{Binding Label}" Text="{Binding TextValue, Mode=TwoWay}" MaxLength="{Binding MaxLength}"
+                                                         Visibility="{Binding IsText, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                <TextBlock Text="{Binding Hint}" Style="{StaticResource CaptionText}" TextWrapping="Wrap"
+                                                           Visibility="{Binding HasHint, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
                         <views:LaunchSettingsCard />
                         </StackPanel>
                     </Grid>

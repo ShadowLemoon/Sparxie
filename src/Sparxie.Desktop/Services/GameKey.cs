@@ -96,4 +96,13 @@ public static class GameDirectory
     }
 
     public static IReadOnlyList<string> ExeNames(string id) => GameCatalogProvider.ExeNamesFor(id);
+
+    /// <summary>第三方游戏的设置 schema；内置游戏和没有 schema 的插件返回 null。</summary>
+    public static PluginSettingsSchema? Schema(string id)
+    {
+        lock (Gate)
+        {
+            return _plugins.FirstOrDefault(item => item.Id == id)?.SettingsSchema is { Fields.Count: > 0 } schema ? schema : null;
+        }
+    }
 }

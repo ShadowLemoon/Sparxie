@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Microsoft.UI.Xaml.Controls;
 using Sparxie.Contracts.Models;
 using Sparxie.Desktop.Services;
+using Sparxie.Infrastructure.Plugins;
 using Sparxie.Infrastructure.Processes;
 using Sparxie.LauncherCore;
 
@@ -376,7 +377,8 @@ public sealed class ProfileManagerViewModel : ObservableObject
             || e.PropertyName is nameof(ProfileEditorViewModel.IsHoyoGame) or nameof(ProfileEditorViewModel.IsGenshin)
                 or nameof(ProfileEditorViewModel.PathHint) or nameof(ProfileEditorViewModel.HasPathHint)
                 or nameof(ProfileEditorViewModel.CommandLinePreview) or nameof(ProfileEditorViewModel.ResolutionControlsEnabled)
-                or nameof(ProfileEditorViewModel.PresetEnabled) or nameof(ProfileEditorViewModel.CustomEnabled))
+                or nameof(ProfileEditorViewModel.PresetEnabled) or nameof(ProfileEditorViewModel.CustomEnabled)
+                or nameof(ProfileEditorViewModel.HasPluginFields))
         {
             return;
         }
@@ -492,6 +494,66 @@ public sealed class ProfileEditorViewModel : ObservableObject
 
     public static ProcessPriority[] PriorityOptions { get; } = Enum.GetValues<ProcessPriority>();
 
+    /// <summary>第三方插件游戏的设置字段（按插件 settingsSchema 生成）；内置游戏为空。</summary>
+    public ObservableCollection<PluginFieldViewModel> PluginFields { get; } = [];
+
+    public bool HasPluginFields => PluginFields.Count > 0;
+
+    /// <summary>任何插件设置字段变化时自增，用来触发自动保存（保存逻辑只认属性变更通知）。</summary>
+    public int PluginSettingsRevision { get; private set; }
+
+    private PluginSettingsSchema? _schema;
+
+    /// <summary>按当前游戏的 schema 重建字段；<paramref name="values"/> 是已保存的值（缺的用默认值）。</summary>
+    public void RebuildPluginFields(System.Text.Json.Nodes.JsonObject? values)
+    {
+        PluginFields.Clear();
+        _schema = Game.IsThirdParty ? GameDirectory.Schema(Game.Id) : null;
+        if (_schema is not null)
+        {
+            foreach (var field in _schema.Fields)
+            {
+                System.Text.Json.Nodes.JsonNode? initial = null;
+                values?.TryGetPropertyValue(field.Key, out initial);
+                PluginFields.Add(new PluginFieldViewModel(field, initial, OnPluginFieldChanged));
+            }
+        }
+
+        UpdatePluginFieldVisibility();
+        OnPropertyChanged(nameof(HasPluginFields));
+    }
+
+    private void OnPluginFieldChanged()
+    {
+        UpdatePluginFieldVisibility();
+        PluginSettingsRevision++;
+        OnPropertyChanged(nameof(PluginSettingsRevision));
+    }
+
+    private void UpdatePluginFieldVisibility()
+    {
+        var current = CollectPluginValues();
+        foreach (var field in PluginFields)
+        {
+            field.IsVisible = PluginSettingsSchema.IsVisible(field.Field, current);
+        }
+    }
+
+    private System.Text.Json.Nodes.JsonObject CollectPluginValues()
+    {
+        var values = new System.Text.Json.Nodes.JsonObject();
+        foreach (var field in PluginFields)
+        {
+            values[field.Key] = field.ToJson();
+        }
+
+        return values;
+    }
+
+    /// <summary>当前设置值（按 schema 归一化）；内置游戏或没有 schema 时为 null。</summary>
+    public System.Text.Json.Nodes.JsonObject? BuildPluginSettings() =>
+        _schema is null ? null : _schema.Normalize(CollectPluginValues());
+
     public string Id { get => _id; set => SetProperty(ref _id, value); }
     public string DisplayName { get => _displayName; set => SetProperty(ref _displayName, value); }
     public GameKey Game
@@ -508,6 +570,7 @@ public sealed class ProfileEditorViewModel : ObservableObject
             OnPropertyChanged(nameof(PathHint));
             OnPropertyChanged(nameof(HasPathHint));
             OnPropertyChanged(nameof(IsGenshin));
+            RebuildPluginFields(null); // 换了游戏：旧游戏的设置不适用，按新游戏的 schema 重建（默认值）
         }
     }
     public string ExecutablePath
@@ -778,7 +841,13 @@ public sealed class ProfileEditorViewModel : ObservableObject
         GenshinPreset60Fps = profile.Hoyo?.GenshinPreset60Fps ?? 1000,
         GenshinTouchUiScaleOverrideEnabled = profile.Hoyo?.GenshinTouchUiScaleOverrideEnabled ?? false,
         GenshinTouchUiScalePercent = profile.Hoyo?.GenshinTouchUiScalePercent ?? 400,
-    }.WithLaunch(profile.Launch);
+    }.WithLaunch(profile.Launch).WithPluginSettings(profile.Settings);
+
+    private ProfileEditorViewModel WithPluginSettings(System.Text.Json.Nodes.JsonObject? settings)
+    {
+        RebuildPluginFields(settings); // Game 已在初始化时设好，这里按已保存的值重建字段
+        return this;
+    }
 
     private ProfileEditorViewModel WithLaunch(LaunchSettings? launch)
     {
@@ -794,6 +863,7 @@ public sealed class ProfileEditorViewModel : ObservableObject
         Id: IsNew ? Id : null,
         DisplayName: DisplayName,
         GameId: Game.Id,
+        PluginSettings: BuildPluginSettings(),
         ExecutablePath: string.IsNullOrWhiteSpace(ExecutablePath) ? null : ExecutablePath,
         FpsUnlockEnabled: IsHoyoGame ? FpsUnlockEnabled : null,
         TargetFps: IsHoyoGame ? ToFps(TargetFps, 120) : null,
