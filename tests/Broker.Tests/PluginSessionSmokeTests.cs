@@ -18,6 +18,14 @@ namespace Broker.Tests;
 public sealed class PluginSessionSmokeTests : IAsyncLifetime
 {
     private const string PluginId = "ext.mock.game";
+
+    private const string SettingsSchema = """
+        { "fields": [
+          { "key": "mode", "label": "模式", "type": "enum", "default": "touch", "options": [ { "value": "touch", "label": "触屏" }, { "value": "pc", "label": "键鼠" } ] },
+          { "key": "autoResolution", "label": "跟随串流", "type": "bool", "default": true },
+          { "key": "width", "label": "宽度", "type": "int", "min": 320, "max": 7680, "default": 1920, "showWhen": { "key": "autoResolution", "equals": false } }
+        ] }
+        """;
     private readonly string _brokerPipe = $"sparxie-plugin-smoke-{Guid.NewGuid():N}";
     private readonly List<string> _installedRoots = [];
     private Process? _brokerProcess;
@@ -162,6 +170,12 @@ public sealed class PluginSessionSmokeTests : IAsyncLifetime
         Assert.Single(calls.Select(call => call.Thread).Distinct()); // 所有调用在同一个专用线程上
         Assert.DoesNotContain("abort", names); // 正常结束不走失败路径
         Assert.DoesNotContain(events, e => e.State == "Failed");
+
+        var settings = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(_installedRoots.Last(), "plugin-data", PluginId, "settings.json")))!.AsObject();
+        Assert.Equal("touch", (string)settings["mode"]!); // 枚举不在选项里：回落默认值
+        Assert.False((bool)settings["autoResolution"]!);
+        Assert.Equal(7680, (int)settings["width"]!); // 夹到 max
+        Assert.False(settings.ContainsKey("evil")); // 未知键被丢弃
     }
 
     [Fact]
@@ -200,6 +214,8 @@ public sealed class PluginSessionSmokeTests : IAsyncLifetime
                         DisplayName = "Mock 游戏",
                         Game = PluginId,
                         ExecutablePath = Path.Combine(_fakeGameDir!, "Mock.exe"),
+                        // 故意给越界、类型不对、未知键的设置：宿主必须按 manifest 的 schema 归一化后再传给插件，而不是拒绝会话。
+                        SettingsJson = """{ "mode": "gamepad", "autoResolution": false, "width": 99999, "evil": 1 }""",
                     },
                 }, cancellationToken: cts.Token);
             }
@@ -240,7 +256,7 @@ public sealed class PluginSessionSmokeTests : IAsyncLifetime
         Directory.CreateDirectory(dir);
         File.Copy(Path.Combine(mockDir, "mock_game_module.dll"), Path.Combine(dir, "module.dll"));
         File.WriteAllText(Path.Combine(dir, "plugin.json"),
-            $$"""{ "id": "{{PluginId}}", "displayName": "Mock", "abiMajor": 1, "exeNames": ["Mock.exe"], "caps": ["hotParams"] }""");
+            $$"""{ "id": "{{PluginId}}", "displayName": "Mock", "abiMajor": 1, "exeNames": ["Mock.exe"], "caps": ["hotParams"], "settingsSchema": {{SettingsSchema}} }""");
         TryDelete(Path.Combine(root, "plugin-data", PluginId), recursive: true);
 
         var trust = new PluginTrustStore(Path.Combine(root, "plugin-trust.json"));

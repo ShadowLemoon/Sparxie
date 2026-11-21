@@ -20,6 +20,7 @@ public static class ProfileSnapshotMapper
                     LauncherFailureKind.ProfileSelection,
                     $"不支持的游戏类型: {profile.Game}"),
             ExecutablePath = profile.ExecutablePath,
+            SettingsJson = profile.BuiltInGame is null && profile.Settings is { } settings ? settings.ToJsonString() : string.Empty,
             Launch = profile.Launch is null || profile.Launch.IsEmpty
                 ? null
                 : new Sparxie.Contracts.Rpc.LaunchSettings

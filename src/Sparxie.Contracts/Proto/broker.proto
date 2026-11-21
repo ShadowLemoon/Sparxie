@@ -45,6 +45,8 @@ message ProfileSnapshot {
   string executable_path = 4;
   HoyoSettings hoyo = 5;
   LaunchSettings launch = 6;
+  // 第三方插件游戏的设置（JSON 对象文本）：UI 侧按 plugin.json 的 settingsSchema 生成，SessionHost 归一化后传给插件；内置游戏为空。
+  string settings_json = 7;
 }
 
 message StartSessionRequest {

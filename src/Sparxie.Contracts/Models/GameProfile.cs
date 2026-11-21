@@ -30,4 +30,8 @@ public sealed class GameProfile
     /// <summary>分辨率 / 窗口模式 / 附加命令行参数；没有任何设置时为 null（不写入配置）。</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public LaunchSettings? Launch { get; set; }
+
+    /// <summary>第三方插件游戏的设置值（键由插件 settingsSchema 定义）；内置游戏为 null。读取时不做校验，启动前由 schema 归一化。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public System.Text.Json.Nodes.JsonObject? Settings { get; set; }
 }

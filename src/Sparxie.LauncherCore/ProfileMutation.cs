@@ -23,7 +23,8 @@ public sealed record ProfileMutation(
     bool? GenshinTouchUiScaleOverrideEnabled = null,
     int? GenshinTouchUiScalePercent = null,
     LaunchSettings? Launch = null,
-    string? GameId = null)
+    string? GameId = null,
+    System.Text.Json.Nodes.JsonObject? PluginSettings = null)
 {
     /// <summary>要创建/改成的游戏 id：优先 <see cref="GameId"/>（含第三方插件游戏），否则取内置游戏 <see cref="Game"/>。</summary>
     public string? EffectiveGameId => GameId ?? (Game is { } game ? GameIds.ToId(game) : null);
@@ -47,6 +48,7 @@ public sealed record ProfileMutation(
         || !string.IsNullOrWhiteSpace(ExecutablePath)
         || Game.HasValue
         || GameId is not null
+        || PluginSettings is not null
         || HasHoyoSettings
         || HasGenshinSettings
         || Launch is not null;

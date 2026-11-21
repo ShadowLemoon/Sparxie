@@ -83,7 +83,7 @@ public sealed class PluginCatalog(string pluginsRoot, PluginTrustStore trust) : 
     public PluginAvailability? Availability(string id) => Scan().FirstOrDefault(entry => entry.Id == id)?.Availability;
 
     private static GameDescriptor ToDescriptor(PluginEntry entry) =>
-        new(entry.Id, entry.Manifest!.DisplayName, entry.Manifest.ExeNames);
+        new(entry.Id, entry.Manifest!.DisplayName, entry.Manifest.ExeNames, entry.Manifest.Schema);
 
     private static PluginEntry ScanOne(string dir, Dictionary<string, PluginTrustRecord> trusted)
     {

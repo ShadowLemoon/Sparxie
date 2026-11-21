@@ -76,6 +76,21 @@ public static class ProfileSnapshotValidator
             }
         }
 
+        if (!string.IsNullOrEmpty(profile.SettingsJson))
+        {
+            // 内置游戏没有插件设置；第三方游戏的设置只做结构检查（大小、是 JSON 对象），具体取值由 SessionHost 按 schema 归一化，不当作拒绝理由。
+            if (GameIds.TryGetBuiltIn(profile.Game, out _))
+            {
+                return (ErrorCode.InvalidArgument, "内置游戏不支持 settingsJson");
+            }
+
+            if (profile.SettingsJson.Length > PluginSettingsSchema.MaxSettingsBytes
+                || PluginSettingsSchema.ParseObject(profile.SettingsJson) is null)
+            {
+                return (ErrorCode.InvalidArgument, "settingsJson 必须是不超过 16KB 的 JSON 对象");
+            }
+        }
+
         if (profile.Hoyo is { } hoyo)
         {
             if (hoyo.TargetFps is < MinFps or > MaxFps)

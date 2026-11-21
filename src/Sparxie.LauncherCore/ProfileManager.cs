@@ -38,6 +38,7 @@ public static class ProfileManager
 
         ApplySettings(profile, mutation);
         ApplyLaunch(profile, mutation);
+        ApplyPluginSettings(profile, mutation);
         ValidateProfile(profile);
 
         config.Profiles.Add(profile);
@@ -88,6 +89,7 @@ public static class ProfileManager
 
         ApplySettings(updated, mutation);
         ApplyLaunch(updated, mutation);
+        ApplyPluginSettings(updated, mutation);
         ValidateProfile(updated);
 
         var index = config.Profiles.IndexOf(current);
@@ -273,6 +275,7 @@ public static class ProfileManager
         Game = source.Game,
         ExecutablePath = source.ExecutablePath,
         Launch = source.Launch is null ? null : CloneLaunch(source.Launch),
+        Settings = source.Settings?.DeepClone() as System.Text.Json.Nodes.JsonObject,
         Hoyo = source.Hoyo is null
             ? null
             : new HoyoProfileSettings
@@ -300,6 +303,32 @@ public static class ProfileManager
         return value.Trim();
     }
 
+
+    /// <summary>
+    /// 第三方游戏的设置：mutation 带了就整体替换。能找到该游戏的 schema 就按 schema 归一化（补默认值、夹范围、丢未知键），
+    /// 找不到（插件当前不可用）原样保留，等插件回来再归一化，不丢用户的值。内置游戏不带设置。
+    /// </summary>
+    private static void ApplyPluginSettings(GameProfile profile, ProfileMutation mutation)
+    {
+        if (profile.BuiltInGame is not null)
+        {
+            profile.Settings = null;
+            return;
+        }
+
+        if (mutation.PluginSettings is not { } settings)
+        {
+            return;
+        }
+
+        if (settings.ToJsonString().Length > PluginSettingsSchema.MaxSettingsBytes)
+        {
+            throw Fail("插件设置过大");
+        }
+
+        var schema = GameCatalogProvider.Current.Find(profile.Game)?.SettingsSchema;
+        profile.Settings = schema is null ? settings.DeepClone() as System.Text.Json.Nodes.JsonObject : schema.Normalize(settings);
+    }
 
     /// <summary>只有原神/星铁带 Hoyo 专用设置段；绝区零和第三方插件游戏都不带。</summary>
     private static bool UsesHoyoSettings(string gameId) =>

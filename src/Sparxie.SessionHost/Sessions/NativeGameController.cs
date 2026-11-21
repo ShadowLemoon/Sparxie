@@ -37,9 +37,10 @@ public sealed class NativeGameController(PluginEntry entry) : IGameController
         var logDir = Path.Combine(AppDataDirectory.Resolve(), "logs");
         Directory.CreateDirectory(logDir);
 
-        // settings_json：schema 校验与表单尚未接入，先传空对象。
+        // 设置按 manifest 的 settingsSchema 归一化（补默认值、夹范围、丢未知键），任何输入都不是拒绝会话的理由。
+        var settingsJson = PluginSettingsSchema.ToJson(entry.Manifest!.Schema.Normalize(PluginSettingsSchema.ParseObject(profile.SettingsJson)));
         _registryHooks = CreateRegistryHooks();
-        await _session.CreateAsync(profile.ExecutablePath, arguments, "{}", logDir, dataDir, CallTimeout, _registryHooks).ConfigureAwait(false);
+        await _session.CreateAsync(profile.ExecutablePath, arguments, settingsJson, logDir, dataDir, CallTimeout, _registryHooks).ConfigureAwait(false);
         await _session.PrepareLaunchAsync(CallTimeout).ConfigureAwait(false);
     }
 

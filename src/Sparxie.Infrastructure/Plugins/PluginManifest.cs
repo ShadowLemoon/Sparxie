@@ -54,6 +54,10 @@ public sealed class PluginManifest
     [JsonConverter(typeof(RawJsonConverter))]
     public string? SettingsSchema { get; set; }
 
+    /// <summary>解析后的设置 schema（<see cref="TryParse"/> 已校验；没有 schema 时为空 schema）。</summary>
+    [JsonIgnore]
+    public PluginSettingsSchema Schema { get; private set; } = null!;
+
     public bool HasCap(string cap) => Caps.Contains(cap, StringComparer.Ordinal);
 
     /// <summary>解析并校验；失败返回 false 并给出原因。</summary>
@@ -122,6 +126,13 @@ public sealed class PluginManifest
             return false;
         }
 
+        if (!PluginSettingsSchema.TryParse(parsed.SettingsSchema, out var schema, out var schemaError))
+        {
+            error = schemaError;
+            return false;
+        }
+
+        parsed.Schema = schema;
         manifest = parsed;
         error = string.Empty;
         return true;

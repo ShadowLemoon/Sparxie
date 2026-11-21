@@ -72,6 +72,39 @@ public sealed class PluginGameValidationTests : IDisposable
         Assert.NotNull(ProfileSnapshotValidator.Validate(Snapshot()));
     }
 
+    [Theory]
+    [InlineData("""{ "width": 99999, "unknown": true }""", true)] // 取值越界不是拒绝理由，由 SessionHost 按 schema 归一化
+    [InlineData("{}", true)]
+    [InlineData("{ broken", false)]
+    [InlineData("[1,2,3]", false)]
+    [InlineData("\"text\"", false)]
+    public void 插件游戏的settingsJson只做结构检查(string json, bool accepted)
+    {
+        var snapshot = Snapshot();
+        snapshot.SettingsJson = json;
+
+        var result = ProfileSnapshotValidator.Validate(snapshot, Catalog(confirm: true));
+
+        Assert.Equal(accepted, result is null);
+    }
+
+    [Fact]
+    public void 过大的settingsJson被拒绝()
+    {
+        var snapshot = Snapshot();
+        snapshot.SettingsJson = "{ \"a\": \"" + new string('x', 17 * 1024) + "\" }";
+
+        Assert.NotNull(ProfileSnapshotValidator.Validate(snapshot, Catalog(confirm: true)));
+    }
+
+    [Fact]
+    public void 内置游戏带settingsJson被拒绝()
+    {
+        var snapshot = new ProfileSnapshot { ProfileId = "p", DisplayName = "原神", Game = "genshin", ExecutablePath = @"D:\G\YuanShen.exe", SettingsJson = "{}" };
+
+        Assert.NotNull(ProfileSnapshotValidator.Validate(snapshot, Catalog(confirm: true)));
+    }
+
     [Fact]
     public void 内置游戏在带插件目录时行为不变()
     {

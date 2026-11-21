@@ -88,6 +88,17 @@ static SpxError create_session(const SpxLaunchRequest* req, SpxResult* r, void**
     s->slow_reg = contains(req->settings_json, L"slow-reg");
     if (req->size >= offsetof(SpxLaunchRequest, host) + sizeof(req->host)) s->host = req->host;
     log_call("create_session");
+    {
+        /* 把宿主传来的 settings_json 原样写到 data_dir\\settings.json，测试据此验证宿主的归一化 */
+        wchar_t path[MAX_PATH];
+        FILE* sf;
+        swprintf_s(path, MAX_PATH, L"%ls\\settings.json", s->data_dir);
+        if (_wfopen_s(&sf, path, L"wb") == 0 && sf) {
+            uint32_t i;
+            for (i = 0; i < req->settings_json.chars; i++) fputc((int)(req->settings_json.p[i] & 0x7F), sf);
+            fclose(sf);
+        }
+    }
     *out = s;
     return SPX_OK;
 }

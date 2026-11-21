@@ -74,7 +74,29 @@ Sparxie 可以加载第三方提供的游戏模块（插件）。主仓库和主
 - `wait_exit(timeout_ms)` 在游戏退出时返回 `SPX_OK`，本轮超时返回 `SPX_ERR_TIMEOUT`。
 - 模块自己创建游戏进程时（`createsProcess`），宿主在 `install` 前调用 `attach_job`，模块创建进程后必须立即把它加入该 Job。
 - 宿主服务（注册表钩子）只在声明了 `registryHooks` 时才会传入，否则 `host` 为空。
-- 目前 `settings_json` 固定为 `{}`，`settingsSchema` 校验与表单尚未实现。
+- `create_session` 里的 `settings_json` 是按 `settingsSchema` 归一化之后的设置，见下一节。
+
+## 插件设置（settingsSchema）
+
+插件不提供界面。需要用户可调的选项时，在 `plugin.json` 里声明 `settingsSchema`，Sparxie 据此在「配置」页生成表单、校验并补默认值，再把结果以 `settings_json`（UTF-16 JSON 对象文本）通过 `create_session` 传给插件。
+
+```json
+"settingsSchema": { "fields": [
+  { "key": "inputMode", "label": "输入模式", "type": "enum", "default": "touch",
+    "options": [ { "value": "touch", "label": "触屏" }, { "value": "pc", "label": "键鼠" } ] },
+  { "key": "autoResolution", "label": "分辨率跟随串流", "type": "bool", "default": true },
+  { "key": "width", "label": "宽度", "type": "int", "min": 320, "max": 7680, "default": 1920,
+    "showWhen": { "key": "autoResolution", "equals": false } },
+  { "key": "uiScale", "label": "界面缩放（%）", "type": "int", "min": 100, "max": 180, "step": 5, "default": 140, "hint": "100–180，步长 5" }
+] }
+```
+
+- 字段类型：`bool`、`int`（`min`/`max` 必填，可选 `step`）、`enum`（`options` 1–32 项，`default` 必须是其中之一）、`string`（`maxLength` ≤ 256）。每个字段有 `key`（`^[A-Za-z][A-Za-z0-9_]{0,39}$`，不得重复）、`label`、`default`，可选 `hint`、`showWhen`（`{ "key": 前面已声明的字段, "equals": 值 }`，条件不满足时界面隐藏该字段，但值仍会传给插件）。最多 64 个字段。
+- **schema 写错会让整个插件无效**（manifest 解析失败），而不是运行时才出错。
+- **归一化是全函数，不是拒绝会话的理由**：启动前由 SessionHost 按 manifest 的 schema 处理一遍——缺失或类型不对用默认值，数值夹到 `[min, max]` 并按 `step` 对齐，枚举不在选项里用默认值，字符串去控制字符并截断，未知键丢弃。插件拿到的 `settings_json` 一定包含 schema 里的每个字段。
+- Broker 只做结构检查：`settings_json` 必须是不超过 16 KB 的 JSON 对象，内置游戏不得携带。
+- 设置存在 `config.json` 里对应配置的 `settings` 字段；插件暂时不可用（未启用、被删除）时原样保留，不丢用户的值。
+- 目前**没有热更新**：设置只在会话创建时传入，运行中改设置不会推给插件（热调只有 `set_param(key, int64)`，目前只有 `targetFps`）。
 
 ## 测试用 mock 模块
 
