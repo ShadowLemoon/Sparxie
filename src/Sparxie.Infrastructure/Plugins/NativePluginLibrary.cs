@@ -8,10 +8,15 @@ namespace Sparxie.Infrastructure.Plugins;
 public sealed class PluginLoadException(string message) : Exception(message);
 
 /// <summary>模块调用返回非 SPX_OK。</summary>
-public sealed class PluginCallException(string function, int code, string message)
-    : Exception($"插件 {function} 失败: {code} {message}")
+public sealed class PluginCallException(string function, int code, string message, uint stage = 0, uint detail = 0)
+    : Exception($"插件 {function} 失败: {code} {message}" + (stage != 0 || detail != 0 ? $"（阶段 {stage}，详情 {detail}）" : string.Empty))
 {
     public int Code { get; } = code;
+
+    /// <summary>插件在 SpxResult 里报告的阶段码与详情码（含义由插件自己定义，宿主只展示和记日志）。</summary>
+    public uint Stage { get; } = stage;
+
+    public uint Detail { get; } = detail;
 }
 
 /// <summary>
@@ -650,7 +655,7 @@ public sealed class NativePluginSession : IDisposable
     {
         if (rc != NativePluginLibrary.SpxOk)
         {
-            throw new PluginCallException(name, rc, NativePluginLibrary.SanitizeMessage(result.Message));
+            throw new PluginCallException(name, rc, NativePluginLibrary.SanitizeMessage(result.Message), result.Stage, result.Detail);
         }
     }
 

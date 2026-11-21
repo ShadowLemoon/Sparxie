@@ -189,6 +189,7 @@ static SpxError install(void* h, uint32_t pid, SpxResult* r)
         log_code("reg_late", s->host->registry_set_dword(s->host->context, key, name, 9, &r2));
     }
     if (s->fail_install) {
+        if (r) { r->stage = 3; r->detail = 7; } /* 插件自定义的阶段/详情码，宿主只展示 */
         set_msg(r, SPX_ERR_INJECT_FAILED, L"mock inject failed");
         return SPX_ERR_INJECT_FAILED;
     }

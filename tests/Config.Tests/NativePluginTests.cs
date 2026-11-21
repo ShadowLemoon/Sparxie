@@ -105,6 +105,9 @@ public sealed class NativePluginTests : IDisposable
         var ex = await Assert.ThrowsAsync<PluginCallException>(() => session.InstallAsync(0, Timeout));
         Assert.Equal(100, ex.Code);
         Assert.Contains("mock inject failed", ex.Message);
+        Assert.Equal(3u, ex.Stage);
+        Assert.Equal(7u, ex.Detail);
+        Assert.Contains("阶段 3", ex.Message);
     }
 
     [Fact]
