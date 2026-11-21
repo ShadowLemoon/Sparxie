@@ -11,17 +11,17 @@ public sealed class HomeViewModel : ObservableObject
     private readonly DesktopDataService _data;
     private readonly LauncherService _launcher;
     private readonly Services.GameBackgroundService _backgrounds = new();
-    private GameType _selectedGame;
+    private GameKey _selectedGame;
     private GameProfile? _selectedProfile;
     private string _statusMessage = "准备就绪";
     private bool _isLaunching;
-    private readonly HashSet<GameType> _activeGames = new();
+    private readonly HashSet<GameKey> _activeGames = new();
 
     /// <summary>
     /// 当前页面游戏的进程监视：检测只绑定到当前选中的游戏（<see cref="SelectedGame"/>），换游戏就换盯的进程；
     /// 以后增加游戏，只要它在 GameExecutables 里登记了进程名就自动适用，不用再改这里。
     /// </summary>
-    private GameType? _watchedGame;
+    private GameKey? _watchedGame;
 
     private System.Diagnostics.Process? _watchedProcess;
 
@@ -64,7 +64,7 @@ public sealed class HomeViewModel : ObservableObject
 
         try
         {
-            GameType game;
+            GameKey game;
             do
             {
                 game = SelectedGame;
@@ -74,7 +74,7 @@ public sealed class HomeViewModel : ObservableObject
                     RaiseLaunchState();
                 }
 
-                var processes = await Task.Run(() => GameProcessDetector.FindRunning(game)).ConfigureAwait(true);
+                var processes = await Task.Run(() => GameProcessDetector.FindRunning(GameDirectory.ExeNames(game.Id))).ConfigureAwait(true);
                 if (SelectedGame != game)
                 {
                     DisposeAll(processes); // 检测期间切了游戏：丢弃结果，下一轮重新检测
@@ -113,7 +113,7 @@ public sealed class HomeViewModel : ObservableObject
         }
     }
 
-    private void Watch(GameType game, System.Diagnostics.Process[] processes)
+    private void Watch(GameKey game, System.Diagnostics.Process[] processes)
     {
         var watched = processes[0];
         DisposeAll(processes.Skip(1));
@@ -145,7 +145,7 @@ public sealed class HomeViewModel : ObservableObject
 
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _exitFallback;
 
-    private void StartExitFallback(GameType game, System.Diagnostics.Process watched)
+    private void StartExitFallback(GameKey game, System.Diagnostics.Process watched)
     {
         if (_dispatcher is null)
         {
@@ -172,7 +172,7 @@ public sealed class HomeViewModel : ObservableObject
             {
                 var stillRunning = await Task.Run(() =>
                 {
-                    var found = GameProcessDetector.FindRunning(game);
+                    var found = GameProcessDetector.FindRunning(GameDirectory.ExeNames(game.Id));
                     DisposeAll(found);
                     return found.Length > 0;
                 }).ConfigureAwait(true);
@@ -217,7 +217,7 @@ public sealed class HomeViewModel : ObservableObject
 
     public ObservableCollection<ProfileListItemViewModel> Profiles { get; }
 
-    public GameType[] Games { get; } = Enum.GetValues<GameType>();
+    public IReadOnlyList<GameKey> Games => GameDirectory.Games;
 
     /// <summary>左下游戏卡 Flyout 的内容：三个游戏，多配置的游戏下挂配置 Chip。</summary>
     public ObservableCollection<GameEntryViewModel> GameEntries { get; }
@@ -231,7 +231,7 @@ public sealed class HomeViewModel : ObservableObject
     /// <summary>某个游戏会话进入 Running（注入成功、游戏已在运行）时触发，用于“启动后窗口行为”。</summary>
     public event Action? GameRunning;
 
-    public GameType SelectedGame
+    public GameKey SelectedGame
     {
         get => _selectedGame;
         private set
@@ -249,11 +249,11 @@ public sealed class HomeViewModel : ObservableObject
         }
     }
 
-    private void PersistSelectedGame(GameType game)
+    private void PersistSelectedGame(GameKey game)
     {
         try
         {
-            _data.Preferences.SelectedGame = GameIds.ToId(game);
+            _data.Preferences.SelectedGame = game.Id;
             _data.SavePreferences();
         }
         catch
@@ -347,7 +347,7 @@ public sealed class HomeViewModel : ObservableObject
 
     private RelayCommand? _toggleBackgroundPauseCommand;
 
-    private async Task LoadBackgroundAsync(GameType game)
+    private async Task LoadBackgroundAsync(GameKey game)
     {
         try
         {
@@ -373,7 +373,7 @@ public sealed class HomeViewModel : ObservableObject
         }
     }
 
-    private void ApplyBackgrounds(GameType game, IReadOnlyList<GameBackgroundItem> items)
+    private void ApplyBackgrounds(GameKey game, IReadOnlyList<GameBackgroundItem> items)
     {
         _backgroundItems = items;
         BackgroundDots.Clear();
@@ -485,7 +485,7 @@ public sealed class HomeViewModel : ObservableObject
 
     public string CurrentProfileDetails => SelectedProfile is null
         ? "尚未设置游戏路径，点击设置"
-        : $"{FormatGame(SelectedProfile.BuiltInGame ?? default)} · {SelectedProfile.ExecutablePath}";
+        : $"{FormatGame(new GameKey(SelectedProfile.Game))} · {SelectedProfile.ExecutablePath}";
 
     /// <summary>主页状态条：仅调试模式下显示（设置里开启，或环境变量 SPARXIE_DEBUG=1）；平时隐藏，失败原因仍写入 desktop.log。</summary>
     public bool HasStatusMessage => IsDebugMode && !string.IsNullOrWhiteSpace(StatusMessage) && StatusMessage != "准备就绪";
@@ -522,7 +522,7 @@ public sealed class HomeViewModel : ObservableObject
     }
 
     /// <summary>当前选中的游戏已有会话在运行（同款游戏同一时间只允许一个会话）。</summary>
-    public bool IsSelectedGameActive => SelectedProfile is { } profile && (profile.BuiltInGame is { } active && _activeGames.Contains(active) || (_watchedProcess is not null && _watchedGame == profile.BuiltInGame));
+    public bool IsSelectedGameActive => SelectedProfile is { } profile && (_activeGames.Contains(new GameKey(profile.Game)) || (_watchedProcess is not null && _watchedGame == new GameKey(profile.Game)));
 
     /// <summary>启动按钮文字：启动中 / 运行中 / 启动游戏。</summary>
     public string LaunchLabel => IsLaunching ? "启动中…" : IsSelectedGameActive ? "运行中" : "启动游戏";
@@ -537,8 +537,8 @@ public sealed class HomeViewModel : ObservableObject
     public string PathIssueMessage => SelectedProfile is { } profile
         ? PathIssue switch
         {
-            ExecutablePathIssue.Empty => $"还没有设置 {GameNames.Display(profile.BuiltInGame ?? default)} 的游戏路径",
-            ExecutablePathIssue.NotFound => $"找不到 {GameNames.Display(profile.BuiltInGame ?? default)}，游戏可能已移动或卸载",
+            ExecutablePathIssue.Empty => $"还没有设置 {GameNames.Display(new GameKey(profile.Game))} 的游戏路径",
+            ExecutablePathIssue.NotFound => $"找不到 {GameNames.Display(new GameKey(profile.Game))}，游戏可能已移动或卸载",
             var issue => ExecutablePathCheck.Describe(profile.Game, issue),
         }
         : string.Empty;
@@ -556,7 +556,7 @@ public sealed class HomeViewModel : ObservableObject
         LaunchCommand.NotifyCanExecuteChanged();
     }
 
-    private void SetGameActive(GameType game, bool active)
+    private void SetGameActive(GameKey game, bool active)
     {
         if (active ? _activeGames.Add(game) : _activeGames.Remove(game))
         {
@@ -564,13 +564,16 @@ public sealed class HomeViewModel : ObservableObject
         }
     }
 
+    /// <summary>该游戏当前可选（内置，或已确认的插件游戏）才返回；插件被停用/删除后落回别的游戏。</summary>
+    private GameKey? AvailableGame(string id) => Games.Contains(new GameKey(id)) ? new GameKey(id) : null;
+
     public void Refresh()
     {
         var selected = _data.TryGetSelectedProfile();
         _selectedGame = RestoreSelectedGame()
-            ?? selected?.BuiltInGame
-            ?? _data.Config.Profiles.FirstOrDefault()?.BuiltInGame
-            ?? GameType.Genshin;
+            ?? (selected is { } chosen ? AvailableGame(chosen.Game) : null)
+            ?? (_data.Config.Profiles.FirstOrDefault() is { } first ? AvailableGame(first.Game) : null)
+            ?? (GameKey)Sparxie.Contracts.Models.GameType.Genshin;
         OnPropertyChanged(nameof(SelectedGame));
         RefreshProfiles();
 
@@ -584,13 +587,13 @@ public sealed class HomeViewModel : ObservableObject
     }
 
     /// <summary>恢复上次选中的游戏标签；无记录或值非法时回退到所选 Profile 的游戏。</summary>
-    private GameType? RestoreSelectedGame() =>
-        GameIds.TryGetBuiltIn(_data.Preferences.SelectedGame, out var saved) ? saved : null;
+    private GameKey? RestoreSelectedGame() =>
+        GameIds.Normalize(_data.Preferences.SelectedGame) is { } saved && Games.Contains(new GameKey(saved)) ? new GameKey(saved) : null;
 
     private void RefreshProfiles()
     {
         Profiles.Clear();
-        foreach (var profile in _data.Config.Profiles.Where(item => item.BuiltInGame == SelectedGame))
+        foreach (var profile in _data.Config.Profiles.Where(item => item.Game == SelectedGame.Id))
         {
             Profiles.Add(new ProfileListItemViewModel(profile));
         }
@@ -601,12 +604,12 @@ public sealed class HomeViewModel : ObservableObject
 
     private void SelectGame(object? parameter)
     {
-        if (parameter is string text && Enum.TryParse<GameType>(text, out var parsed))
+        if (parameter is string text && GameIds.IsValidId(text))
         {
-            parameter = parsed;
+            parameter = new GameKey(GameIds.Normalize(text)!);
         }
 
-        if (parameter is GameType game)
+        if (parameter is GameKey game)
         {
             SelectedGame = game;
             // 点游戏标题 = 该游戏“记住的配置”（Flyout 里已高亮显示），而不是随机一个。
@@ -640,9 +643,9 @@ public sealed class HomeViewModel : ObservableObject
     }
 
     /// <summary>某游戏点标题时会用到的配置：偏好里记住的 → 否则该游戏第一个。</summary>
-    private string? ResolveProfileId(GameType game)
+    private string? ResolveProfileId(GameKey game)
     {
-        var inGame = _data.Config.Profiles.Where(item => item.BuiltInGame == game).ToList();
+        var inGame = _data.Config.Profiles.Where(item => item.Game == game.Id).ToList();
         if (TryGetRememberedProfile(game, out var saved)
             && inGame.Any(item => item.Id == saved))
         {
@@ -652,20 +655,20 @@ public sealed class HomeViewModel : ObservableObject
         return inGame.FirstOrDefault()?.Id;
     }
 
-    private bool TryGetRememberedProfile(GameType game, out string? profileId) =>
-        _data.Preferences.LastProfileByGame.TryGetValue(GameIds.ToId(game), out profileId)
-        || _data.Preferences.LastProfileByGame.TryGetValue(game.ToString(), out profileId);
+    private bool TryGetRememberedProfile(GameKey game, out string? profileId) =>
+        _data.Preferences.LastProfileByGame.TryGetValue(game.Id, out profileId)
+        || (game.BuiltIn is { } legacyGame && _data.Preferences.LastProfileByGame.TryGetValue(legacyGame.ToString(), out profileId));
 
     private void RememberProfile(GameProfile? profile)
     {
         if (profile is null
-            || (profile.BuiltInGame is { } remembered && TryGetRememberedProfile(remembered, out var current) && current == profile.Id))
+            || (TryGetRememberedProfile(new GameKey(profile.Game), out var current) && current == profile.Id))
         {
             return;
         }
 
         // 旧版本以 PascalCase 名存键；写回统一用 id，并清掉旧键避免两份不一致。
-        if (profile.BuiltInGame is { } legacy) { _data.Preferences.LastProfileByGame.Remove(legacy.ToString()); }
+        if (new GameKey(profile.Game).BuiltIn is { } legacy) { _data.Preferences.LastProfileByGame.Remove(legacy.ToString()); }
         _data.Preferences.LastProfileByGame[profile.Game] = profile.Id;
         try
         {
@@ -703,7 +706,7 @@ public sealed class HomeViewModel : ObservableObject
         GameEntries.Clear();
         foreach (var game in Games)
         {
-            var profiles = _data.Config.Profiles.Where(item => item.BuiltInGame == game).ToList();
+            var profiles = _data.Config.Profiles.Where(item => item.Game == game.Id).ToList();
             var chips = profiles
                 .Select(profile => new ProfileChipViewModel(
                     profile,
@@ -749,8 +752,8 @@ public sealed class HomeViewModel : ObservableObject
             StatusMessage = $"已启动 {profile.DisplayName}，会话 {session.SessionId[..Math.Min(8, session.SessionId.Length)]}";
 
             // 会话存续期间该游戏的启动按钮禁用并显示“运行中”，直到收到终态事件。
-            SetGameActive(profile.BuiltInGame ?? default, true);
-            _ = ObserveSessionAsync(session, profile.BuiltInGame ?? default);
+            SetGameActive(new GameKey(profile.Game), true);
+            _ = ObserveSessionAsync(session, new GameKey(profile.Game));
         }
         catch (Exception ex)
         {
@@ -762,7 +765,7 @@ public sealed class HomeViewModel : ObservableObject
         }
     }
 
-    private async Task ObserveSessionAsync(LauncherSession session, GameType game)
+    private async Task ObserveSessionAsync(LauncherSession session, GameKey game)
     {
         try
         {
@@ -798,7 +801,7 @@ public sealed class HomeViewModel : ObservableObject
         }
     }
 
-    private static string FormatGame(GameType game) => GameNames.Display(game);
+    private static string FormatGame(GameKey game) => GameNames.Display(game);
 }
 
 public sealed class ProfileListItemViewModel

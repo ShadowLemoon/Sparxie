@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Data;
 using Sparxie.Contracts.Models;
+using Sparxie.Desktop.Services;
 
 namespace Sparxie.Desktop.Converters;
 
@@ -26,9 +27,8 @@ public sealed class GameDisplayConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language) => value switch
     {
-        GameType.Genshin => "原神",
-        GameType.StarRail => "崩坏：星穹铁道",
-        GameType.ZenlessZoneZero => "绝区零",
+        GameKey key => key.Display,
+        GameType game => ((GameKey)game).Display,
         _ => value?.ToString() ?? string.Empty,
     };
 
@@ -39,7 +39,7 @@ public sealed class GameDisplayConverter : IValueConverter
 public sealed class GameIconConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language) =>
-        value is GameType game && Sparxie.Desktop.Services.GameIconCache.Get(game) is { } path
+        value is GameKey game && Sparxie.Desktop.Services.GameIconCache.Get(game) is { } path
             ? new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(path))
             : Microsoft.UI.Xaml.DependencyProperty.UnsetValue;
 

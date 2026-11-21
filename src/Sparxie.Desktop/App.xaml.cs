@@ -29,6 +29,7 @@ public partial class App : Application
             DesktopLog.Write("配置加载失败", ex);
         }
 
+        GameDirectory.Reload(); // 先读出已确认的插件游戏，主页和 Profile 校验才认识它们
         var launcher = new LauncherService();
         var settingsPanel = new SettingsPanelState();
         var viewModel = new MainWindowViewModel(

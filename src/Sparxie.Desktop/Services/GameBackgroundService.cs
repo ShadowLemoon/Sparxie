@@ -30,12 +30,12 @@ public sealed class GameBackgroundService
 
     private static string CacheDir => AppPaths.BackgroundCacheDirectory;
 
-    private static string BizOf(GameType game) => game switch
+    private static string BizOf(GameKey game) => game.BuiltIn switch
     {
         GameType.Genshin => "hk4e_cn",
         GameType.StarRail => "hkrpg_cn",
         GameType.ZenlessZoneZero => "nap_cn",
-        _ => string.Empty,
+        _ => string.Empty, // 第三方插件游戏没有官方背景
     };
 
     // 背景缓存：图片 / 视频文件名由 URL 决定（官方换图即换文件名）；
@@ -55,7 +55,7 @@ public sealed class GameBackgroundService
         Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(text)))[..12].ToLowerInvariant();
 
     /// <summary>该游戏记住的背景编号（用户上次选的那一张）；没有记录返回 null。</summary>
-    public string? GetSelectedId(GameType game)
+    public string? GetSelectedId(GameKey game)
     {
         var biz = BizOf(game);
         try
@@ -68,7 +68,7 @@ public sealed class GameBackgroundService
         }
     }
 
-    public void SetSelectedId(GameType game, string id)
+    public void SetSelectedId(GameKey game, string id)
     {
         var biz = BizOf(game);
         if (biz.Length == 0)
@@ -88,7 +88,7 @@ public sealed class GameBackgroundService
     }
 
     /// <summary>同步返回上次缓存的背景列表（只含图片已在本地的项）；用于切换游戏时立即上屏。</summary>
-    public IReadOnlyList<GameBackgroundItem> GetCachedBackgrounds(GameType game)
+    public IReadOnlyList<GameBackgroundItem> GetCachedBackgrounds(GameKey game)
     {
         var biz = BizOf(game);
         if (biz.Length == 0 || !File.Exists(ListFile(biz)))
@@ -123,7 +123,7 @@ public sealed class GameBackgroundService
     }
 
     /// <summary>同步返回该游戏当前应显示的背景图本地路径（记住的那张，没有就第一张）；没有缓存时返回 null。</summary>
-    public string? GetCachedBackgroundPath(GameType game) => Pick(GetCachedBackgrounds(game), GetSelectedId(game))?.ImagePath;
+    public string? GetCachedBackgroundPath(GameKey game) => Pick(GetCachedBackgrounds(game), GetSelectedId(game))?.ImagePath;
 
     /// <summary>从列表里取记住的那一项，找不到就取第一项。</summary>
     public static GameBackgroundItem? Pick(IReadOnlyList<GameBackgroundItem> items, string? selectedId) =>
@@ -133,7 +133,7 @@ public sealed class GameBackgroundService
     /// 官方启动器的全部背景（图片已下载到本地）。无法联网时回退上次缓存。
     /// 一项可以带视频（动态背景）；视频体积大，按需用 <see cref="EnsureVideoAsync"/> 下载。
     /// </summary>
-    public async Task<IReadOnlyList<GameBackgroundItem>> GetBackgroundsAsync(GameType game)
+    public async Task<IReadOnlyList<GameBackgroundItem>> GetBackgroundsAsync(GameKey game)
     {
         var biz = BizOf(game);
         if (biz.Length == 0)
@@ -266,7 +266,7 @@ public sealed class GameBackgroundService
     }
 
     /// <summary>返回游戏图标（getGames → display.icon）本地路径；失败返回 null。</summary>
-    public async Task<string?> GetGameIconPathAsync(GameType game)
+    public async Task<string?> GetGameIconPathAsync(GameKey game)
     {
         var biz = BizOf(game);
         if (biz.Length == 0)

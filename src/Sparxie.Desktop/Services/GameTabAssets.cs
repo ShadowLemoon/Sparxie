@@ -1,31 +1,24 @@
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
-using Sparxie.Contracts.Models;
 
 namespace Sparxie.Desktop.Services;
 
-/// <summary>游戏图标本地路径缓存，供标题栏标签模板使用。</summary>
+/// <summary>游戏图标本地路径缓存，供标题栏标签模板使用。第三方游戏没有图标，Get 返回 null，标签退化为纯文字。</summary>
 public static class GameIconCache
 {
-    private static readonly Dictionary<GameType, string> Paths = [];
+    private static readonly Dictionary<GameKey, string> Paths = [];
 
-    public static void Set(GameType game, string path) => Paths[game] = path;
+    public static void Set(GameKey game, string path) => Paths[game] = path;
 
-    public static string? Get(GameType game) => Paths.TryGetValue(game, out var path) ? path : null;
+    public static string? Get(GameKey game) => Paths.TryGetValue(game, out var path) ? path : null;
 }
 
 /// <summary>x:Bind 函数绑定辅助：游戏标签的显示名与图标。</summary>
 public static class GameTabBinding
 {
-    public static string Name(GameType game) => game switch
-    {
-        GameType.Genshin => "原神",
-        GameType.StarRail => "崩坏：星穹铁道",
-        GameType.ZenlessZoneZero => "绝区零",
-        _ => game.ToString(),
-    };
+    public static string Name(GameKey game) => game.Display;
 
-    public static ImageSource? Icon(GameType game) => GameIconCache.Get(game) is { } path
+    public static ImageSource? Icon(GameKey game) => GameIconCache.Get(game) is { } path
         ? new BitmapImage(new Uri(path))
         : null;
 }

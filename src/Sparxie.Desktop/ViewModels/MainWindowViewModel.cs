@@ -23,6 +23,7 @@ public sealed class MainWindowViewModel : ObservableObject
         Profiles = profiles;
         Settings = settings;
         Settings.Saved += Home.NotifyDebugModeChanged;
+        Settings.Plugins.Changed += OnPluginsChanged;
         _settingsPanel = settingsPanel;
         _settingsPanel.Changed += OnSettingsPanelChanged;
         ShowHomeCommand = new RelayCommand(ShowHome);
@@ -75,6 +76,15 @@ public sealed class MainWindowViewModel : ObservableObject
         Profiles.Refresh();
         Home.Refresh();
         CurrentPage = DesktopPage.Home;
+    }
+
+    /// <summary>插件被启用/停用/删除：重新读取可用游戏列表；有变化就刷新主页（游戏标签、当前游戏、配置列表）。</summary>
+    private void OnPluginsChanged()
+    {
+        if (GameDirectory.Reload())
+        {
+            Home.Refresh();
+        }
     }
 
     private void ShowProfiles()

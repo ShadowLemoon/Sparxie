@@ -108,7 +108,7 @@ public sealed partial class ProfileManagerPage : Page
     }
 
     private string? ServerLabelFor(string path) =>
-        Profiles is { SelectedProfile: { } editing } ? ServerLabelDetector.Detect(editing.Game, path, new CurrentUserGameRegistry()) : null;
+        Profiles is { SelectedProfile: { } editing } && editing.Game.BuiltIn is { } builtIn ? ServerLabelDetector.Detect(builtIn, path, new CurrentUserGameRegistry()) : null;
 
     /// <summary>找到多个安装时弹窗让用户选一个（默认选中排在最前的，国服优先）；取消返回 null。</summary>
     private async Task<Sparxie.Infrastructure.Processes.GameExecutableCandidate?> ChooseExecutableAsync(
@@ -189,9 +189,9 @@ public sealed partial class ProfileManagerPage : Page
             }
 
             // 选完立即按当前游戏白名单反馈，避免用户填完再在保存时才看到失败。
-            if (!GameExecutables.IsAllowed(profile.Game, file.Path))
+            if (!Sparxie.Infrastructure.Plugins.GameCatalogProvider.IsAllowed(profile.Game.Id, file.Path))
             {
-                var allowed = string.Join("、", GameExecutables.For(profile.Game));
+                var allowed = string.Join("、", Sparxie.Infrastructure.Plugins.GameCatalogProvider.ExeNamesFor(profile.Game.Id));
                 await ShowMessageAsync($"该 EXE 不属于所选游戏，可用文件名：{allowed}");
                 return;
             }

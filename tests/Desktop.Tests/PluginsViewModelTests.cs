@@ -86,6 +86,29 @@ public sealed class PluginsViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task 启用_停用_删除后触发Changed_构造时不触发()
+    {
+        var fired = 0;
+        var trust = new PluginTrustStore(Path.Combine(_root, "plugin-trust.json"));
+        var vm = new PluginsViewModel(new PluginCatalog(Path.Combine(_root, "plugins"), trust), trust, _root, null, _registry);
+        vm.Changed += () => fired++;
+        Assert.Equal(0, fired); // 构造时的首次读取不算变化
+        vm.Confirm = _ => Task.FromResult(true);
+
+        await vm.EnableAsync(Id);
+        Assert.True(fired >= 1);
+
+        var afterEnable = fired;
+        vm.Disable(Id);
+        Assert.True(fired > afterEnable);
+
+        var afterDisable = fired;
+        await vm.EnableAsync(Id);
+        await vm.DeleteAsync(Id);
+        Assert.True(fired > afterDisable);
+    }
+
+    [Fact]
     public async Task 用户拒绝确认时不写信任记录()
     {
         var (vm, trust, _) = Create();

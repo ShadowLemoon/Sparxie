@@ -20,7 +20,7 @@ internal static class SwitcherBrushes
 /// <summary>主页游戏切换 Flyout 中的一行：一个游戏及其配置 Chip（仅多配置时展示）。</summary>
 public sealed class GameEntryViewModel
 {
-    public GameEntryViewModel(GameType game, bool isSelected, IReadOnlyList<ProfileChipViewModel> profiles, Action select)
+    public GameEntryViewModel(GameKey game, bool isSelected, IReadOnlyList<ProfileChipViewModel> profiles, Action select)
     {
         Game = game;
         IsSelected = isSelected;
@@ -28,7 +28,7 @@ public sealed class GameEntryViewModel
         SelectCommand = new RelayCommand(select);
     }
 
-    public GameType Game { get; }
+    public GameKey Game { get; }
 
     public string Title => GameNames.Display(Game);
 

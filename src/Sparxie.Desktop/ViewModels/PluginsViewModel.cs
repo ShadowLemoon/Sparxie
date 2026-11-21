@@ -57,6 +57,7 @@ public sealed class PluginsViewModel : ObservableObject
     private readonly Action<string>? _onRemoved;
     private readonly IRegistryHookStore _registry;
     private string _message = string.Empty;
+    private bool _ready;
 
     public PluginsViewModel(PluginCatalog catalog, PluginTrustStore trust, string dataRoot, Action<string>? onRemoved = null, IRegistryHookStore? registry = null)
     {
@@ -68,7 +69,11 @@ public sealed class PluginsViewModel : ObservableObject
         Confirm = _ => Task.FromResult(false); // 界面层接管前一律视为拒绝（默认不启用）
         RefreshCommand = new RelayCommand(Refresh);
         Refresh();
+        _ready = true;
     }
+
+    /// <summary>插件列表被重新读取之后触发（启用/停用/删除/手动刷新）。让主页等依赖"可用游戏列表"的地方刷新。</summary>
+    public event Action? Changed;
 
     public ObservableCollection<PluginItemViewModel> Items { get; } = [];
 
@@ -105,6 +110,11 @@ public sealed class PluginsViewModel : ObservableObject
 
         OnPropertyChanged(nameof(HasItems));
         OnPropertyChanged(nameof(IsEmpty));
+
+        if (_ready)
+        {
+            Changed?.Invoke();
+        }
     }
 
     public async Task EnableAsync(string id)

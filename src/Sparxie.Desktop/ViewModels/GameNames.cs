@@ -1,14 +1,9 @@
-using Sparxie.Contracts.Models;
+using Sparxie.Desktop.Services;
 
 namespace Sparxie.Desktop.ViewModels;
 
 public static class GameNames
 {
-    public static string Display(GameType game) => game switch
-    {
-        GameType.Genshin => "原神",
-        GameType.StarRail => "崩坏：星穹铁道",
-        GameType.ZenlessZoneZero => "绝区零",
-        _ => game.ToString(),
-    };
+    /// <summary>显示名：内置三款写死中文名，第三方游戏取 plugin.json 的 displayName。</summary>
+    public static string Display(GameKey game) => game.Display;
 }

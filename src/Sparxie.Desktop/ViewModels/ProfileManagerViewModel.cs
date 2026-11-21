@@ -14,7 +14,7 @@ public sealed class ProfileManagerViewModel : ObservableObject
     private string _statusMessage = string.Empty;
     private InfoBarSeverity _statusSeverity = InfoBarSeverity.Informational;
     private bool _isRebuilding;
-    private GameType _scope = GameType.Genshin;
+    private GameKey _scope = GameType.Genshin;
     private readonly Microsoft.UI.Dispatching.DispatcherQueue? _dispatcher;
     private readonly IGameFinderEnvironment _finderEnvironment;
     private readonly IGameRegistry? _registry;
@@ -59,7 +59,7 @@ public sealed class ProfileManagerViewModel : ObservableObject
     public RelayCommand DeleteCommand { get; }
 
     /// <summary>当前管理的游戏：配置按游戏分开管理，页面只展示该游戏的配置。</summary>
-    public GameType Scope => _scope;
+    public GameKey Scope => _scope;
 
     public string ScopeTitle => $"{GameNames.Display(_scope)} 设置";
 
@@ -67,7 +67,7 @@ public sealed class ProfileManagerViewModel : ObservableObject
     public bool HasMultiple => Profiles.Count > 1;
 
     /// <summary>切换到某个游戏的配置页；该游戏还没有配置时自动落一个占位配置。</summary>
-    public void SetScope(GameType game)
+    public void SetScope(GameKey game)
     {
         Flush();
         _scope = game;
@@ -168,9 +168,9 @@ public sealed class ProfileManagerViewModel : ObservableObject
     }
 
     /// <summary>进入 Profile 页时若一个 Profile 都没有，则自动落一个占位 Profile 供右侧补全。</summary>
-    public void EnsureDefaultIfEmpty(GameType game)
+    public void EnsureDefaultIfEmpty(GameKey game)
     {
-        if (_data.Config.Profiles.Any(item => item.BuiltInGame == game))
+        if (_data.Config.Profiles.Any(item => item.Game == game.Id))
         {
             return;
         }
@@ -184,8 +184,8 @@ public sealed class ProfileManagerViewModel : ObservableObject
                 id = $"{game.ToString().ToLowerInvariant()}-{n}";
             }
 
-            var names = _data.Config.Profiles.Where(item => item.BuiltInGame == game).Select(item => item.DisplayName);
-            _data.AddProfile(new ProfileMutation(Id: id, DisplayName: ProfileNames.NextDefault(names), Game: game));
+            var names = _data.Config.Profiles.Where(item => item.Game == game.Id).Select(item => item.DisplayName);
+            _data.AddProfile(new ProfileMutation(Id: id, DisplayName: ProfileNames.NextDefault(names), GameId: game.Id));
             ReportInfo("请先选择游戏 EXE 路径");
         }
         catch (Exception ex)
@@ -207,7 +207,7 @@ public sealed class ProfileManagerViewModel : ObservableObject
         try
         {
             Profiles.Clear();
-            foreach (var profile in _data.Config.Profiles.Where(item => item.BuiltInGame == _scope))
+            foreach (var profile in _data.Config.Profiles.Where(item => item.Game == _scope.Id))
             {
                 Profiles.Add(Track(ProfileEditorViewModel.From(profile)));
             }
@@ -239,7 +239,7 @@ public sealed class ProfileManagerViewModel : ObservableObject
             var created = ProfileEditorViewModel.New(
                 _data.Config.Profiles.Select(profile => profile.Id),
                 _scope,
-                _data.Config.Profiles.Where(profile => profile.BuiltInGame == _scope).Select(profile => profile.DisplayName));
+                _data.Config.Profiles.Where(profile => profile.Game == _scope.Id).Select(profile => profile.DisplayName));
             var saved = _data.AddProfile(created.ToMutation());
             StatusMessage = string.Empty;
             _selectedProfile = null;
@@ -266,7 +266,11 @@ public sealed class ProfileManagerViewModel : ObservableObject
             return new AutoFindOutcome([], "请先选择一个配置");
         }
 
-        var game = editing.Game;
+        if (editing.Game.BuiltIn is not { } game)
+        {
+            return new AutoFindOutcome([], "第三方游戏暂不支持自动查找，请点“浏览…”手动选择 EXE");
+        }
+
         IReadOnlyList<GameExecutableCandidate> candidates;
         try
         {
@@ -389,7 +393,8 @@ public sealed class ProfileManagerViewModel : ObservableObject
     private void RenameByDetectedServer(ProfileEditorViewModel editor)
     {
         if (!ProfileNames.IsAuto(editor.DisplayName)
-            || ServerLabelDetector.Detect(editor.Game, editor.ExecutablePath, _registry) is not { } label)
+            || editor.Game.BuiltIn is not { } builtIn
+            || ServerLabelDetector.Detect(builtIn, editor.ExecutablePath, _registry) is not { } label)
         {
             return;
         }
@@ -457,7 +462,7 @@ public sealed class ProfileEditorViewModel : ObservableObject
 {
     private string _id = string.Empty;
     private string _displayName = string.Empty;
-    private GameType _game;
+    private GameKey _game;
     private string _executablePath = string.Empty;
     private bool _fpsUnlockEnabled = true;
     private double _targetFps = 120;
@@ -483,13 +488,13 @@ public sealed class ProfileEditorViewModel : ObservableObject
     // 必须是所有编辑项共享的同一实例：若每个 Profile 各持一份数组，切换 Profile 时
     // ComboBox 的 ItemsSource 会换成新集合，导致原 SelectedItem 不在集合中而被置空，
     // 再经 TwoWay 反向写回，表现为游戏类型/优先级下拉框漂移。
-    public static GameType[] GameOptions { get; } = Enum.GetValues<GameType>();
+    public static GameKey[] GameOptions => GameDirectory.Options;
 
     public static ProcessPriority[] PriorityOptions { get; } = Enum.GetValues<ProcessPriority>();
 
     public string Id { get => _id; set => SetProperty(ref _id, value); }
     public string DisplayName { get => _displayName; set => SetProperty(ref _displayName, value); }
-    public GameType Game
+    public GameKey Game
     {
         get => _game;
         set
@@ -519,7 +524,7 @@ public sealed class ProfileEditorViewModel : ObservableObject
     }
 
     /// <summary>路径即时检查结果（未设置 / 非完整路径 / 文件名不属于该游戏 / 文件不存在），合法时为空。</summary>
-    public string PathHint => ExecutablePathCheck.Describe(Game, ExecutablePathCheck.Check(Game, ExecutablePath));
+    public string PathHint => ExecutablePathCheck.Describe(Game.Id, ExecutablePathCheck.Check(Game.Id, ExecutablePath));
 
     public bool HasPathHint => PathHint.Length > 0;
     public bool FpsUnlockEnabled { get => _fpsUnlockEnabled; set => SetProperty(ref _fpsUnlockEnabled, value); }
@@ -732,11 +737,11 @@ public sealed class ProfileEditorViewModel : ObservableObject
         }
     }
 
-    public bool IsHoyoGame => Game != GameType.ZenlessZoneZero;
-    public bool IsGenshin => Game == GameType.Genshin;
+    public bool IsHoyoGame => Game.BuiltIn is { } game && game != GameType.ZenlessZoneZero;
+    public bool IsGenshin => Game.BuiltIn == GameType.Genshin;
 
     /// <summary>新建编辑项。ID 与名称预填可用默认值，立即保存即可用。</summary>
-    public static ProfileEditorViewModel New(IEnumerable<string> existingIds, GameType game, IEnumerable<string>? existingNames = null)
+    public static ProfileEditorViewModel New(IEnumerable<string> existingIds, GameKey game, IEnumerable<string>? existingNames = null)
     {
         var taken = new HashSet<string>(existingIds, StringComparer.Ordinal);
         var suffix = 1;
@@ -761,7 +766,7 @@ public sealed class ProfileEditorViewModel : ObservableObject
     {
         Id = profile.Id,
         DisplayName = profile.DisplayName,
-        Game = profile.BuiltInGame ?? default,
+        Game = new GameKey(profile.Game),
         ExecutablePath = profile.ExecutablePath,
         FpsUnlockEnabled = profile.Hoyo?.FpsUnlockEnabled ?? true,
         TargetFps = profile.Hoyo?.TargetFps ?? 120,
@@ -788,7 +793,7 @@ public sealed class ProfileEditorViewModel : ObservableObject
     public ProfileMutation ToMutation() => new(
         Id: IsNew ? Id : null,
         DisplayName: DisplayName,
-        Game: Game,
+        GameId: Game.Id,
         ExecutablePath: string.IsNullOrWhiteSpace(ExecutablePath) ? null : ExecutablePath,
         FpsUnlockEnabled: IsHoyoGame ? FpsUnlockEnabled : null,
         TargetFps: IsHoyoGame ? ToFps(TargetFps, 120) : null,
