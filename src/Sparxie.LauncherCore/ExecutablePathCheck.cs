@@ -1,4 +1,5 @@
 using Sparxie.Contracts.Models;
+using Sparxie.Infrastructure.Plugins;
 using Sparxie.Infrastructure.Processes;
 
 namespace Sparxie.LauncherCore;
@@ -41,7 +42,7 @@ public static class ExecutablePathCheck
             return ExecutablePathIssue.NotFullyQualified;
         }
 
-        if (!GameExecutables.IsAllowed(game, input))
+        if (!GameCatalogProvider.IsAllowed(game, input))
         {
             return ExecutablePathIssue.NotAllowed;
         }
@@ -54,10 +55,10 @@ public static class ExecutablePathCheck
     {
         ExecutablePathIssue.Empty => "尚未设置游戏路径",
         ExecutablePathIssue.NotFullyQualified => "请填写完整路径（如 D:\\Games\\…\\" + Example(game) + "）",
-        ExecutablePathIssue.NotAllowed => $"文件名不属于该游戏，可用：{string.Join("、", GameExecutables.For(game))}",
+        ExecutablePathIssue.NotAllowed => $"文件名不属于该游戏，可用：{string.Join("、", GameCatalogProvider.ExeNamesFor(game))}",
         ExecutablePathIssue.NotFound => "找不到该文件，请确认路径",
         _ => string.Empty,
     };
 
-    private static string Example(string? game) => GameExecutables.For(game).FirstOrDefault() ?? "game.exe";
+    private static string Example(string? game) => GameCatalogProvider.ExeNamesFor(game).FirstOrDefault() ?? "game.exe";
 }

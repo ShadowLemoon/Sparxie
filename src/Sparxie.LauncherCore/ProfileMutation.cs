@@ -22,8 +22,12 @@ public sealed record ProfileMutation(
     int? GenshinPreset60Fps = null,
     bool? GenshinTouchUiScaleOverrideEnabled = null,
     int? GenshinTouchUiScalePercent = null,
-    LaunchSettings? Launch = null)
+    LaunchSettings? Launch = null,
+    string? GameId = null)
 {
+    /// <summary>要创建/改成的游戏 id：优先 <see cref="GameId"/>（含第三方插件游戏），否则取内置游戏 <see cref="Game"/>。</summary>
+    public string? EffectiveGameId => GameId ?? (Game is { } game ? GameIds.ToId(game) : null);
+
     public bool HasHoyoSettings =>
         FpsUnlockEnabled.HasValue
         || TargetFps.HasValue
@@ -42,6 +46,7 @@ public sealed record ProfileMutation(
         !string.IsNullOrWhiteSpace(DisplayName)
         || !string.IsNullOrWhiteSpace(ExecutablePath)
         || Game.HasValue
+        || GameId is not null
         || HasHoyoSettings
         || HasGenshinSettings
         || Launch is not null;

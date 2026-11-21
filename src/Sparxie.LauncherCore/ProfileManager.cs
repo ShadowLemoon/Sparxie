@@ -1,5 +1,6 @@
 using Sparxie.Contracts.Models;
 using Sparxie.Infrastructure.Configuration;
+using Sparxie.Infrastructure.Plugins;
 using Sparxie.Infrastructure.Processes;
 
 namespace Sparxie.LauncherCore;
@@ -21,18 +22,18 @@ public static class ProfileManager
             throw Fail($"Profile ID 已存在: {id}");
         }
 
-        if (mutation.Game is not { } game)
+        if (mutation.EffectiveGameId is not { } gameId || !GameIds.IsValidId(gameId))
         {
-            throw Fail("创建 Profile 必须指定游戏类型");
+            throw Fail("创建 Profile 必须指定合法的游戏");
         }
 
         var profile = new GameProfile
         {
             Id = id,
             DisplayName = RequireText(mutation.DisplayName, "Profile 名称"),
-            Game = GameIds.ToId(game),
-            ExecutablePath = NormalizeOptionalExecutablePath(GameIds.ToId(game), mutation.ExecutablePath),
-            Hoyo = game == GameType.ZenlessZoneZero ? null : new HoyoProfileSettings(),
+            Game = gameId,
+            ExecutablePath = NormalizeOptionalExecutablePath(gameId, mutation.ExecutablePath),
+            Hoyo = UsesHoyoSettings(gameId) ? new HoyoProfileSettings() : null,
         };
 
         ApplySettings(profile, mutation);
@@ -67,10 +68,10 @@ public static class ProfileManager
         }
 
         // 改游戏类型必须先落到 updated.Game，后续路径归一化与设置校验才按新游戏的规则执行。
-        if (mutation.Game is { } game && GameIds.ToId(game) != updated.Game)
+        if (mutation.EffectiveGameId is { } newGameId && GameIds.IsValidId(newGameId) && newGameId != updated.Game)
         {
-            updated.Game = GameIds.ToId(game);
-            updated.Hoyo = game == GameType.ZenlessZoneZero ? null : updated.Hoyo ?? new HoyoProfileSettings();
+            updated.Game = newGameId;
+            updated.Hoyo = UsesHoyoSettings(newGameId) ? updated.Hoyo ?? new HoyoProfileSettings() : null;
 
             // 原路径属于旧游戏白名单，换游戏后必然非法；调用方未同时给出新路径时清空回占位状态。
             if (string.IsNullOrWhiteSpace(mutation.ExecutablePath))
@@ -257,7 +258,7 @@ public static class ProfileManager
             throw new LauncherException(LauncherFailureKind.ProfileManagement, "EXE 路径无效", ex);
         }
 
-        if (!GameExecutables.IsAllowed(game, fullPath))
+        if (!GameCatalogProvider.IsAllowed(game, fullPath))
         {
             throw Fail($"EXE 名称不属于 {game} 白名单: {Path.GetFileName(fullPath)}");
         }
@@ -299,6 +300,10 @@ public static class ProfileManager
         return value.Trim();
     }
 
+
+    /// <summary>只有原神/星铁带 Hoyo 专用设置段；绝区零和第三方插件游戏都不带。</summary>
+    private static bool UsesHoyoSettings(string gameId) =>
+        GameIds.TryGetBuiltIn(gameId, out var game) && game != GameType.ZenlessZoneZero;
 
     private static LauncherException Fail(string message) =>
         new(LauncherFailureKind.ProfileManagement, message);

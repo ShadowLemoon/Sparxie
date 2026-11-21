@@ -18,6 +18,18 @@ public static class GameProcessDetector
         return found.ToArray();
     }
 
+    /// <summary>按 EXE 名（可含 .exe）找正在运行的进程对象，调用方负责 Dispose；第三方插件游戏用 manifest 里的名字。</summary>
+    public static Process[] FindRunning(IEnumerable<string> exeNames)
+    {
+        var found = new List<Process>();
+        foreach (var exe in exeNames)
+        {
+            found.AddRange(Process.GetProcessesByName(Path.GetFileNameWithoutExtension(exe)));
+        }
+
+        return found.ToArray();
+    }
+
     public static bool IsAnyRunning(IEnumerable<string> exeNames)
     {
         var names = exeNames.Select(n => Path.GetFileNameWithoutExtension(n)).ToHashSet(StringComparer.OrdinalIgnoreCase);
