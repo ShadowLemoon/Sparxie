@@ -257,8 +257,8 @@ public sealed class ProfileManagerViewModel : ObservableObject
 
     /// <summary>
     /// 自动查找当前游戏的 EXE 路径：来源是米哈游启动器登记的安装路径、启动器安装目录、最近运行记录、正在运行的游戏。
-    /// 候选里跳过已经被现有配置使用的路径，按国服优先排序：
-    /// 只有一个就直接填入；有多个就把它们交给界面弹窗让用户选（<see cref="ApplyAutoFindChoice"/>）；一个都没有就提示。
+    /// 候选全部列出，被其他配置占用的标注占用者，没占用的排前面（国服优先）：
+    /// 只有一个且没被占用就直接填入；其余交给界面弹窗让用户选（<see cref="ApplyAutoFindChoice"/>）；一个都没有就提示。
     /// </summary>
     public async Task<AutoFindOutcome> AutoFindExecutableAsync()
     {
@@ -288,28 +288,46 @@ public sealed class ProfileManagerViewModel : ObservableObject
             return Report(new AutoFindOutcome([], $"自动查找失败：{ex.Message}"), found: false);
         }
 
-        // “已经加到配置里”：所有配置已保存的路径、界面里各套配置当前的路径（含当前这套）都不再推荐。
-        var used = _data.Config.Profiles.Select(profile => profile.ExecutablePath)
-            .Concat(Profiles.Select(profile => profile.ExecutablePath))
-            .Append(editing.ExecutablePath)
-            .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Select(path => path.Replace('/', '\\').TrimEnd('\\'))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // 已被其他配置占用的路径不过滤，只在候选上标出占用者，让用户自己决定。
+        static string Normalize(string path) => path.Replace('/', '\\').TrimEnd('\\');
+        var owners = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var other in Profiles.Where(profile => !ReferenceEquals(profile, editing)))
+        {
+            if (!string.IsNullOrWhiteSpace(other.ExecutablePath))
+            {
+                owners.TryAdd(Normalize(other.ExecutablePath), other.DisplayName);
+            }
+        }
+
+        foreach (var saved in _data.Config.Profiles.Where(profile => profile.Id != editing.Id))
+        {
+            if (!string.IsNullOrWhiteSpace(saved.ExecutablePath))
+            {
+                owners.TryAdd(Normalize(saved.ExecutablePath), saved.DisplayName);
+            }
+        }
+
+        var currentPath = string.IsNullOrWhiteSpace(editing.ExecutablePath) ? null : Normalize(editing.ExecutablePath);
         var choices = candidates
-            .Where(candidate => !used.Contains(candidate.Path.TrimEnd('\\')))
-            .OrderBy(candidate => candidate.Priority)
+            .Select(candidate =>
+            {
+                var path = Normalize(candidate.Path);
+                var usage = string.Equals(path, currentPath, StringComparison.OrdinalIgnoreCase)
+                    ? "当前"
+                    : owners.TryGetValue(path, out var owner) ? $"已用于「{owner}」" : null;
+                return new AutoFindChoice(candidate, usage);
+            })
+            .OrderBy(choice => choice.Usage is null ? 0 : 1)
+            .ThenBy(choice => choice.Candidate.Priority)
             .ToList();
 
         if (choices.Count == 0)
         {
-            return Report(
-                new AutoFindOutcome([], candidates.Count == 0
-                    ? $"没有找到 {displayName}。请点“浏览…”手动选择 EXE"
-                    : $"没有找到新的 {displayName}：找到的 {candidates.Count} 个安装都已经添加到配置里了"),
-                found: false);
+            return Report(new AutoFindOutcome([], $"没有找到 {displayName}。请点“浏览…”手动选择 EXE"), found: false);
         }
 
-        if (choices.Count == 1)
+        // 只有一个且没被占用：直接填入；其余情况都交给界面列出来，让用户看清占用关系再选。
+        if (choices.Count == 1 && choices[0].Usage is null)
         {
             return ApplyAutoFindChoice(choices[0]);
         }
@@ -318,7 +336,7 @@ public sealed class ProfileManagerViewModel : ObservableObject
     }
 
     /// <summary>把用户在弹窗里选的（或唯一的）候选填入当前配置并保存。</summary>
-    public AutoFindOutcome ApplyAutoFindChoice(GameExecutableCandidate choice)
+    public AutoFindOutcome ApplyAutoFindChoice(AutoFindChoice choice)
     {
         if (SelectedProfile is not { } editing)
         {
@@ -912,4 +930,12 @@ public sealed class ProfileEditorViewModel : ObservableObject
 }
 
 /// <summary>自动查找的结果：<see cref="Choices"/> 非空表示有多个候选等用户选择；否则 <see cref="Message"/> 就是给用户看的结果。</summary>
-public sealed record AutoFindOutcome(IReadOnlyList<GameExecutableCandidate> Choices, string Message);
+public sealed record AutoFindOutcome(IReadOnlyList<AutoFindChoice> Choices, string Message);
+
+/// <summary>自动查找的一个候选；<see cref="Usage"/> 为“当前”或“已用于「配置名」”，没被占用时为 null。</summary>
+public sealed record AutoFindChoice(GameExecutableCandidate Candidate, string? Usage)
+{
+    public string Path => Candidate.Path;
+
+    public string Source => Candidate.Source;
+}

@@ -90,37 +90,60 @@ public sealed class AutoFindExecutableTests : IDisposable
     }
 
     [Fact]
-    public async Task 只剩一个没用过的时直接填入不弹窗()
+    public async Task 已被其他配置使用的安装仍然列出并标注占用者()
     {
         var manager = CreateManager(TwoServers());
         var first = await manager.AutoFindExecutableAsync();
         manager.ApplyAutoFindChoice(first.Choices[0]); // 第一套拿到国服
+        var firstName = manager.SelectedProfile!.DisplayName;
         manager.NewCommand.Execute(null);
 
         var outcome = await manager.AutoFindExecutableAsync();
 
-        Assert.Empty(outcome.Choices);
-        Assert.Equal(GlobalExe, manager.SelectedProfile!.ExecutablePath);
-        Assert.Empty(outcome.Message); // 路径框本身就是反馈，不再另弹提示
+        Assert.Equal(2, outcome.Choices.Count);
+        Assert.Equal(GlobalExe, outcome.Choices[0].Path); // 没被占用的排前面，作为默认选中
+        Assert.Null(outcome.Choices[0].Usage);
+        Assert.Equal(CnExe, outcome.Choices[1].Path);
+        Assert.Equal($"已用于「{firstName}」", outcome.Choices[1].Usage);
+        Assert.Equal(string.Empty, manager.SelectedProfile!.ExecutablePath);
     }
 
     [Fact]
-    public async Task 找到的都已添加时提示没找到且不改路径()
+    public async Task 找到的都已被使用时也列出来不再提示没找到()
     {
         var manager = CreateManager(TwoServers());
         var first = await manager.AutoFindExecutableAsync();
         manager.ApplyAutoFindChoice(first.Choices[0]);
         manager.NewCommand.Execute(null);
-        await manager.AutoFindExecutableAsync();   // 第二套自动拿到国际服
+        var second = await manager.AutoFindExecutableAsync();
+        manager.ApplyAutoFindChoice(second.Choices[0]);
         manager.NewCommand.Execute(null);          // 第三套：两个安装都已被前两套用掉
         var third = manager.SelectedProfile!;
 
         var outcome = await manager.AutoFindExecutableAsync();
 
-        Assert.Empty(outcome.Choices);
+        Assert.Equal(2, outcome.Choices.Count);
+        Assert.All(outcome.Choices, choice => Assert.StartsWith("已用于", choice.Usage));
         Assert.Equal(string.Empty, third.ExecutablePath);
-        Assert.Contains("没有找到新的", outcome.Message);
-        Assert.Contains("已经添加", outcome.Message);
+    }
+
+    [Fact]
+    public async Task 只有一个且被其他配置使用时不直接填入()
+    {
+        var finder = new FakeFinder();
+        finder.Hyp.Add(("nap_cn", "D:/Games/ZZZ-CN"));
+        finder.Files.Add(CnExe);
+        var manager = CreateManager(finder);
+        var first = await manager.AutoFindExecutableAsync();   // 唯一且没被占用 → 直接填入
+        Assert.Empty(first.Choices);
+        Assert.Equal(CnExe, manager.SelectedProfile!.ExecutablePath);
+        manager.NewCommand.Execute(null);
+
+        var outcome = await manager.AutoFindExecutableAsync();
+
+        Assert.Single(outcome.Choices);
+        Assert.StartsWith("已用于", outcome.Choices[0].Usage);
+        Assert.Equal(string.Empty, manager.SelectedProfile!.ExecutablePath);
     }
 
     [Fact]
@@ -136,16 +159,18 @@ public sealed class AutoFindExecutableTests : IDisposable
     }
 
     [Fact]
-    public async Task 当前配置自己已有的路径不再作为候选()
+    public async Task 当前配置自己的路径标注为当前并排在后面()
     {
         var manager = CreateManager(TwoServers());
         manager.SelectedProfile!.ExecutablePath = CnExe;
 
         var outcome = await manager.AutoFindExecutableAsync();
 
-        // 国服已经是这套配置自己的路径 → 只剩国际服，直接填入
-        Assert.Empty(outcome.Choices);
-        Assert.Equal(GlobalExe, manager.SelectedProfile!.ExecutablePath);
+        Assert.Equal(2, outcome.Choices.Count);
+        Assert.Equal(GlobalExe, outcome.Choices[0].Path);
+        Assert.Equal(CnExe, outcome.Choices[1].Path);
+        Assert.Equal("当前", outcome.Choices[1].Usage);
+        Assert.Equal(CnExe, manager.SelectedProfile!.ExecutablePath);
     }
 
     [Fact]

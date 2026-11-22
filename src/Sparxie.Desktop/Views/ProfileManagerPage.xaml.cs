@@ -93,7 +93,7 @@ public sealed partial class ProfileManagerPage : Page
         try
         {
             var outcome = await profiles.AutoFindExecutableAsync();
-            if (outcome.Choices.Count > 1 && await ChooseExecutableAsync(outcome.Choices) is { } chosen)
+            if (outcome.Choices.Count > 0 && await ChooseExecutableAsync(outcome.Choices) is { } chosen)
             {
                 profiles.ApplyAutoFindChoice(chosen);
             }
@@ -111,8 +111,8 @@ public sealed partial class ProfileManagerPage : Page
         Profiles is { SelectedProfile: { } editing } && editing.Game.BuiltIn is { } builtIn ? ServerLabelDetector.Detect(builtIn, path, new CurrentUserGameRegistry()) : null;
 
     /// <summary>找到多个安装时弹窗让用户选一个（默认选中排在最前的，国服优先）；取消返回 null。</summary>
-    private async Task<Sparxie.Infrastructure.Processes.GameExecutableCandidate?> ChooseExecutableAsync(
-        IReadOnlyList<Sparxie.Infrastructure.Processes.GameExecutableCandidate> choices)
+    private async Task<AutoFindChoice?> ChooseExecutableAsync(
+        IReadOnlyList<AutoFindChoice> choices)
     {
         var list = new ListView { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 360 };
         foreach (var choice in choices)
@@ -133,7 +133,7 @@ public sealed partial class ProfileManagerPage : Page
                         },
                         new TextBlock
                         {
-                            Text = choice.Source,
+                            Text = choice.Usage is { } usage ? $"{choice.Source} · {usage}" : choice.Source,
                             FontSize = 12,
                             Opacity = 0.7,
                             TextWrapping = TextWrapping.Wrap,
@@ -159,7 +159,7 @@ public sealed partial class ProfileManagerPage : Page
             return null;
         }
 
-        return (list.SelectedItem as ListViewItem)?.Tag as Sparxie.Infrastructure.Processes.GameExecutableCandidate;
+        return (list.SelectedItem as ListViewItem)?.Tag as AutoFindChoice;
     }
 
     private async void BrowseExecutableClick(object sender, RoutedEventArgs e)
