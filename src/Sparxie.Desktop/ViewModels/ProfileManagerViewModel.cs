@@ -267,15 +267,20 @@ public sealed class ProfileManagerViewModel : ObservableObject
             return new AutoFindOutcome([], "请先选择一个配置");
         }
 
-        if (editing.Game.BuiltIn is not { } game)
+        GameType? builtIn = editing.Game.BuiltIn;
+        var thirdParty = builtIn is null ? Sparxie.Infrastructure.Plugins.GameCatalogProvider.Current.Find(editing.Game.Id) : null;
+        if (builtIn is null && thirdParty is null)
         {
-            return new AutoFindOutcome([], "第三方游戏暂不支持自动查找，请点“浏览…”手动选择 EXE");
+            return new AutoFindOutcome([], "找不到这个游戏的插件，请点“浏览…”手动选择 EXE");
         }
 
+        var displayName = builtIn is { } known ? GameNames.Display(known) : thirdParty!.DisplayName;
         IReadOnlyList<GameExecutableCandidate> candidates;
         try
         {
-            candidates = await Task.Run(() => GameExecutableFinder.Find(game, _finderEnvironment)).ConfigureAwait(true);
+            candidates = await Task.Run(() => builtIn is { } game
+                ? GameExecutableFinder.Find(game, _finderEnvironment)
+                : GameExecutableFinder.FindThirdParty(thirdParty!, _finderEnvironment)).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -299,8 +304,8 @@ public sealed class ProfileManagerViewModel : ObservableObject
         {
             return Report(
                 new AutoFindOutcome([], candidates.Count == 0
-                    ? $"没有找到 {GameNames.Display(game)}。请点“浏览…”手动选择 EXE"
-                    : $"没有找到新的 {GameNames.Display(game)}：找到的 {candidates.Count} 个安装都已经添加到配置里了"),
+                    ? $"没有找到 {displayName}。请点“浏览…”手动选择 EXE"
+                    : $"没有找到新的 {displayName}：找到的 {candidates.Count} 个安装都已经添加到配置里了"),
                 found: false);
         }
 
@@ -504,18 +509,41 @@ public sealed class ProfileEditorViewModel : ObservableObject
 
     private PluginSettingsSchema? _schema;
 
+    /// <summary>全部插件设置恢复为插件声明的默认值。</summary>
+    public void ResetPluginFieldsToDefaults()
+    {
+        foreach (var field in PluginFields)
+        {
+            field.ResetToDefault();
+        }
+    }
+
+    public RelayCommand ResetPluginFieldsCommand => _resetPluginFieldsCommand ??= new RelayCommand(ResetPluginFieldsToDefaults);
+
+    private RelayCommand? _resetPluginFieldsCommand;
+
+    public bool CanResetPluginFields => PluginFields.Any(item => item.CanReset);
+
     /// <summary>按当前游戏的 schema 重建字段；<paramref name="values"/> 是已保存的值（缺的用默认值）。</summary>
     public void RebuildPluginFields(System.Text.Json.Nodes.JsonObject? values)
     {
         PluginFields.Clear();
         _schema = Game.IsThirdParty ? GameDirectory.Schema(Game.Id) : null;
+        string? lastGroup = null;
         if (_schema is not null)
         {
             foreach (var field in _schema.Fields)
             {
                 System.Text.Json.Nodes.JsonNode? initial = null;
                 values?.TryGetPropertyValue(field.Key, out initial);
-                PluginFields.Add(new PluginFieldViewModel(field, initial, OnPluginFieldChanged));
+                var item = new PluginFieldViewModel(field, initial, OnPluginFieldChanged);
+                if (field.Group is { Length: > 0 } group && group != lastGroup)
+                {
+                    item.GroupHeader = group;
+                }
+
+                lastGroup = field.Group;
+                PluginFields.Add(item);
             }
         }
 
@@ -528,6 +556,7 @@ public sealed class ProfileEditorViewModel : ObservableObject
         UpdatePluginFieldVisibility();
         PluginSettingsRevision++;
         OnPropertyChanged(nameof(PluginSettingsRevision));
+        OnPropertyChanged(nameof(CanResetPluginFields));
     }
 
     private void UpdatePluginFieldVisibility()

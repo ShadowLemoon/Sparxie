@@ -178,7 +178,7 @@ public sealed class PluginsViewModelTests : IDisposable
         vm.Refresh();
 
         var item = Assert.Single(vm.Items);
-        Assert.Contains("重新确认", item.Status);
+        Assert.Equal("文件已变化", item.Status);
         Assert.Equal("重新确认并启用", item.EnableLabel);
     }
 

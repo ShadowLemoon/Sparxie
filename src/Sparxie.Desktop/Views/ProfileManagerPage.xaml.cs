@@ -188,14 +188,7 @@ public sealed partial class ProfileManagerPage : Page
                 return;
             }
 
-            // 选完立即按当前游戏白名单反馈，避免用户填完再在保存时才看到失败。
-            if (!Sparxie.Infrastructure.Plugins.GameCatalogProvider.IsAllowed(profile.Game.Id, file.Path))
-            {
-                var allowed = string.Join("、", Sparxie.Infrastructure.Plugins.GameCatalogProvider.ExeNamesFor(profile.Game.Id));
-                await ShowMessageAsync($"该 EXE 不属于所选游戏，可用文件名：{allowed}");
-                return;
-            }
-
+            // 文件名不在白名单里时不再弹框：照常填入，路径下方的内联提示（PathHint）会说明可用的文件名，和手动输入一致。
             profile.ExecutablePath = file.Path;
         }
         catch (Exception ex)

@@ -39,6 +39,50 @@ public sealed class PluginFieldViewModel : ObservableObject
 
     public string Key => Field.Key;
 
+    public string? Group => Field.Group;
+
+    /// <summary>分组标题：只有同一分组的第一个字段才有值（由编辑器在构建列表时设置），其余为空。</summary>
+    public string GroupHeader { get; set; } = string.Empty;
+
+    public bool HasGroupHeader => GroupHeader.Length > 0;
+
+    /// <summary>当前值是否等于默认值（决定“恢复默认”是否可用）。</summary>
+    public bool IsDefault => Field.Kind switch
+    {
+        PluginFieldKind.Bool => _boolValue == Field.Default.GetValue<bool>(),
+        PluginFieldKind.Int => !double.IsNaN(_numberValue) && (int)Math.Round(_numberValue) == Field.Default.GetValue<int>(),
+        _ => string.Equals(_textValue, Field.Default.GetValue<string>(), StringComparison.Ordinal),
+    };
+
+    public bool CanReset => !IsDefault;
+
+    /// <summary>恢复这个字段的默认值。</summary>
+    public void ResetToDefault()
+    {
+        switch (Field.Kind)
+        {
+            case PluginFieldKind.Bool:
+                BoolValue = Field.Default.GetValue<bool>();
+                break;
+            case PluginFieldKind.Int:
+                NumberValue = Field.Default.GetValue<int>();
+                break;
+            default:
+                TextValue = Field.Default.GetValue<string>();
+                break;
+        }
+    }
+
+    public RelayCommand ResetCommand => _resetCommand ??= new RelayCommand(ResetToDefault);
+
+    private RelayCommand? _resetCommand;
+
+    private void NotifyDefaultChanged()
+    {
+        OnPropertyChanged(nameof(IsDefault));
+        OnPropertyChanged(nameof(CanReset));
+    }
+
     public string Label => Field.Label;
 
     public string? Hint => Field.Hint;
@@ -59,7 +103,6 @@ public sealed class PluginFieldViewModel : ObservableObject
 
     public double Maximum => Field.Max;
 
-    public double Step => Field.Step;
 
     public int MaxLength => Field.MaxLength;
 
@@ -76,6 +119,7 @@ public sealed class PluginFieldViewModel : ObservableObject
         {
             if (SetProperty(ref _boolValue, value))
             {
+                NotifyDefaultChanged();
                 _changed();
             }
         }
@@ -88,6 +132,7 @@ public sealed class PluginFieldViewModel : ObservableObject
         {
             if (SetProperty(ref _numberValue, value))
             {
+                NotifyDefaultChanged();
                 _changed();
             }
         }
@@ -101,6 +146,7 @@ public sealed class PluginFieldViewModel : ObservableObject
         {
             if (SetProperty(ref _textValue, value ?? string.Empty))
             {
+                NotifyDefaultChanged();
                 _changed();
             }
         }

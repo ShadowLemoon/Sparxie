@@ -208,7 +208,7 @@ public sealed class PluginGameUiTests : IDisposable
     }
 
     [Fact]
-    public void 插件游戏的自动查找给出明确提示而不是崩溃()
+    public void 插件游戏的自动查找走通用来源_没找到时给出明确提示()
     {
         var data = NewData();
         var manager = new ProfileManagerViewModel(data, new EmptyFinder());
@@ -217,7 +217,7 @@ public sealed class PluginGameUiTests : IDisposable
         var outcome = manager.AutoFindExecutableAsync().GetAwaiter().GetResult();
 
         Assert.Empty(outcome.Choices);
-        Assert.Contains("第三方", outcome.Message);
+        Assert.Contains("没有找到", outcome.Message);
     }
 
     [Fact]
@@ -241,6 +241,54 @@ public sealed class PluginGameUiTests : IDisposable
         Assert.NotEqual(PluginId, home.SelectedGame.Id);
         Assert.DoesNotContain(home.GameEntries, entry => entry.Game.Id == PluginId);
         Assert.Single(data.Config.Profiles); // 配置保留，只是游戏不可选
+    }
+
+    [Fact]
+    public void 配置里有插件游戏的配置但插件当前不可用_启动路径不抛异常_配置原样保留()
+    {
+        // 复现用户的场景：config.json 里已有终末地的配置和 selectedGame，随后插件文件被换成别的版本（哈希变了/不兼容），目录里不再有这款游戏。
+        var first = NewData();
+        first.AddProfile(new ProfileMutation(Id: "p1", DisplayName: "演示配置", GameId: PluginId, ExecutablePath: @"D:\Games\Demo\Demo.exe"));
+        first.Preferences.SelectedGame = PluginId;
+        first.Preferences.LastProfileByGame[PluginId] = "p1";
+        first.SavePreferences();
+        SetPlugin(installed: false);
+
+        var data = NewData();
+        var home = new HomeViewModel(data, new LauncherService());
+        var manager = new ProfileManagerViewModel(data, new EmptyFinder());
+        manager.SetScope(home.SelectedGame);
+        home.Refresh();
+
+        Assert.NotEqual(PluginId, home.SelectedGame.Id);
+        Assert.Contains(data.Config.Profiles, profile => profile.Game == PluginId);
+    }
+
+    [Fact]
+    public void 注入类插件首次启动先提示_拒绝则不启动也不记录()
+    {
+        GameDirectory.PluginSource = () => [new GameDescriptor(PluginId, "演示游戏", ["Demo.exe"], Caps: ["injects"], DllSha256: "abc")];
+        GameDirectory.Reload();
+        var data = NewData();
+        data.AddProfile(new ProfileMutation(Id: "p1", DisplayName: "演示配置", GameId: PluginId, ExecutablePath: @"D:\Games\Demo\Demo.exe"));
+        data.Preferences.SelectedGame = PluginId;
+        data.SavePreferences();
+        var home = new HomeViewModel(data, new LauncherService());
+        var prompts = new List<HomeViewModel.PluginLaunchPrompt>();
+        home.ConfirmFirstPluginLaunch = prompt =>
+        {
+            prompts.Add(prompt);
+            return Task.FromResult(false);
+        };
+
+        home.LaunchCommand.Execute(null); // async void：等提示被调用，再留一点时间让后续逻辑（如果有）跑完
+        SpinWait.SpinUntil(() => prompts.Count > 0, TimeSpan.FromSeconds(10));
+        Thread.Sleep(300);
+
+        Assert.Equal("演示游戏", Assert.Single(prompts).GameName);
+        Assert.Empty(data.Preferences.AcknowledgedPluginLaunches);
+        Assert.DoesNotContain("正在启动", home.StatusMessage);
+        Assert.Equal("ext.acme.demo:abc", HomeViewModel.FirstLaunchKey(PluginId, "abc"));
     }
 
     [Fact]

@@ -495,6 +495,32 @@ public sealed class HomeViewModel : ObservableObject
 
     public void NotifyDebugModeChanged() => OnPropertyChanged(nameof(HasStatusMessage));
 
+    private LaunchErrorInfo? _launchError;
+
+    /// <summary>启动失败 / 会话异常结束时给所有用户显示的错误（和调试状态条分开）；开始新的启动或用户关闭时清除。</summary>
+    public LaunchErrorInfo? LaunchError
+    {
+        get => _launchError;
+        private set
+        {
+            if (SetProperty(ref _launchError, value))
+            {
+                OnPropertyChanged(nameof(HasLaunchError));
+            }
+        }
+    }
+
+    public bool HasLaunchError => _launchError is not null;
+
+    /// <summary>启动时发现的问题（例如程序目录不可写），用和启动错误同一条错误条显示。</summary>
+    public void ShowStartupProblem(LaunchErrorInfo problem) => LaunchError = problem;
+
+    public RelayCommand DismissLaunchErrorCommand => _dismissLaunchErrorCommand ??= new RelayCommand(() => LaunchError = null);
+
+    private RelayCommand? _dismissLaunchErrorCommand;
+
+    public string LaunchErrorDiagnostics => _launchError?.ToDiagnosticText(GameNames.Display(SelectedGame), DateTimeOffset.Now) ?? string.Empty;
+
     public string StatusMessage
     {
         get => _statusMessage;
@@ -589,6 +615,13 @@ public sealed class HomeViewModel : ObservableObject
     /// <summary>恢复上次选中的游戏标签；无记录或值非法时回退到所选 Profile 的游戏。</summary>
     private GameKey? RestoreSelectedGame() =>
         GameIds.Normalize(_data.Preferences.SelectedGame) is { } saved && Games.Contains(new GameKey(saved)) ? new GameKey(saved) : null;
+
+    /// <summary>该游戏第一个已填写且文件存在的 EXE 路径（插件没有自带图标时，用它的图标作游戏图标）。</summary>
+    public string? FirstExecutablePath(GameKey game) =>
+        _data.Config.Profiles
+            .Where(item => item.Game == game.Id && !string.IsNullOrWhiteSpace(item.ExecutablePath))
+            .Select(item => item.ExecutablePath)
+            .FirstOrDefault(File.Exists);
 
     private void RefreshProfiles()
     {
@@ -692,6 +725,10 @@ public sealed class HomeViewModel : ObservableObject
 
     public Microsoft.UI.Xaml.Media.ImageSource? CurrentGameIcon => GameTabBinding.Icon(SelectedGame);
 
+    public bool HasCurrentGameIcon => GameTabAssetsInfo.HasIcon(SelectedGame);
+
+    public string CurrentGameInitial => GameTabAssetsInfo.Initial(GameNames.Display(SelectedGame));
+
     public string SwitcherAutomationName => $"当前：{SwitcherLabel}。切换游戏或配置";
 
     public string GameSettingsAutomationName => $"{GameNames.Display(SelectedGame)} 游戏设置";
@@ -699,7 +736,12 @@ public sealed class HomeViewModel : ObservableObject
     public string LaunchAutomationName => IsSelectedGameActive ? $"{SwitcherLabel} 运行中" : $"启动 {SwitcherLabel}";
 
     /// <summary>游戏图标是异步下载的，加载完后补发属性变更并重建 Flyout 内容。</summary>
-    public void NotifyGameIconsLoaded() => RebuildEntries();
+    public void NotifyGameIconsLoaded()
+    {
+        RebuildEntries();
+        OnPropertyChanged(nameof(CurrentGameIcon));
+        OnPropertyChanged(nameof(HasCurrentGameIcon));
+    }
 
     private void RebuildEntries()
     {
@@ -724,6 +766,8 @@ public sealed class HomeViewModel : ObservableObject
         OnPropertyChanged(nameof(SwitcherLabel));
         OnPropertyChanged(nameof(SwitcherText));
         OnPropertyChanged(nameof(CurrentGameIcon));
+        OnPropertyChanged(nameof(HasCurrentGameIcon));
+        OnPropertyChanged(nameof(CurrentGameInitial));
         OnPropertyChanged(nameof(SwitcherAutomationName));
         OnPropertyChanged(nameof(GameSettingsAutomationName));
         OnPropertyChanged(nameof(LaunchAutomationName));
@@ -744,7 +788,14 @@ public sealed class HomeViewModel : ObservableObject
             return; // 游戏已经在运行（刚被别的启动器启动），按钮会变成“运行中”
         }
 
+        // 会注入游戏的插件：同一份插件文件第一次启动前提示一次（启用确认和真正启动之间可能隔了很久）。
+        if (!await ConfirmFirstInjectionLaunchAsync(profile).ConfigureAwait(true))
+        {
+            return;
+        }
+
         IsLaunching = true;
+        LaunchError = null;
         StatusMessage = $"正在启动 {profile.DisplayName}…";
         try
         {
@@ -758,11 +809,53 @@ public sealed class HomeViewModel : ObservableObject
         catch (Exception ex)
         {
             StatusMessage = $"启动失败：{ex.Message}";
+            LaunchError = LaunchErrorInfo.FromStartFailure(profile.DisplayName, ex.Message);
         }
         finally
         {
             IsLaunching = false;
         }
+    }
+
+    /// <summary>首次启动注入类插件游戏的提示内容。</summary>
+    public sealed record PluginLaunchPrompt(string GameName, string PluginId);
+
+    /// <summary>由界面层设置：显示“首次启动会注入游戏”的提示，返回是否继续。没有设置（测试、无界面）时直接继续。</summary>
+    public Func<PluginLaunchPrompt, Task<bool>>? ConfirmFirstPluginLaunch { get; set; }
+
+    /// <summary>某个插件文件版本的“已提示”键：插件文件（module.dll 哈希）变化后会再提示一次。</summary>
+    public static string FirstLaunchKey(string pluginId, string? dllSha256) => $"{pluginId}:{dllSha256}";
+
+    private async Task<bool> ConfirmFirstInjectionLaunchAsync(GameProfile profile)
+    {
+        var descriptor = profile.BuiltInGame is null ? Sparxie.Infrastructure.Plugins.GameCatalogProvider.Current.Find(profile.Game) : null;
+        if (descriptor?.Caps is not { } caps || !caps.Contains("injects") || ConfirmFirstPluginLaunch is not { } ask)
+        {
+            return true;
+        }
+
+        var key = FirstLaunchKey(descriptor.Id, descriptor.DllSha256);
+        if (_data.Preferences.AcknowledgedPluginLaunches.Contains(key))
+        {
+            return true;
+        }
+
+        if (!await ask(new PluginLaunchPrompt(descriptor.DisplayName, descriptor.Id)).ConfigureAwait(true))
+        {
+            return false;
+        }
+
+        _data.Preferences.AcknowledgedPluginLaunches.Add(key);
+        try
+        {
+            _data.SavePreferences();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            StatusMessage = $"记录提示状态失败：{ex.Message}";
+        }
+
+        return true;
     }
 
     private async Task ObserveSessionAsync(LauncherSession session, GameKey game)
@@ -773,6 +866,11 @@ public sealed class HomeViewModel : ObservableObject
             {
                 if (ev.State is "Exited" or "Failed" or "HostCrashedBeforeRunning" or "HostCrashedAfterRunning")
                 {
+                    if (LaunchErrorInfo.IsFailureState(ev.State))
+                    {
+                        LaunchError = LaunchErrorInfo.FromSessionEnd(ev.State, ev.Message);
+                    }
+
                     StatusMessage = string.IsNullOrWhiteSpace(ev.Message)
                         ? $"会话结束：{ev.State}"
                         : $"会话结束：{ev.Message}";

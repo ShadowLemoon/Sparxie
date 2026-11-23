@@ -14,6 +14,10 @@ public partial class App : Application
     {
         InitializeComponent();
         UnhandledException += (sender, e) => DesktopLog.Write("未捕获异常", e.Exception);
+        // XAML 之外（线程池、任务）的致命异常也留一条日志，方便定位"打不开"。
+        AppDomain.CurrentDomain.UnhandledException += (sender, e) =>
+            DesktopLog.Write("进程级未处理异常", e.ExceptionObject as Exception ?? new InvalidOperationException(e.ExceptionObject?.ToString()));
+        TaskScheduler.UnobservedTaskException += (sender, e) => DesktopLog.Write("未观察到的任务异常", e.Exception);
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
@@ -37,6 +41,15 @@ public partial class App : Application
             new ProfileManagerViewModel(data),
             new SettingsViewModel(data),
             settingsPanel);
+        if (!AppPaths.IsWritable)
+        {
+            // 绿色便携：不悄悄把数据写到 AppData。写不进程序目录时明确告诉用户，由用户决定怎么处理。
+            viewModel.Home.ShowStartupProblem(new LaunchErrorInfo(
+                "程序目录不可写，配置、日志和缓存都无法保存",
+                "Sparxie 装在需要管理员权限的位置。请以管理员身份运行 Sparxie，或把整个文件夹移到可写的位置（例如其它盘的普通目录）。",
+                AppPaths.DataRoot));
+        }
+
         var window = new MainWindow(viewModel, launcher);
         _window = window;
         MainWindow = window;

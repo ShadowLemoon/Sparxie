@@ -87,9 +87,139 @@ public sealed class GameBackgroundService
         }
     }
 
+    // 第三方游戏背景：优先用插件目录里的图片文件；其次是 manifest 的 backgroundUrl，再其次是 backgroundApi（JSON 里取地址，可以是多张，可带视频）。
+    // 网络来的图由宿主下载（只允许 https、不碰内网、限大小、按文件头验证是图片），缓存在背景缓存目录，离线用旧缓存。
+    private const long MaxRemoteImageBytes = 8 * 1024 * 1024;
+
+    private sealed record PluginBackgroundEntry(string Image, string? Video);
+
+    private static string PluginListFile(string id) => Path.Combine(CacheDir, $"plugin-{HashOf(id)}.list");
+
+    private static string PluginImageFile(string url) => Path.Combine(CacheDir, $"plugin-img-{HashOf(url)}.img");
+
+    private static IReadOnlyList<GameBackgroundItem> PluginCachedBackgrounds(GameKey game)
+    {
+        var descriptor = Sparxie.Infrastructure.Plugins.GameCatalogProvider.Current.Find(game.Id);
+        if (descriptor?.BackgroundPath is { } path)
+        {
+            return [new GameBackgroundItem("plugin", path, null)];
+        }
+
+        if (descriptor is not ({ BackgroundUrl: not null } or { BackgroundApi: not null }) || !File.Exists(PluginListFile(game.Id)))
+        {
+            return [];
+        }
+
+        try
+        {
+            var entries = JsonSerializer.Deserialize<List<PluginBackgroundEntry>>(File.ReadAllText(PluginListFile(game.Id))) ?? [];
+            return entries
+                .Where(entry => File.Exists(PluginImageFile(entry.Image)))
+                .Select(entry => new GameBackgroundItem(HashOf(entry.Image), PluginImageFile(entry.Image), entry.Video))
+                .ToList();
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    private static async Task<IReadOnlyList<GameBackgroundItem>> PluginBackgroundsAsync(GameKey game)
+    {
+        var descriptor = Sparxie.Infrastructure.Plugins.GameCatalogProvider.Current.Find(game.Id);
+        if (descriptor is null || descriptor.BackgroundPath is not null)
+        {
+            return PluginCachedBackgrounds(game);
+        }
+
+        try
+        {
+            var entries = new List<PluginBackgroundEntry>();
+            if (descriptor.BackgroundUrl is { } single)
+            {
+                entries.Add(new PluginBackgroundEntry(single, null));
+            }
+            else if (descriptor.BackgroundApi is { } api && Sparxie.Infrastructure.Plugins.RemoteUrlPolicy.IsAllowed(api.Url)
+                && await ReadLimitedAsync(api.Url, Sparxie.Infrastructure.Plugins.RemoteUrlPolicy.MaxApiBytes, api.Body).ConfigureAwait(false) is { } json)
+            {
+                foreach (var (image, video) in Sparxie.Infrastructure.Plugins.RemoteUrlPolicy.ReadBackgrounds(System.Text.Encoding.UTF8.GetString(json), api))
+                {
+                    entries.Add(new PluginBackgroundEntry(image, video));
+                }
+            }
+
+            var downloaded = new List<PluginBackgroundEntry>();
+            Directory.CreateDirectory(CacheDir);
+            foreach (var entry in entries)
+            {
+                var file = PluginImageFile(entry.Image);
+                if (!File.Exists(file))
+                {
+                    if (await ReadLimitedAsync(entry.Image, MaxRemoteImageBytes).ConfigureAwait(false) is not { } bytes
+                        || !Sparxie.Infrastructure.Plugins.RemoteUrlPolicy.LooksLikeImage(bytes))
+                    {
+                        continue;
+                    }
+
+                    await File.WriteAllBytesAsync(file, bytes).ConfigureAwait(false);
+                }
+
+                downloaded.Add(entry);
+            }
+
+            if (downloaded.Count > 0) // 接口这次没给出有效内容时保留旧列表
+            {
+                await File.WriteAllTextAsync(PluginListFile(game.Id), JsonSerializer.Serialize(downloaded)).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException)
+        {
+            // 离线或接口异常：回退旧缓存
+        }
+
+        return PluginCachedBackgrounds(game);
+    }
+
+    /// <summary>读取响应体，超过上限就放弃（返回 null）。</summary>
+    private static async Task<byte[]?> ReadLimitedAsync(string url, long limit, string? postJson = null)
+    {
+        using var request = new HttpRequestMessage(postJson is null ? HttpMethod.Get : HttpMethod.Post, url);
+        if (postJson is not null)
+        {
+            request.Content = new StringContent(postJson, System.Text.Encoding.UTF8, "application/json");
+        }
+
+        using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > limit
+            || response.RequestMessage?.RequestUri is not { } finalUri || !Sparxie.Infrastructure.Plugins.RemoteUrlPolicy.IsAllowed(finalUri.AbsoluteUri))
+        {
+            return null; // 重定向后的最终地址也要满足 https / 非内网
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+        using var buffer = new MemoryStream();
+        var chunk = new byte[81920];
+        int read;
+        while ((read = await stream.ReadAsync(chunk).ConfigureAwait(false)) > 0)
+        {
+            buffer.Write(chunk, 0, read);
+            if (buffer.Length > limit)
+            {
+                return null;
+            }
+        }
+
+        return buffer.ToArray();
+    }
+
     /// <summary>同步返回上次缓存的背景列表（只含图片已在本地的项）；用于切换游戏时立即上屏。</summary>
     public IReadOnlyList<GameBackgroundItem> GetCachedBackgrounds(GameKey game)
     {
+        if (game.IsThirdParty)
+        {
+            return PluginCachedBackgrounds(game);
+        }
+
         var biz = BizOf(game);
         if (biz.Length == 0 || !File.Exists(ListFile(biz)))
         {
@@ -135,6 +265,11 @@ public sealed class GameBackgroundService
     /// </summary>
     public async Task<IReadOnlyList<GameBackgroundItem>> GetBackgroundsAsync(GameKey game)
     {
+        if (game.IsThirdParty)
+        {
+            return await PluginBackgroundsAsync(game).ConfigureAwait(false);
+        }
+
         var biz = BizOf(game);
         if (biz.Length == 0)
         {
@@ -268,6 +403,11 @@ public sealed class GameBackgroundService
     /// <summary>返回游戏图标（getGames → display.icon）本地路径；失败返回 null。</summary>
     public async Task<string?> GetGameIconPathAsync(GameKey game)
     {
+        if (game.IsThirdParty)
+        {
+            return Sparxie.Infrastructure.Plugins.GameCatalogProvider.Current.Find(game.Id)?.IconPath;
+        }
+
         var biz = BizOf(game);
         if (biz.Length == 0)
         {
@@ -300,6 +440,46 @@ public sealed class GameBackgroundService
         }
 
         return await DownloadOrCacheAsync(url, imageFile, urlFile).ConfigureAwait(false);
+    }
+
+    /// <summary>取 EXE 自带的图标（系统缩略图）存成缓存文件；插件没声明 icon 时的后备。失败返回 null。</summary>
+    public async Task<string?> GetExecutableIconPathAsync(string? exePath)
+    {
+        if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
+        {
+            return null;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(CacheDir);
+            var target = Path.Combine(CacheDir, $"exeicon-{HashOf(exePath.ToLowerInvariant())}-{File.GetLastWriteTimeUtc(exePath).Ticks}.img");
+            if (File.Exists(target))
+            {
+                return target;
+            }
+
+            var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(exePath);
+            using var thumbnail = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.SingleItem, 128);
+            if (thumbnail is null || thumbnail.Size == 0 || thumbnail.Size > 4 * 1024 * 1024)
+            {
+                return null;
+            }
+
+            var bytes = new byte[thumbnail.Size];
+            using (var reader = new Windows.Storage.Streams.DataReader(thumbnail))
+            {
+                await reader.LoadAsync((uint)thumbnail.Size);
+                reader.ReadBytes(bytes);
+            }
+
+            await File.WriteAllBytesAsync(target, bytes).ConfigureAwait(false);
+            return target;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException or ArgumentException)
+        {
+            return null;
+        }
     }
 
     private static async Task<string?> DownloadOrCacheAsync(string? url, string imageFile, string urlFile)

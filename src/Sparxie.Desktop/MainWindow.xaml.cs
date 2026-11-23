@@ -46,6 +46,7 @@ public sealed partial class MainWindow : Window
         Activated += OnFirstActivated;
 
         _viewModel.Home.PropertyChanged += OnHomePropertyChanged;
+        _viewModel.Home.ConfirmFirstPluginLaunch = ConfirmFirstPluginLaunchAsync;
         _viewModel.Home.GameRunning += OnGameRunning;
         // 缓存背景在 HomeViewModel 构造期就同步设置了，早于这里订阅；补一次，否则启动时背景与主题色不会生效。
         if (_viewModel.Home.BackgroundPath is { } initial)
@@ -61,14 +62,39 @@ public sealed partial class MainWindow : Window
         _ = LoadGameIconsAsync();
     }
 
+    /// <summary>首次启动注入类插件游戏前的提示：默认按钮是“取消”。</summary>
+    private async Task<bool> ConfirmFirstPluginLaunchAsync(HomeViewModel.PluginLaunchPrompt prompt)
+    {
+        if (Content is not FrameworkElement { XamlRoot: { } root })
+        {
+            return true;
+        }
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = root,
+            Title = $"首次启动「{prompt.GameName}」",
+            Content = new TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                Text = "这个插件会向游戏进程注入代码，可能违反游戏用户协议，有被封号的风险。启动后插件会以管理员权限运行。",
+            },
+            PrimaryButtonText = "继续启动",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Close,
+        };
+        return await dialog.ShowAsync() == ContentDialogResult.Primary;
+    }
+
     private async Task LoadGameIconsAsync()
     {
         var service = new Services.GameBackgroundService();
-        foreach (GameType game in Enum.GetValues<GameType>())
+        foreach (var game in Services.GameDirectory.Games)
         {
             try
             {
-                var path = await service.GetGameIconPathAsync(game).ConfigureAwait(true);
+                var path = await service.GetGameIconPathAsync(game).ConfigureAwait(true)
+                    ?? (game.IsThirdParty ? await service.GetExecutableIconPathAsync(_viewModel.Home.FirstExecutablePath(game)).ConfigureAwait(true) : null);
                 if (path is not null)
                 {
                     Services.GameIconCache.Set(game, path);
@@ -85,6 +111,11 @@ public sealed partial class MainWindow : Window
 
     private void OnHomePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(HomeViewModel.SelectedGame))
+        {
+            _ = LoadGameIconsAsync(); // 填好 EXE 路径后，没有自带图标的插件游戏用 EXE 图标
+        }
+
         if (e.PropertyName == nameof(HomeViewModel.BackgroundPath))
         {
             UpdateWindowBackground(_viewModel.Home.BackgroundPath);
