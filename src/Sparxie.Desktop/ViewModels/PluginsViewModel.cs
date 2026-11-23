@@ -27,33 +27,95 @@ public sealed record PluginEnableDetails(
     bool IsChange,
     bool RequiresInjectionAck);
 
-/// <summary>设置页里的一个第三方插件。</summary>
+/// <summary>设置页里的一个第三方插件（一张卡片）。</summary>
 public sealed class PluginItemViewModel
 {
-    public PluginItemViewModel(PluginEntry entry, PluginsViewModel owner)
+    public PluginItemViewModel(PluginEntry entry, PluginsViewModel owner, string? notice = null, bool highlighted = false)
     {
         Entry = entry;
-        Title = entry.Manifest?.DisplayName is { Length: > 0 } name ? $"{name}（{entry.Id}）" : entry.Id;
+        DisplayName = entry.Manifest?.DisplayName is { Length: > 0 } name ? name : entry.Id;
+        Title = entry.Manifest?.DisplayName is { Length: > 0 } ? $"{DisplayName}（{entry.Id}）" : entry.Id;
+        Subtitle = string.Join(" · ", new[] { entry.Id, entry.Manifest?.Version is { Length: > 0 } version ? "v" + version : null }.Where(text => text is not null));
         Status = PluginsViewModel.StatusText(entry);
+        StatusGlyph = StatusGlyphFor(entry.Availability);
+        StatusLevel = StatusLevelFor(entry.Availability);
+        SortRank = entry.Availability switch
+        {
+            PluginAvailability.HashChanged => 0,
+            PluginAvailability.Untrusted => 1,
+            PluginAvailability.Ready => 3,
+            _ => 2,
+        };
         Detail = entry.Reason ?? (entry.Manifest is null ? string.Empty : string.Join("、", PluginsViewModel.CapabilityLabels(entry.Manifest)));
         CanEnable = entry.Availability is PluginAvailability.Untrusted or PluginAvailability.HashChanged;
-        CanDisable = entry.Availability == PluginAvailability.Ready;
+
+        // 游戏正在运行时不允许停用/删除（替换文件、恢复注册表都会和运行中的游戏冲突），并说明原因。
+        var running = entry.Manifest is { } manifest && GameProcessDetector.IsAnyRunning(manifest.ExeNames);
+        BlockReason = running ? "游戏正在运行，请先退出游戏" : null;
+        CanDisable = entry.Availability == PluginAvailability.Ready && !running;
+        CanDisableVisible = entry.Availability == PluginAvailability.Ready;
+        CanDelete = !running;
+        Notice = notice ?? string.Empty;
+        IsHighlighted = highlighted;
         EnableCommand = new AsyncRelayCommand(() => owner.EnableAsync(entry.Id));
         DisableCommand = new RelayCommand(() => owner.Disable(entry.Id));
         DeleteCommand = new AsyncRelayCommand(() => owner.DeleteAsync(entry.Id));
+        OpenFolderCommand = new RelayCommand(() => owner.OpenFolder(entry.Directory));
     }
 
     public PluginEntry Entry { get; }
 
+    public string DisplayName { get; }
+
+    /// <summary>旧版标题（名称 + 标识）；卡片用 <see cref="DisplayName"/> 与 <see cref="Subtitle"/>。</summary>
     public string Title { get; }
 
+    public string Subtitle { get; }
+
     public string Status { get; }
+
+    /// <summary>状态徽标图标（Segoe Fluent Icons）；颜色不能是唯一信号，所以始终和文字一起显示。</summary>
+    public string StatusGlyph { get; }
+
+    /// <summary>success / caution / critical / neutral，界面据此选主题色。</summary>
+    public string StatusLevel { get; }
+
+    public int SortRank { get; }
+
+    public bool IsStatusSuccess => StatusLevel == "success";
+
+    public bool IsStatusCaution => StatusLevel == "caution";
+
+    public bool IsStatusCritical => StatusLevel == "critical";
+
+    public bool IsStatusNeutral => StatusLevel == "neutral";
+
+    public bool HasDetail => Detail.Length > 0;
 
     public string Detail { get; }
 
     public bool CanEnable { get; }
 
+    /// <summary>当前能不能停用（游戏运行中为 false）。</summary>
     public bool CanDisable { get; }
+
+    /// <summary>是否显示“停用”菜单项（已启用的插件才有）。</summary>
+    public bool CanDisableVisible { get; }
+
+    public bool CanDelete { get; }
+
+    /// <summary>停用/删除被禁用时的原因，没有限制时为 null。</summary>
+    public string? BlockReason { get; }
+
+    public bool HasBlockReason => BlockReason is not null;
+
+    /// <summary>该条目自己的操作结果（导入、启用、停用…），显示在卡片里而不是列表底部。</summary>
+    public string Notice { get; }
+
+    public bool HasNotice => Notice.Length > 0;
+
+    /// <summary>刚导入或刚操作过的条目：卡片加高亮边框，便于在列表里找到。</summary>
+    public bool IsHighlighted { get; }
 
     public string EnableLabel => Entry.Availability == PluginAvailability.HashChanged ? "重新确认并启用" : "查看并启用";
 
@@ -62,6 +124,25 @@ public sealed class PluginItemViewModel
     public RelayCommand DisableCommand { get; }
 
     public AsyncRelayCommand DeleteCommand { get; }
+
+    public RelayCommand OpenFolderCommand { get; }
+
+    private static string StatusGlyphFor(PluginAvailability availability) => availability switch
+    {
+        PluginAvailability.Ready => "",        // 对勾
+        PluginAvailability.Untrusted => "",    // 警告
+        PluginAvailability.HashChanged => "",
+        PluginAvailability.AbiTooNew => "",    // 叉
+        _ => "",
+    };
+
+    private static string StatusLevelFor(PluginAvailability availability) => availability switch
+    {
+        PluginAvailability.Ready => "success",
+        PluginAvailability.Untrusted => "neutral",
+        PluginAvailability.HashChanged => "caution",
+        _ => "critical",
+    };
 }
 
 /// <summary>
@@ -76,6 +157,8 @@ public sealed class PluginsViewModel : ObservableObject
     private readonly Action<string>? _onRemoved;
     private readonly IRegistryHookStore _registry;
     private string _message = string.Empty;
+    private readonly Dictionary<string, string> _notices = [];
+    private string? _highlightId;
     private bool _ready;
 
     public PluginsViewModel(PluginCatalog catalog, PluginTrustStore trust, string dataRoot, Action<string>? onRemoved = null, IRegistryHookStore? registry = null)
@@ -113,18 +196,26 @@ public sealed class PluginsViewModel : ObservableObject
             if (SetProperty(ref _message, value))
             {
                 OnPropertyChanged(nameof(HasMessage));
+                OnPropertyChanged(nameof(ShowStandaloneMessage));
             }
         }
     }
 
     public bool HasMessage => _message.Length > 0;
 
+    /// <summary>消息没有对应的卡片（导入失败、删除成功等）时才在列表下方单独显示；有卡片的消息显示在卡片里。</summary>
+    public bool ShowStandaloneMessage => HasMessage && _notices.Count == 0;
+
     public void Refresh()
     {
         Items.Clear();
-        foreach (var entry in _catalog.Scan())
+        // 需要处理的排前面（文件已变化 → 未启用 → 其它/无效 → 已启用）；同一档按标识排序。
+        foreach (var entry in _catalog.Scan()
+                     .Select(item => new PluginItemViewModel(item, this, _notices.GetValueOrDefault(item.Id), item.Id == _highlightId))
+                     .OrderBy(item => item.SortRank)
+                     .ThenBy(item => item.Entry.Id, StringComparer.Ordinal))
         {
-            Items.Add(new PluginItemViewModel(entry, this));
+            Items.Add(entry);
         }
 
         OnPropertyChanged(nameof(HasItems));
@@ -140,18 +231,53 @@ public sealed class PluginsViewModel : ObservableObject
     public async Task ImportAsync(string source)
     {
         var result = await Task.Run(() => PluginInstaller.Install(source, _catalog.PluginsRoot, Path.Combine(_dataRoot, "plugin-staging"))).ConfigureAwait(true);
-        Message = result.Success
-            ? $"{result.Message}：{result.Id}。{(result.Replaced ? "文件已变化，需要重新确认后才能使用。" : "请在下面的列表里查看哈希并确认后启用。")}"
-            : result.Message;
+        if (result.Success && result.Id is { } id)
+        {
+            Report(id, $"{result.Message}。{(result.Replaced ? "文件已变化，需要重新确认后才能使用。" : "还没有启用：请查看哈希并确认后再启用。")}");
+        }
+        else
+        {
+            _notices.Clear();
+            _highlightId = null;
+            Message = result.Message;
+            Refresh();
+        }
+    }
+
+    /// <summary>记录某个插件自己的操作结果：显示在它的卡片里并高亮；同时保留全局消息（供测试和无障碍朗读）。</summary>
+    private void Report(string id, string text)
+    {
+        _notices.Clear();
+        _notices[id] = text;
+        _highlightId = id;
+        Message = text;
         Refresh();
     }
+
+    /// <summary>在资源管理器里打开目录（插件所在目录，或 plugins 根目录）。</summary>
+    public void OpenFolder(string path)
+    {
+        try
+        {
+            Directory.CreateDirectory(path);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = path, UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            Message = $"无法打开目录：{ex.Message}";
+        }
+    }
+
+    public RelayCommand OpenPluginsFolderCommand => _openPluginsFolderCommand ??= new RelayCommand(() => OpenFolder(_catalog.PluginsRoot));
+
+    private RelayCommand? _openPluginsFolderCommand;
 
     public async Task EnableAsync(string id)
     {
         var entry = _catalog.Scan().FirstOrDefault(item => item.Id == id);
         if (entry is null || entry.Manifest is null || entry.Availability is not (PluginAvailability.Untrusted or PluginAvailability.HashChanged))
         {
-            Message = "该插件当前无法启用，请刷新后重试。";
+            Report(id, "该插件当前无法启用，请刷新后重试。");
             Refresh();
             return;
         }
@@ -168,7 +294,7 @@ public sealed class PluginsViewModel : ObservableObject
         var latest = _catalog.Scan().FirstOrDefault(item => item.Id == id);
         if (latest is null || latest.DllSha256 != entry.DllSha256 || latest.ManifestSha256 != entry.ManifestSha256 || latest.DllSize != entry.DllSize)
         {
-            Message = "插件文件在确认期间发生了变化，已取消启用。";
+            Report(id, "插件文件在确认期间发生了变化，已取消启用。");
             Refresh();
             return;
         }
@@ -176,11 +302,11 @@ public sealed class PluginsViewModel : ObservableObject
         try
         {
             _trust.Confirm(new PluginTrustRecord(id, latest.DllSha256!, latest.ManifestSha256!, latest.DllSize, DateTimeOffset.UtcNow));
-            Message = $"已启用 {entry.Manifest.DisplayName}。";
+            Report(id, $"已启用 {entry.Manifest.DisplayName}。");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Message = $"保存信任记录失败：{ex.Message}";
+            Report(id, $"保存信任记录失败：{ex.Message}");
         }
 
         Refresh();
@@ -211,13 +337,13 @@ public sealed class PluginsViewModel : ObservableObject
         try
         {
             _trust.Remove(id);
-            Message = restoreProblem is null
+            Report(id, restoreProblem is null
                 ? "已停用，该游戏的配置会保留但无法启动。"
-                : $"已停用，但{restoreProblem}；备份保留，重新启用该插件后下次启动前会再次尝试恢复。";
+                : $"已停用，但{restoreProblem}；备份保留，重新启用该插件后下次启动前会再次尝试恢复。");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Message = $"保存信任记录失败：{ex.Message}";
+            Report(id, $"保存信任记录失败：{ex.Message}");
         }
 
         Refresh();
@@ -242,7 +368,7 @@ public sealed class PluginsViewModel : ObservableObject
         // 删除后就没有插件能再触发恢复了：遗留的注册表备份必须先恢复成功，否则拒绝删除（避免 HKCU 永久停在插件改写后的值）。
         if (RestoreLeftoverBackup(entry, id) is { } restoreProblem)
         {
-            Message = $"未删除：{restoreProblem}。";
+            Report(id, $"未删除：{restoreProblem}。");
             Refresh();
             return;
         }
@@ -256,7 +382,7 @@ public sealed class PluginsViewModel : ObservableObject
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Message = $"删除失败（文件可能正被占用）：{ex.Message}";
+            Report(id, $"删除失败（文件可能正被占用）：{ex.Message}");
         }
 
         Refresh();
