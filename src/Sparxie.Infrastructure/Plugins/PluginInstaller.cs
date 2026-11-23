@@ -180,14 +180,21 @@ public static class PluginInstaller
 
     private static string? Normalize(string? version) => version is null ? null : (version.Count(c => c == '.') == 0 ? version + ".0" : version);
 
+    /// <summary>两个目录的文件集合和每个文件的内容完全一致（包含图标、说明等不参与哈希的文件）才算“相同”，否则图标更新这类变化会被当成没有改动而跳过。</summary>
     private static bool SameContent(string a, string b)
     {
-        foreach (var name in new[] { PluginCatalog.ManifestFileName, PluginManifest.ModuleFileName })
+        var left = Directory.GetFiles(a, "*", SearchOption.AllDirectories).Select(path => Path.GetRelativePath(a, path)).Order(StringComparer.OrdinalIgnoreCase).ToList();
+        var right = Directory.GetFiles(b, "*", SearchOption.AllDirectories).Select(path => Path.GetRelativePath(b, path)).Order(StringComparer.OrdinalIgnoreCase).ToList();
+        if (!left.SequenceEqual(right, StringComparer.OrdinalIgnoreCase))
         {
-            var left = Path.Combine(a, name);
-            var right = Path.Combine(b, name);
-            if (!File.Exists(left) || !File.Exists(right) || new FileInfo(left).Length != new FileInfo(right).Length
-                || !File.ReadAllBytes(left).AsSpan().SequenceEqual(File.ReadAllBytes(right)))
+            return false;
+        }
+
+        foreach (var relative in left)
+        {
+            var x = Path.Combine(a, relative);
+            var y = Path.Combine(b, relative);
+            if (new FileInfo(x).Length != new FileInfo(y).Length || !File.ReadAllBytes(x).AsSpan().SequenceEqual(File.ReadAllBytes(y)))
             {
                 return false;
             }
