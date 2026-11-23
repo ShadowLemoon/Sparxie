@@ -5,7 +5,7 @@ using Sparxie.LauncherCore;
 
 namespace Desktop.Tests;
 
-/// <summary>用户数据根目录：程序目录可写就用它；程序目录不可写（受保护目录）时回退到 AppData，配置/日志/缓存都要能写。</summary>
+/// <summary>数据目录始终是程序目录（绿色）；不可写时不静默换位置，只探测并由启动提示告诉用户。</summary>
 public sealed class AppPathsTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "sparxie-apppaths-" + Guid.NewGuid().ToString("N"));
