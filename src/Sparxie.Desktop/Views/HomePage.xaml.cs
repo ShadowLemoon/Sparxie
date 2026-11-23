@@ -6,6 +6,16 @@ public sealed partial class HomePage : Page
 {
     public HomePage() => InitializeComponent();
 
+    private void CopyLaunchErrorClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        if (DataContext is ViewModels.MainWindowViewModel { Home: { HasLaunchError: true } home })
+        {
+            var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
+            package.SetText(home.LaunchErrorDiagnostics);
+            Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
+        }
+    }
+
     private void BackgroundStripPointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e) => BackgroundSwitchStrip.Opacity = 1;
 
     private void BackgroundStripPointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e) => BackgroundSwitchStrip.Opacity = 0;

@@ -495,6 +495,29 @@ public sealed class HomeViewModel : ObservableObject
 
     public void NotifyDebugModeChanged() => OnPropertyChanged(nameof(HasStatusMessage));
 
+    private LaunchErrorInfo? _launchError;
+
+    /// <summary>启动失败 / 会话异常结束时给所有用户显示的错误（和调试状态条分开）；开始新的启动或用户关闭时清除。</summary>
+    public LaunchErrorInfo? LaunchError
+    {
+        get => _launchError;
+        private set
+        {
+            if (SetProperty(ref _launchError, value))
+            {
+                OnPropertyChanged(nameof(HasLaunchError));
+            }
+        }
+    }
+
+    public bool HasLaunchError => _launchError is not null;
+
+    public RelayCommand DismissLaunchErrorCommand => _dismissLaunchErrorCommand ??= new RelayCommand(() => LaunchError = null);
+
+    private RelayCommand? _dismissLaunchErrorCommand;
+
+    public string LaunchErrorDiagnostics => _launchError?.ToDiagnosticText(GameNames.Display(SelectedGame), DateTimeOffset.Now) ?? string.Empty;
+
     public string StatusMessage
     {
         get => _statusMessage;
@@ -752,6 +775,7 @@ public sealed class HomeViewModel : ObservableObject
         }
 
         IsLaunching = true;
+        LaunchError = null;
         StatusMessage = $"正在启动 {profile.DisplayName}…";
         try
         {
@@ -765,6 +789,7 @@ public sealed class HomeViewModel : ObservableObject
         catch (Exception ex)
         {
             StatusMessage = $"启动失败：{ex.Message}";
+            LaunchError = LaunchErrorInfo.FromStartFailure(profile.DisplayName, ex.Message);
         }
         finally
         {
@@ -780,6 +805,11 @@ public sealed class HomeViewModel : ObservableObject
             {
                 if (ev.State is "Exited" or "Failed" or "HostCrashedBeforeRunning" or "HostCrashedAfterRunning")
                 {
+                    if (LaunchErrorInfo.IsFailureState(ev.State))
+                    {
+                        LaunchError = LaunchErrorInfo.FromSessionEnd(ev.State, ev.Message);
+                    }
+
                     StatusMessage = string.IsNullOrWhiteSpace(ev.Message)
                         ? $"会话结束：{ev.State}"
                         : $"会话结束：{ev.Message}";

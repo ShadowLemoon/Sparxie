@@ -69,7 +69,29 @@
                             Command="{Binding ShowProfilesCommand}" AutomationProperties.Name="定位游戏" />
                 </StackPanel>
             </Border>
-            <!-- 启动状态条：启动/注入各阶段与失败原因（之前只写在内部状态里，界面上看不到）。 -->
+            <!-- 启动错误：所有用户可见（之前只在调试模式显示）。三段式：发生了什么 / 可以怎么做 / 技术详情。 -->
+            <Border HorizontalAlignment="Right" Margin="0,0,0,12" Padding="16,12" CornerRadius="16" MaxWidth="720"
+                    Background="{StaticResource GlassAcrylicBrush}"
+                    BorderBrush="{ThemeResource SystemFillColorCriticalBrush}" BorderThickness="1"
+                    AutomationProperties.LiveSetting="Assertive"
+                    Visibility="{Binding Home.HasLaunchError, Converter={StaticResource BoolToVisibilityConverter}}">
+                <StackPanel Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <FontIcon Glyph="&#xE783;" FontSize="16" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                        <TextBlock Text="{Binding Home.LaunchError.Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding Home.LaunchError.Hint}" TextWrapping="Wrap" FontSize="14" />
+                    <Expander Header="技术详情" HorizontalAlignment="Stretch" Padding="8">
+                        <TextBlock Text="{Binding Home.LaunchError.Detail}" TextWrapping="Wrap" IsTextSelectionEnabled="True"
+                                   FontFamily="Consolas" FontSize="12" />
+                    </Expander>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="复制诊断信息" MinHeight="40" Click="CopyLaunchErrorClick" AutomationProperties.Name="复制诊断信息" />
+                        <Button Content="关闭" MinHeight="40" Command="{Binding Home.DismissLaunchErrorCommand}" AutomationProperties.Name="关闭错误提示" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            <!-- 启动状态条：启动/注入各阶段与失败原因（调试模式）。 -->
             <Border HorizontalAlignment="Right" Margin="0,0,0,12" Padding="16,10" CornerRadius="16" MaxWidth="720"
                     Background="{StaticResource GlassAcrylicBrush}"
                     BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1"
