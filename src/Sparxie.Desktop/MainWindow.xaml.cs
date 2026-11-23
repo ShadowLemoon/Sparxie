@@ -46,6 +46,7 @@ public sealed partial class MainWindow : Window
         Activated += OnFirstActivated;
 
         _viewModel.Home.PropertyChanged += OnHomePropertyChanged;
+        _viewModel.Home.ConfirmFirstPluginLaunch = ConfirmFirstPluginLaunchAsync;
         _viewModel.Home.GameRunning += OnGameRunning;
         // 缓存背景在 HomeViewModel 构造期就同步设置了，早于这里订阅；补一次，否则启动时背景与主题色不会生效。
         if (_viewModel.Home.BackgroundPath is { } initial)
@@ -59,6 +60,30 @@ public sealed partial class MainWindow : Window
             UpdateWindowVideo();
         }
         _ = LoadGameIconsAsync();
+    }
+
+    /// <summary>首次启动注入类插件游戏前的提示：默认按钮是“取消”。</summary>
+    private async Task<bool> ConfirmFirstPluginLaunchAsync(HomeViewModel.PluginLaunchPrompt prompt)
+    {
+        if (Content is not FrameworkElement { XamlRoot: { } root })
+        {
+            return true;
+        }
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = root,
+            Title = $"首次启动「{prompt.GameName}」",
+            Content = new TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                Text = "这个插件会向游戏进程注入代码，可能违反游戏的用户协议，并有被反作弊系统处理（包括封号）的风险。\n\n启动后插件会以管理员权限运行。同一份插件文件只提示这一次；插件文件变化后会再次提示。",
+            },
+            PrimaryButtonText = "继续启动",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Close,
+        };
+        return await dialog.ShowAsync() == ContentDialogResult.Primary;
     }
 
     private async Task LoadGameIconsAsync()

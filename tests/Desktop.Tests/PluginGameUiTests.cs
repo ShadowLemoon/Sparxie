@@ -265,6 +265,33 @@ public sealed class PluginGameUiTests : IDisposable
     }
 
     [Fact]
+    public void 注入类插件首次启动先提示_拒绝则不启动也不记录()
+    {
+        GameDirectory.PluginSource = () => [new GameDescriptor(PluginId, "演示游戏", ["Demo.exe"], Caps: ["injects"], DllSha256: "abc")];
+        GameDirectory.Reload();
+        var data = NewData();
+        data.AddProfile(new ProfileMutation(Id: "p1", DisplayName: "演示配置", GameId: PluginId, ExecutablePath: @"D:\Games\Demo\Demo.exe"));
+        data.Preferences.SelectedGame = PluginId;
+        data.SavePreferences();
+        var home = new HomeViewModel(data, new LauncherService());
+        var prompts = new List<HomeViewModel.PluginLaunchPrompt>();
+        home.ConfirmFirstPluginLaunch = prompt =>
+        {
+            prompts.Add(prompt);
+            return Task.FromResult(false);
+        };
+
+        home.LaunchCommand.Execute(null); // async void：等提示被调用，再留一点时间让后续逻辑（如果有）跑完
+        SpinWait.SpinUntil(() => prompts.Count > 0, TimeSpan.FromSeconds(10));
+        Thread.Sleep(300);
+
+        Assert.Equal("演示游戏", Assert.Single(prompts).GameName);
+        Assert.Empty(data.Preferences.AcknowledgedPluginLaunches);
+        Assert.DoesNotContain("正在启动", home.StatusMessage);
+        Assert.Equal("ext.acme.demo:abc", HomeViewModel.FirstLaunchKey(PluginId, "abc"));
+    }
+
+    [Fact]
     public void 主页选中内置游戏的偏好键仍兼容旧版PascalCase()
     {
         var data = NewData();

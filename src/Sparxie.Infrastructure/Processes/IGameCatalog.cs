@@ -3,7 +3,7 @@ using Sparxie.Contracts.Models;
 namespace Sparxie.Infrastructure.Processes;
 
 /// <summary>某款游戏的静态描述（只读元数据，不执行任何游戏代码）。</summary>
-public sealed record GameDescriptor(string Id, string DisplayName, IReadOnlyList<string> ExeNames, Plugins.PluginSettingsSchema? SettingsSchema = null, string? IconPath = null, string? BackgroundPath = null, IReadOnlyList<string>? UninstallNames = null, string? BackgroundUrl = null, Plugins.BackgroundApiSpec? BackgroundApi = null, IReadOnlyList<Plugins.RegistryLookupSpec>? RegistryLookups = null);
+public sealed record GameDescriptor(string Id, string DisplayName, IReadOnlyList<string> ExeNames, Plugins.PluginSettingsSchema? SettingsSchema = null, string? IconPath = null, string? BackgroundPath = null, IReadOnlyList<string>? UninstallNames = null, string? BackgroundUrl = null, Plugins.BackgroundApiSpec? BackgroundApi = null, IReadOnlyList<Plugins.RegistryLookupSpec>? RegistryLookups = null, IReadOnlyList<string>? Caps = null, string? DllSha256 = null);
 
 /// <summary>游戏目录：按游戏 id 查询静态描述。当前只含内置三款，后续由插件目录扩展。</summary>
 public interface IGameCatalog

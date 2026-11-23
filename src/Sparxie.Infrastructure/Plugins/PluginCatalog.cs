@@ -99,7 +99,9 @@ public sealed class PluginCatalog(string pluginsRoot, PluginTrustStore trust) : 
             entry.Manifest.AutoFind?.UninstallNames,
             entry.Manifest.BackgroundUrl,
             entry.Manifest.BackgroundApi,
-            entry.Manifest.AutoFind?.Registry);
+            entry.Manifest.AutoFind?.Registry,
+            entry.Manifest.Caps,
+            entry.DllSha256);
 
     private static PluginEntry ScanOne(string dir, Dictionary<string, PluginTrustRecord> trusted)
     {

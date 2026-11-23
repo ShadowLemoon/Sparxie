@@ -785,6 +785,12 @@ public sealed class HomeViewModel : ObservableObject
             return; // 游戏已经在运行（刚被别的启动器启动），按钮会变成“运行中”
         }
 
+        // 会注入游戏的插件：同一份插件文件第一次启动前提示一次（启用确认和真正启动之间可能隔了很久）。
+        if (!await ConfirmFirstInjectionLaunchAsync(profile).ConfigureAwait(true))
+        {
+            return;
+        }
+
         IsLaunching = true;
         LaunchError = null;
         StatusMessage = $"正在启动 {profile.DisplayName}…";
@@ -806,6 +812,47 @@ public sealed class HomeViewModel : ObservableObject
         {
             IsLaunching = false;
         }
+    }
+
+    /// <summary>首次启动注入类插件游戏的提示内容。</summary>
+    public sealed record PluginLaunchPrompt(string GameName, string PluginId);
+
+    /// <summary>由界面层设置：显示“首次启动会注入游戏”的提示，返回是否继续。没有设置（测试、无界面）时直接继续。</summary>
+    public Func<PluginLaunchPrompt, Task<bool>>? ConfirmFirstPluginLaunch { get; set; }
+
+    /// <summary>某个插件文件版本的“已提示”键：插件文件（module.dll 哈希）变化后会再提示一次。</summary>
+    public static string FirstLaunchKey(string pluginId, string? dllSha256) => $"{pluginId}:{dllSha256}";
+
+    private async Task<bool> ConfirmFirstInjectionLaunchAsync(GameProfile profile)
+    {
+        var descriptor = profile.BuiltInGame is null ? Sparxie.Infrastructure.Plugins.GameCatalogProvider.Current.Find(profile.Game) : null;
+        if (descriptor?.Caps is not { } caps || !caps.Contains("injects") || ConfirmFirstPluginLaunch is not { } ask)
+        {
+            return true;
+        }
+
+        var key = FirstLaunchKey(descriptor.Id, descriptor.DllSha256);
+        if (_data.Preferences.AcknowledgedPluginLaunches.Contains(key))
+        {
+            return true;
+        }
+
+        if (!await ask(new PluginLaunchPrompt(descriptor.DisplayName, descriptor.Id)).ConfigureAwait(true))
+        {
+            return false;
+        }
+
+        _data.Preferences.AcknowledgedPluginLaunches.Add(key);
+        try
+        {
+            _data.SavePreferences();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            StatusMessage = $"记录提示状态失败：{ex.Message}";
+        }
+
+        return true;
     }
 
     private async Task ObserveSessionAsync(LauncherSession session, GameKey game)
