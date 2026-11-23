@@ -36,17 +36,16 @@ Get-ChildItem $out -Filter '*.zip' -ErrorAction SilentlyContinue | Remove-Item -
 & (Join-Path $PSScriptRoot 'package_desktop.ps1') -Version $Version -RuntimeDirectory $runtime -OutputDirectory $out
 if ($LASTEXITCODE -ne 0) { throw 'package_desktop.ps1 failed (is Sparxie from the release folder still running?)' }
 
-# Fixed names at the top of the release folder. User data next to Sparxie.exe (config.json, plugins\, plugin-trust.json,
-# logs\, cache\ ...) is KEPT: only the program files (Sparxie.exe, version.ini, app-*\) are replaced.
+# Fixed names at the top of the release folder. Only the app-<version>\ folder(s) and version.ini are replaced.
+# Everything else next to them (Sparxie.exe, config.json, plugins\, plugin-trust.json, logs\, cache\ ...) is left alone;
+# Sparxie.exe is only copied when it is missing.
 $app = Join-Path $release 'Sparxie'
 $built = Join-Path $out 'Sparxie'
 New-Item -ItemType Directory -Force $app | Out-Null
 Get-ChildItem $app -Directory -Filter 'app-*' | Remove-Item -Recurse -Force
-foreach ($file in 'Sparxie.exe', 'version.ini') {
-    $old = Join-Path $app $file
-    if (Test-Path $old) { Remove-Item $old -Force }
-}
-Get-ChildItem $built | Move-Item -Destination $app -Force
+Get-ChildItem $built -Directory -Filter 'app-*' | Move-Item -Destination $app -Force
+Copy-Item (Join-Path $built 'version.ini') (Join-Path $app 'version.ini') -Force
+if (-not (Test-Path (Join-Path $app 'Sparxie.exe'))) { Copy-Item (Join-Path $built 'Sparxie.exe') $app }
 $zip = Get-ChildItem $out -Filter 'Sparxie-desktop-*.zip' | Select-Object -First 1
 $fixedZip = Join-Path $release 'Sparxie-desktop-win-x64.zip'
 Move-Item $zip.FullName $fixedZip -Force
