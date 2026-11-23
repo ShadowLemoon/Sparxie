@@ -512,6 +512,9 @@ public sealed class HomeViewModel : ObservableObject
 
     public bool HasLaunchError => _launchError is not null;
 
+    /// <summary>启动时发现的问题（例如程序目录不可写），用和启动错误同一条错误条显示。</summary>
+    public void ShowStartupProblem(LaunchErrorInfo problem) => LaunchError = problem;
+
     public RelayCommand DismissLaunchErrorCommand => _dismissLaunchErrorCommand ??= new RelayCommand(() => LaunchError = null);
 
     private RelayCommand? _dismissLaunchErrorCommand;

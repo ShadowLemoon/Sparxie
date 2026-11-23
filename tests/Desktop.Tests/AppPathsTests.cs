@@ -1,6 +1,7 @@
 using System.Security.AccessControl;
 using System.Security.Principal;
 using Sparxie.Desktop.Services;
+using Sparxie.LauncherCore;
 
 namespace Desktop.Tests;
 
@@ -39,25 +40,44 @@ public sealed class AppPathsTests : IDisposable
     }
 
     [Fact]
-    public void 程序目录可写时用程序目录()
+    public void 目录可写时探测通过且不留探测文件()
     {
-        var install = Path.Combine(_root, "install");
-        Directory.CreateDirectory(install);
+        var dir = Path.Combine(_root, "writable");
 
-        Assert.Equal(install, AppPaths.ResolveRoot(install, Path.Combine(_root, "appdata")));
-        Assert.Empty(Directory.GetFiles(install)); // 探测文件已删除
+        Assert.True(AppPaths.CanWrite(dir));
+        Assert.Empty(Directory.GetFiles(dir));
     }
 
     [Fact]
-    public void 程序目录不可写时回退到AppData下的Sparxie()
+    public void 目录不可写时探测失败_不会悄悄换位置()
     {
         if (!OperatingSystem.IsWindows()) { return; }
 
-        var install = Deny("protected");
-        var appData = Path.Combine(_root, "appdata");
+        var dir = Deny("protected");
 
-        var resolved = AppPaths.ResolveRoot(install, appData);
+        Assert.False(AppPaths.CanWrite(dir));
+        Assert.Empty(Directory.GetFileSystemEntries(dir));
+    }
 
-        Assert.Equal(Path.Combine(appData, "Sparxie"), resolved);
+    [Fact]
+    public void 数据目录始终是程序目录_配置文件在其下()
+    {
+        Assert.Equal(Sparxie.Infrastructure.Configuration.AppDataDirectory.Resolve(), AppPaths.DataRoot);
+        Assert.Equal(Path.Combine(AppPaths.DataRoot, "config.json"), AppPaths.ConfigFilePath());
+        Assert.StartsWith(AppPaths.DataRoot, AppPaths.LogsDirectory);
+    }
+
+    [Fact]
+    public void 启动问题用同一条错误条显示()
+    {
+        Directory.CreateDirectory(_root);
+        var data = new DesktopDataService(Path.Combine(_root, "config.json"));
+        data.Load();
+        var home = new Sparxie.Desktop.ViewModels.HomeViewModel(data, new LauncherService());
+
+        home.ShowStartupProblem(new Sparxie.Desktop.ViewModels.LaunchErrorInfo("程序目录不可写", "请以管理员身份运行", AppPaths.DataRoot));
+
+        Assert.True(home.HasLaunchError);
+        Assert.Contains("不可写", home.LaunchError!.Title);
     }
 }
