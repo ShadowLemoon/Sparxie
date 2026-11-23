@@ -29,6 +29,34 @@ public sealed partial class SettingsDrawer : UserControl
         };
     }
 
+    private async void ImportPluginZipClick(object sender, RoutedEventArgs e)
+    {
+        var picker = new Windows.Storage.Pickers.FileOpenPicker { SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Downloads };
+        picker.FileTypeFilter.Add(".zip");
+        await ImportPluginAsync(picker, async () => (await picker.PickSingleFileAsync())?.Path);
+    }
+
+    private async void ImportPluginFolderClick(object sender, RoutedEventArgs e)
+    {
+        var picker = new Windows.Storage.Pickers.FolderPicker { SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Downloads };
+        picker.FileTypeFilter.Add("*");
+        await ImportPluginAsync(picker, async () => (await picker.PickSingleFolderAsync())?.Path);
+    }
+
+    private async Task ImportPluginAsync(object picker, Func<Task<string?>> pick)
+    {
+        if (DataContext is not MainWindowViewModel viewModel || App.MainWindow is not { } window)
+        {
+            return;
+        }
+
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(window));
+        if (await pick() is { Length: > 0 } path)
+        {
+            await viewModel.Settings.Plugins.ImportAsync(path);
+        }
+    }
+
     /// <summary>插件启用/删除前的确认对话框：默认按钮是“取消”，正文是完整的来源、哈希和风险说明。</summary>
     private async Task<bool> ConfirmPluginAsync(PluginConfirmation confirmation)
     {

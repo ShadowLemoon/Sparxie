@@ -117,6 +117,16 @@ public sealed class PluginsViewModel : ObservableObject
         }
     }
 
+    /// <summary>导入压缩包或文件夹。只拷贝和校验，不启用：之后仍要用户在列表里"查看并启用"。</summary>
+    public async Task ImportAsync(string source)
+    {
+        var result = await Task.Run(() => PluginInstaller.Install(source, _catalog.PluginsRoot, Path.Combine(_dataRoot, "plugin-staging"))).ConfigureAwait(true);
+        Message = result.Success
+            ? $"{result.Message}：{result.Id}。{(result.Replaced ? "文件已变化，需要重新确认后才能使用。" : "请在下面的列表里查看哈希并确认后启用。")}"
+            : result.Message;
+        Refresh();
+    }
+
     public async Task EnableAsync(string id)
     {
         var entry = _catalog.Scan().FirstOrDefault(item => item.Id == id);

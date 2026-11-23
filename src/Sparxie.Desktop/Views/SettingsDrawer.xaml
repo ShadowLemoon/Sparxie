@@ -74,7 +74,7 @@
                     <Border Style="{StaticResource GlassCard}">
                         <StackPanel Spacing="10">
                             <TextBlock Text="第三方游戏插件" Style="{StaticResource SectionHeading}" />
-                            <TextBlock Text="把插件文件夹放进程序目录的 plugins 文件夹后，在这里确认才会启用。插件未经 Sparxie 审计，会以管理员权限运行。" TextWrapping="Wrap" Style="{StaticResource CaptionText}" />
+                            <TextBlock Text="点“导入”选择插件压缩包或文件夹（也可以手动放进程序目录的 plugins 文件夹），导入后在这里确认才会启用。插件未经 Sparxie 审计，会以管理员权限运行。" TextWrapping="Wrap" Style="{StaticResource CaptionText}" />
                             <TextBlock Text="没有找到插件。" Style="{StaticResource CaptionText}"
                                        Visibility="{Binding Settings.Plugins.IsEmpty, Converter={StaticResource BoolToVisibilityConverter}}" />
                             <ItemsControl ItemsSource="{Binding Settings.Plugins.Items}">
@@ -97,6 +97,16 @@
                             </ItemsControl>
                             <TextBlock Text="{Binding Settings.Plugins.Message}" TextWrapping="Wrap"
                                        Visibility="{Binding Settings.Plugins.HasMessage, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Button Grid.Column="0" Content="导入压缩包…" HorizontalAlignment="Stretch" MinHeight="48" Click="ImportPluginZipClick"
+                                        AutomationProperties.Name="导入插件压缩包" />
+                                <Button Grid.Column="1" Content="导入文件夹…" HorizontalAlignment="Stretch" MinHeight="48" Click="ImportPluginFolderClick"
+                                        AutomationProperties.Name="导入插件文件夹" />
+                            </Grid>
                             <Button Content="刷新插件列表" HorizontalAlignment="Stretch" MinHeight="48" Command="{Binding Settings.Plugins.RefreshCommand}" />
                         </StackPanel>
                     </Border>

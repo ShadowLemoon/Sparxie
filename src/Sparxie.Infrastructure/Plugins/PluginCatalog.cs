@@ -41,6 +41,8 @@ public sealed class PluginCatalog(string pluginsRoot, PluginTrustStore trust) : 
 {
     public const string ManifestFileName = "plugin.json";
 
+    public string PluginsRoot => pluginsRoot;
+
     public IReadOnlyList<PluginEntry> Scan()
     {
         if (!Directory.Exists(pluginsRoot))
