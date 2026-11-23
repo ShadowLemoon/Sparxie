@@ -21,7 +21,8 @@ $out = Join-Path $release 'out'
 $runtime = Join-Path $release '_cache\zzz-runtime'
 $sha = (& git -C $repo rev-parse --short HEAD).Trim()
 # unique per build (commit + time) so the new app-<version> folder never collides with one that is still running
-if (-not $Version) { $Version = "0.1.0-dev.$sha." + (Get-Date -Format "HHmmss") }
+# prefixed so no identifier is all digits with a leading zero (invalid in SemVer / NuGet: restore fails right after midnight)
+if (-not $Version) { $Version = "0.1.0-dev.g$sha.t" + (Get-Date -Format "HHmmss") }
 
 
 if (-not (Test-Path (Join-Path $runtime 'ZZZTouchCore.dll'))) {
