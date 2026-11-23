@@ -127,6 +127,64 @@ public static class GameExecutableFinder
         return found.OrderBy(item => item.Priority).ToList();
     }
 
+    /// <summary>
+    /// 第三方游戏的自动查找：只用通用来源——卸载项（要插件在 manifest 里声明键名关键字）、最近运行过的程序记录、正在运行的进程。
+    /// 文件名必须在插件声明的白名单里。
+    /// </summary>
+    public static IReadOnlyList<GameExecutableCandidate> FindThirdParty(GameDescriptor game, IGameFinderEnvironment environment)
+    {
+        ArgumentNullException.ThrowIfNull(game);
+        ArgumentNullException.ThrowIfNull(environment);
+        var names = game.ExeNames;
+        var found = new List<GameExecutableCandidate>();
+
+        void Add(string path, string source, int priority)
+        {
+            var normalized = path.Replace('/', '\\');
+            if (normalized.Length > 2 && char.IsLetter(normalized[0]) && normalized[1] == ':'
+                && names.Contains(System.IO.Path.GetFileName(normalized), StringComparer.OrdinalIgnoreCase)
+                && environment.FileExists(normalized)
+                && !found.Any(item => string.Equals(item.Path, normalized, StringComparison.OrdinalIgnoreCase)))
+            {
+                found.Add(new GameExecutableCandidate(normalized, source, priority));
+            }
+        }
+
+        if (game.UninstallNames is { Count: > 0 } hints)
+        {
+            foreach (var (key, directory) in environment.UninstallInstallDirectories())
+            {
+                if (!hints.Any(hint => key.Contains(hint, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                foreach (var name in names)
+                {
+                    foreach (var file in environment.FindFiles(directory.Replace('/', '\\'), name, maxDepth: 3))
+                    {
+                        Add(file, "卸载项里的安装目录", 0);
+                    }
+                }
+            }
+        }
+
+        foreach (var path in environment.RecentExecutablePaths())
+        {
+            Add(path, "最近运行过的程序记录", 1);
+        }
+
+        foreach (var name in names)
+        {
+            foreach (var path in environment.RunningExecutablePaths(System.IO.Path.GetFileNameWithoutExtension(name)))
+            {
+                Add(path, "正在运行的游戏", 2);
+            }
+        }
+
+        return found.OrderBy(item => item.Priority).ToList();
+    }
+
     /// <summary>按键名 / 服务器标识推断优先级：国服 0，B 服 1，认不出 2，国际服 3。</summary>
     public static int PriorityOf(string name)
     {

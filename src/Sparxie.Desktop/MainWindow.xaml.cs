@@ -64,7 +64,7 @@ public sealed partial class MainWindow : Window
     private async Task LoadGameIconsAsync()
     {
         var service = new Services.GameBackgroundService();
-        foreach (GameType game in Enum.GetValues<GameType>())
+        foreach (var game in Services.GameDirectory.Games)
         {
             try
             {

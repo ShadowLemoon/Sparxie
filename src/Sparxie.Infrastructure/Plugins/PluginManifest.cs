@@ -50,6 +50,15 @@ public sealed class PluginManifest
     /// <summary>可选：允许插件通过宿主回调修改的 HKCU 键前缀（由核心备份并恢复，与画面设置无关）。</summary>
     public RegistryHooksSpec? RegistryHooks { get; set; }
 
+    /// <summary>可选：插件目录里的图标图片文件名（只用于游戏标签/标题，不参与信任哈希；见 <see cref="PluginAssets"/>）。</summary>
+    public string? Icon { get; set; }
+
+    /// <summary>可选：插件目录里的主页背景图片文件名。</summary>
+    public string? Background { get; set; }
+
+    /// <summary>可选：自动查找 EXE 的提示。</summary>
+    public AutoFindSpec? AutoFind { get; set; }
+
     /// <summary>设置 schema（原样保留，由后续的表单与校验使用）。</summary>
     [JsonConverter(typeof(RawJsonConverter))]
     public string? SettingsSchema { get; set; }
@@ -126,6 +135,20 @@ public sealed class PluginManifest
             return false;
         }
 
+        if ((parsed.Icon is not null && !PluginAssets.IsValidFileName(parsed.Icon))
+            || (parsed.Background is not null && !PluginAssets.IsValidFileName(parsed.Background)))
+        {
+            error = "icon / background 必须是插件目录里的 png/jpg/webp/bmp 文件名";
+            return false;
+        }
+
+        if (parsed.AutoFind is { } find
+            && (find.UninstallNames.Count > 8 || find.UninstallNames.Any(name => string.IsNullOrWhiteSpace(name) || name.Length is < 2 or > 64)))
+        {
+            error = "autoFind.uninstallNames 最多 8 项，每项 2-64 个字符";
+            return false;
+        }
+
         if (!PluginSettingsSchema.TryParse(parsed.SettingsSchema, out var schema, out var schemaError))
         {
             error = schemaError;
@@ -163,6 +186,12 @@ public sealed class PluginManifest
             }
         }
     }
+}
+
+public sealed class AutoFindSpec
+{
+    /// <summary>卸载项（注册表 Uninstall 下的键名）里包含的关键字；命中的安装目录下会搜索白名单 EXE。</summary>
+    public List<string> UninstallNames { get; set; } = [];
 }
 
 public sealed class RegistryHooksSpec

@@ -208,7 +208,7 @@ public sealed class PluginGameUiTests : IDisposable
     }
 
     [Fact]
-    public void 插件游戏的自动查找给出明确提示而不是崩溃()
+    public void 插件游戏的自动查找走通用来源_没找到时给出明确提示()
     {
         var data = NewData();
         var manager = new ProfileManagerViewModel(data, new EmptyFinder());
@@ -217,7 +217,7 @@ public sealed class PluginGameUiTests : IDisposable
         var outcome = manager.AutoFindExecutableAsync().GetAwaiter().GetResult();
 
         Assert.Empty(outcome.Choices);
-        Assert.Contains("第三方", outcome.Message);
+        Assert.Contains("没有找到", outcome.Message);
     }
 
     [Fact]

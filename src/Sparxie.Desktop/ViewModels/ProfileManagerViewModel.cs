@@ -267,15 +267,20 @@ public sealed class ProfileManagerViewModel : ObservableObject
             return new AutoFindOutcome([], "请先选择一个配置");
         }
 
-        if (editing.Game.BuiltIn is not { } game)
+        GameType? builtIn = editing.Game.BuiltIn;
+        var thirdParty = builtIn is null ? Sparxie.Infrastructure.Plugins.GameCatalogProvider.Current.Find(editing.Game.Id) : null;
+        if (builtIn is null && thirdParty is null)
         {
-            return new AutoFindOutcome([], "第三方游戏暂不支持自动查找，请点“浏览…”手动选择 EXE");
+            return new AutoFindOutcome([], "找不到这个游戏的插件，请点“浏览…”手动选择 EXE");
         }
 
+        var displayName = builtIn is { } known ? GameNames.Display(known) : thirdParty!.DisplayName;
         IReadOnlyList<GameExecutableCandidate> candidates;
         try
         {
-            candidates = await Task.Run(() => GameExecutableFinder.Find(game, _finderEnvironment)).ConfigureAwait(true);
+            candidates = await Task.Run(() => builtIn is { } game
+                ? GameExecutableFinder.Find(game, _finderEnvironment)
+                : GameExecutableFinder.FindThirdParty(thirdParty!, _finderEnvironment)).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -299,8 +304,8 @@ public sealed class ProfileManagerViewModel : ObservableObject
         {
             return Report(
                 new AutoFindOutcome([], candidates.Count == 0
-                    ? $"没有找到 {GameNames.Display(game)}。请点“浏览…”手动选择 EXE"
-                    : $"没有找到新的 {GameNames.Display(game)}：找到的 {candidates.Count} 个安装都已经添加到配置里了"),
+                    ? $"没有找到 {displayName}。请点“浏览…”手动选择 EXE"
+                    : $"没有找到新的 {displayName}：找到的 {candidates.Count} 个安装都已经添加到配置里了"),
                 found: false);
         }
 

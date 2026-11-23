@@ -87,9 +87,20 @@ public sealed class GameBackgroundService
         }
     }
 
+    /// <summary>第三方游戏：插件自带的一张背景图（没有就是空列表，主页保持默认底色）。</summary>
+    private static IReadOnlyList<GameBackgroundItem> PluginBackgrounds(GameKey game) =>
+        Sparxie.Infrastructure.Plugins.GameCatalogProvider.Current.Find(game.Id)?.BackgroundPath is { } path
+            ? [new GameBackgroundItem("plugin", path, null)]
+            : [];
+
     /// <summary>同步返回上次缓存的背景列表（只含图片已在本地的项）；用于切换游戏时立即上屏。</summary>
     public IReadOnlyList<GameBackgroundItem> GetCachedBackgrounds(GameKey game)
     {
+        if (game.IsThirdParty)
+        {
+            return PluginBackgrounds(game);
+        }
+
         var biz = BizOf(game);
         if (biz.Length == 0 || !File.Exists(ListFile(biz)))
         {
@@ -135,6 +146,11 @@ public sealed class GameBackgroundService
     /// </summary>
     public async Task<IReadOnlyList<GameBackgroundItem>> GetBackgroundsAsync(GameKey game)
     {
+        if (game.IsThirdParty)
+        {
+            return PluginBackgrounds(game);
+        }
+
         var biz = BizOf(game);
         if (biz.Length == 0)
         {
@@ -268,6 +284,11 @@ public sealed class GameBackgroundService
     /// <summary>返回游戏图标（getGames → display.icon）本地路径；失败返回 null。</summary>
     public async Task<string?> GetGameIconPathAsync(GameKey game)
     {
+        if (game.IsThirdParty)
+        {
+            return Sparxie.Infrastructure.Plugins.GameCatalogProvider.Current.Find(game.Id)?.IconPath;
+        }
+
         var biz = BizOf(game);
         if (biz.Length == 0)
         {
