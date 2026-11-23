@@ -43,6 +43,7 @@ public sealed class PluginImportFlowTests : IDisposable
         vm.ImportAsync(Make("a", "1.0", "d1")).GetAwaiter().GetResult();
 
         Assert.Empty(asked);
+        Assert.True(Directory.Exists(Path.Combine(_root, "plugin-staging"))); // 数据目录可写时暂存在同盘，提交是改名而不是二次拷贝
         Assert.Single(vm.Items);
     }
 

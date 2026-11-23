@@ -238,8 +238,7 @@ public sealed class PluginsViewModel : ObservableObject
     /// <summary>导入压缩包或文件夹。只拷贝和校验，不启用：之后仍要用户在列表里"查看并启用"。</summary>
     public async Task ImportAsync(string source)
     {
-        // 暂存放在系统临时目录：Sparxie 装在需要管理员权限的位置时，检查阶段也不需要写安装目录。
-        var staging = Path.Combine(Path.GetTempPath(), "sparxie-plugin-staging");
+        var staging = ChooseStagingRoot();
         var inspection = await Task.Run(() => PluginInstaller.Inspect(source, _catalog.PluginsRoot, staging)).ConfigureAwait(true);
         if (!inspection.Success)
         {
@@ -294,6 +293,28 @@ public sealed class PluginsViewModel : ObservableObject
         else
         {
             ReportImportFailure(result.Message);
+        }
+    }
+
+    /// <summary>
+    /// 暂存目录优先放在 plugins 目录所在的盘（数据目录下），这样提交时是同盘改名，不用二次拷贝；
+    /// 那里写不进去（Sparxie 装在需要管理员权限的位置）才退回系统临时目录，让检查阶段仍能进行，
+    /// 提交阶段再给出明确的权限提示。
+    /// </summary>
+    private string ChooseStagingRoot()
+    {
+        var preferred = Path.Combine(_dataRoot, "plugin-staging");
+        try
+        {
+            Directory.CreateDirectory(preferred);
+            var probe = Path.Combine(preferred, ".write-test-" + Guid.NewGuid().ToString("N"));
+            File.WriteAllText(probe, string.Empty);
+            File.Delete(probe);
+            return preferred;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return Path.Combine(Path.GetTempPath(), "sparxie-plugin-staging");
         }
     }
 
