@@ -53,7 +53,7 @@
                             <ToggleSwitch Header="调试模式" IsOn="{Binding Settings.DebugMode, Mode=TwoWay}" />
                         </StackPanel>
                     </Border>
-                    <Border Style="{StaticResource GlassCard}">
+                    <Border Style="{StaticResource GlassCard}" AllowDrop="True" DragOver="PluginDragOver" Drop="PluginDrop">
                         <StackPanel Spacing="10">
                             <Grid ColumnSpacing="4">
                                 <Grid.ColumnDefinitions>

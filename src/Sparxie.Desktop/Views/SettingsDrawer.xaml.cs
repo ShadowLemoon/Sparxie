@@ -29,6 +29,59 @@ public sealed partial class SettingsDrawer : UserControl
         };
     }
 
+    /// <summary>拖放导入：把 .zip 或文件夹拖到“第三方游戏插件”卡片上。只导入、不启用，之后仍要确认。</summary>
+    private void PluginDragOver(object sender, DragEventArgs e)
+    {
+        if (e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
+        {
+            e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy;
+            e.DragUIOverride.Caption = "导入插件（.zip 或文件夹）";
+            e.DragUIOverride.IsGlyphVisible = false;
+        }
+        else
+        {
+            e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.None;
+        }
+    }
+
+    private async void PluginDrop(object sender, DragEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel
+            || !e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
+        {
+            return;
+        }
+
+        var deferral = e.GetDeferral();
+        try
+        {
+            var items = await e.DataView.GetStorageItemsAsync();
+            var picked = Services.PluginDropFilter.Pick(items.Select(item => item.Path));
+            // 拖放回调要尽快结束：真正的导入（可能弹确认框）在释放 deferral 之后再做。
+            deferral.Complete();
+            deferral = null;
+            if (picked.Accepted.Count == 0)
+            {
+                viewModel.Settings.Plugins.ReportDropProblem(picked);
+                return;
+            }
+
+            foreach (var path in picked.Accepted)
+            {
+                await viewModel.Settings.Plugins.ImportAsync(path);
+            }
+
+            if (picked.Rejected.Count > 0 || picked.TooMany)
+            {
+                viewModel.Settings.Plugins.ReportDropProblem(picked);
+            }
+        }
+        finally
+        {
+            deferral?.Complete();
+        }
+    }
+
     private async void ImportPluginZipClick(object sender, RoutedEventArgs e)
     {
         var picker = new Windows.Storage.Pickers.FileOpenPicker { SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Downloads };

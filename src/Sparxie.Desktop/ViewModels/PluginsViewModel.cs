@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text;
+using Sparxie.Desktop.Services;
 using Sparxie.Infrastructure.Plugins;
 using Sparxie.Infrastructure.Processes;
 
@@ -338,6 +339,33 @@ public sealed class PluginsViewModel : ObservableObject
     internal static string WriteFailure(string what, Exception ex) => ex is UnauthorizedAccessException
         ? $"{what}：没有权限写入 Sparxie 的程序目录。Sparxie 装在需要管理员权限的位置时，管理插件（启用、停用、导入、删除）需要以管理员身份运行 Sparxie。"
         : $"{what}：{ex.Message}";
+
+    /// <summary>拖放里有不能导入的内容（不是 .zip 或文件夹）或数量太多时的提示；没有可导入的项时它就是最终结果。</summary>
+    public void ReportDropProblem(PluginDropFilter.Result picked)
+    {
+        var parts = new List<string>();
+        if (picked.Accepted.Count == 0)
+        {
+            parts.Add("没有可以导入的内容：请拖入插件的 .zip 压缩包或文件夹");
+        }
+
+        if (picked.Rejected.Count > 0)
+        {
+            parts.Add($"已忽略不支持的文件：{string.Join("、", picked.Rejected.Take(3))}{(picked.Rejected.Count > 3 ? " 等" : string.Empty)}");
+        }
+
+        if (picked.TooMany)
+        {
+            parts.Add($"一次最多导入 {PluginDropFilter.MaxItems} 个，多出的已忽略");
+        }
+
+        if (parts.Count > 0)
+        {
+            _notices.Clear();
+            Message = string.Join("；", parts) + "。";
+            Refresh();
+        }
+    }
 
     private void ReportImportFailure(string message)
     {
