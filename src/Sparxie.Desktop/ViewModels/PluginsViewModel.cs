@@ -259,7 +259,7 @@ public sealed class PluginsViewModel : ObservableObject
         if (inspection.Kind == PluginInstallKind.Identical)
         {
             PluginInstaller.Discard(inspection);
-            Report(id, "这个插件已经安装，文件完全相同，没有改动。");
+            Report(id, "已安装，没有改动。");
             return;
         }
 
@@ -283,7 +283,7 @@ public sealed class PluginsViewModel : ObservableObject
                 PluginInstallKind.Downgrade => $"降级「{name}」：{from} → {to}（版本比已安装的更旧）",
                 _ => $"用新文件替换「{name}」（{from} → {to}）",
             };
-            var body = headline + "\n\n替换后插件文件会变化，需要你重新核对哈希并确认才能使用；游戏配置会保留。";
+            var body = headline;
             if (!await Confirm(new PluginConfirmation("替换已安装的插件？", body, "替换")).ConfigureAwait(true))
             {
                 PluginInstaller.Discard(inspection);
@@ -294,7 +294,7 @@ public sealed class PluginsViewModel : ObservableObject
         var result = await Task.Run(() => PluginInstaller.Commit(inspection, _catalog.PluginsRoot, staging)).ConfigureAwait(true);
         if (result.Success && result.Id is { } committed)
         {
-            Report(committed, $"{result.Message}。{AfterImportHint(committed)}");
+            ReportQuiet();
         }
         else
         {
@@ -367,14 +367,13 @@ public sealed class PluginsViewModel : ObservableObject
         }
     }
 
-    /// <summary>导入完成后按插件<b>实际的</b>状态给下一步提示：模块和 manifest 的哈希没变（例如只换了图标）仍保持启用；变了才需要重新确认。</summary>
-    private string AfterImportHint(string id) => _catalog.Scan().FirstOrDefault(item => item.Id == id)?.Availability switch
+    /// <summary>成功的操作不弹提示（状态徽标和按钮已经说明结果）：只刷新列表，清掉旧消息。</summary>
+    private void ReportQuiet()
     {
-        PluginAvailability.Ready => "module.dll 和 plugin.json 没有变化，仍保持启用。",
-        PluginAvailability.HashChanged => "文件已变化，需要重新确认后才能使用：点“重新确认并启用”。",
-        PluginAvailability.Untrusted => "还没有启用：请查看哈希并确认后再启用。",
-        _ => "导入后的插件当前不可用，详见上面的状态。",
-    };
+        _notices.Clear();
+        Message = string.Empty;
+        Refresh();
+    }
 
     private void ReportImportFailure(string message)
     {
@@ -440,7 +439,7 @@ public sealed class PluginsViewModel : ObservableObject
         try
         {
             _trust.Confirm(new PluginTrustRecord(id, latest.DllSha256!, latest.ManifestSha256!, latest.DllSize, DateTimeOffset.UtcNow, entry.Manifest.Version, entry.Manifest.DisplayName, entry.Manifest.Caps.ToList()));
-            Report(id, $"已启用 {entry.Manifest.DisplayName}。");
+            ReportQuiet();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -474,9 +473,14 @@ public sealed class PluginsViewModel : ObservableObject
     public void RestoreBackupNow(string id)
     {
         var entry = _catalog.Scan().FirstOrDefault(item => item.Id == id);
-        Report(id, RestoreLeftoverBackup(entry, id) is { } problem
-            ? $"未能恢复：{problem}。"
-            : "已恢复该插件改过的注册表项。");
+        if (RestoreLeftoverBackup(entry, id) is { } problem)
+        {
+            Report(id, $"未能恢复：{problem}。");
+        }
+        else
+        {
+            ReportQuiet();
+        }
     }
 
     /// <summary>停用：只撤销信任，文件保留；之后需要重新确认才能启用。</summary>
@@ -487,9 +491,14 @@ public sealed class PluginsViewModel : ObservableObject
         try
         {
             _trust.Remove(id);
-            Report(id, restoreProblem is null
-                ? "已停用，该游戏的配置会保留但无法启动。"
-                : $"已停用，但{restoreProblem}；备份保留，重新启用该插件后下次启动前会再次尝试恢复。");
+            if (restoreProblem is null)
+            {
+                ReportQuiet();
+            }
+            else
+            {
+                Report(id, $"已停用，但{restoreProblem}。备份已保留，重新启用后下次启动前会再次尝试恢复。");
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -528,7 +537,7 @@ public sealed class PluginsViewModel : ObservableObject
             _trust.Remove(id);
             Directory.Delete(entry.Directory, recursive: true);
             _onRemoved?.Invoke(id);
-            Message = "已删除插件。";
+            ReportQuiet();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -541,8 +550,8 @@ public sealed class PluginsViewModel : ObservableObject
     public static string StatusText(PluginEntry entry) => entry.Availability switch
     {
         PluginAvailability.Ready => "已启用",
-        PluginAvailability.Untrusted => "未启用（需要确认）",
-        PluginAvailability.HashChanged => "文件已变化，需要重新确认",
+        PluginAvailability.Untrusted => "未启用",
+        PluginAvailability.HashChanged => "文件已变化",
         PluginAvailability.AbiTooNew => "需要更新版本的 Sparxie",
         _ => "无效",
     };
@@ -584,22 +593,16 @@ public sealed class PluginsViewModel : ObservableObject
         var injects = manifest.HasCap("injects");
         var risks = new List<string>
         {
-            "它是第三方插件，未经 Sparxie 审计，没有沙箱。",
-            "启用后它会以管理员权限运行原生代码，可能读取或修改你的文件和游戏进程。",
+            "未经审计、没有沙箱，会以管理员权限运行原生代码，可能读取或修改你的文件和游戏进程。",
         };
         if (injects)
         {
-            risks.Add("它声明会向游戏进程注入代码：可能违反游戏的用户协议，并有被反作弊系统处理（包括封号）的风险。");
-        }
-
-        if (manifest.HasCap("createsProcess"))
-        {
-            risks.Add("它会自己创建游戏进程。");
+            risks.Add("会向游戏进程注入代码：可能违反游戏用户协议，有被封号的风险。");
         }
 
         if (manifest.RegistryHooks is { Keys.Count: > 0 } hooks)
         {
-            risks.Add($"它会修改 {hooks.Keys.Count} 个声明的当前用户注册表项，Sparxie 会在改动前备份、结束后恢复。");
+            risks.Add($"会修改 {hooks.Keys.Count} 个当前用户注册表项，Sparxie 会在改动前备份、结束后恢复。");
         }
 
         var isChange = previous is not null && (previous.DllSha256 != entry.DllSha256 || previous.ManifestSha256 != entry.ManifestSha256);

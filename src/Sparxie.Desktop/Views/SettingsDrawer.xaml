@@ -73,14 +73,7 @@
                                     <FontIcon Glyph="&#xE72C;" FontSize="16" />
                                 </Button>
                             </Grid>
-                            <TextBlock Text="插件未经 Sparxie 审计，没有沙箱，会以管理员权限运行。导入后不会自动启用，需要你核对哈希并确认。" TextWrapping="Wrap" Style="{StaticResource CaptionText}" />
-
-                            <!-- 空状态：说明下一步该做什么。 -->
-                            <StackPanel Spacing="6" Padding="0,8"
-                                        Visibility="{Binding Settings.Plugins.IsEmpty, Converter={StaticResource BoolToVisibilityConverter}}">
-                                <TextBlock Text="还没有插件" FontWeight="SemiBold" />
-                                <TextBlock Text="从插件作者那里拿到压缩包（.zip）或文件夹后，点下面的“导入插件”。也可以手动放进 plugins 文件夹，再点刷新。" TextWrapping="Wrap" Style="{StaticResource CaptionText}" />
-                            </StackPanel>
+                            <TextBlock Text="插件未经审计，会以管理员权限运行。" TextWrapping="Wrap" Style="{StaticResource CaptionText}" />
 
                             <ItemsControl ItemsSource="{Binding Settings.Plugins.Items}">
                                 <ItemsControl.ItemTemplate>
@@ -128,7 +121,7 @@
                                                     <TextBlock Text="{x:Bind BlockReason}" TextWrapping="Wrap" FontSize="12"
                                                                Foreground="{ThemeResource SystemFillColorCautionBrush}"
                                                                Visibility="{x:Bind HasBlockReason, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                                    <TextBlock Text="插件改过的注册表项还没有恢复：请先关闭游戏，再点“⋯ → 立即恢复注册表”。" TextWrapping="Wrap" FontSize="12"
+                                                    <TextBlock Text="注册表改动尚未恢复：关闭游戏后，在“⋯”里恢复。" TextWrapping="Wrap" FontSize="12"
                                                                Foreground="{ThemeResource SystemFillColorCautionBrush}"
                                                                Visibility="{x:Bind HasPendingBackup, Converter={StaticResource BoolToVisibilityConverter}}" />
                                                     <StackPanel Orientation="Horizontal" Spacing="8">

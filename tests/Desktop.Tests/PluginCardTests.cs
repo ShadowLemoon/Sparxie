@@ -55,7 +55,7 @@ public sealed class PluginCardTests : IDisposable
     }
 
     [Fact]
-    public void 导入后消息显示在对应卡片里并高亮_不再是列表底部的全局消息()
+    public void 导入成功不弹提示_状态徽标和按钮已经说明结果()
     {
         var (vm, _) = Create();
         var source = Path.Combine(_root, "src");
@@ -66,10 +66,11 @@ public sealed class PluginCardTests : IDisposable
         vm.ImportAsync(source).GetAwaiter().GetResult();
 
         var card = Assert.Single(vm.Items);
-        Assert.True(card.HasNotice);
-        Assert.Contains("还没有启用", card.Notice);
+        Assert.False(card.HasNotice); // 成功的操作不弹提示（文字原则）
+        Assert.Equal("未启用", card.Status);
         Assert.True(card.CanEnable);
         Assert.False(vm.ShowStandaloneMessage);
+        Assert.Empty(vm.Message);
     }
 
     [Fact]

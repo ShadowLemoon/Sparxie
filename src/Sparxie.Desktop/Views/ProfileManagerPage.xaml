@@ -323,12 +323,7 @@
                         <Border Style="{StaticResource GlassCard}"
                                 Visibility="{Binding HasPluginFields, Converter={StaticResource BoolToVisibilityConverter}}">
                             <StackPanel Spacing="14">
-                                <StackPanel Spacing="2">
-                                    <TextBlock Text="插件设置" Style="{StaticResource SectionHeading}" />
-                                    <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
-                                        <Run Text="由插件「" /><Run Text="{Binding Game.Display}" /><Run Text="」提供，设置项由插件声明；Sparxie 会把超出范围的值修正后再传给插件。" />
-                                    </TextBlock>
-                                </StackPanel>
+                                <TextBlock Text="插件设置" Style="{StaticResource SectionHeading}" />
                                 <ItemsControl ItemsSource="{Binding PluginFields}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
@@ -347,7 +342,6 @@
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel Spacing="2" VerticalAlignment="Center">
                                                         <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
-                                                        <TextBlock Text="{Binding RangeText}" Style="{StaticResource CaptionText}" />
                                                     </StackPanel>
                                                     <controls:NumberStepper Grid.Column="1" VerticalAlignment="Center"
                                                                             Minimum="{Binding Minimum}" Maximum="{Binding Maximum}" Step="{Binding Step}"

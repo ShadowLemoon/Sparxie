@@ -3,7 +3,7 @@ using Sparxie.Infrastructure.Plugins;
 
 namespace Desktop.Tests;
 
-/// <summary>导入替换后的提示要和插件的实际状态一致：哈希没变仍是已启用，变了才要求重新确认。</summary>
+/// <summary>导入替换后：状态由徽标和按钮表达（哈希没变仍是已启用，变了才出现“重新确认并启用”），成功不弹提示。</summary>
 public sealed class PluginImportHintTests : IDisposable
 {
     private const string Id = "ext.acme.hint";
@@ -39,30 +39,44 @@ public sealed class PluginImportHintTests : IDisposable
     }
 
     [Fact]
-    public void 只换了图标_哈希没变_提示仍保持启用_而不是要求重新确认()
+    public void 只换了图标_哈希没变_仍是已启用_没有提示()
     {
         var vm = CreateEnabled();
 
         vm.ImportAsync(Make("b", "dll-v1", icon: true)).GetAwaiter().GetResult();
 
         var card = vm.Items.Single();
-        Assert.Contains("仍保持启用", card.Notice);
-        Assert.DoesNotContain("重新确认", card.Notice);
+        Assert.Equal("已启用", card.Status);
+        Assert.False(card.HasNotice);
         Assert.True(card.CanDisableVisible);
         Assert.False(card.CanEnable);
     }
 
     [Fact]
-    public void 模块变了_提示重新确认_卡片出现重新确认并启用()
+    public void 模块变了_徽标是文件已变化_卡片出现重新确认并启用_没有提示()
     {
         var vm = CreateEnabled();
 
         vm.ImportAsync(Make("c", "dll-v2", icon: false)).GetAwaiter().GetResult();
 
         var card = vm.Items.Single();
-        Assert.Contains("重新确认并启用", card.Notice);
+        Assert.Equal("文件已变化", card.Status);
+        Assert.False(card.HasNotice);
         Assert.True(card.CanEnable);
         Assert.Equal("重新确认并启用", card.EnableLabel);
         Assert.False(card.CanDisableVisible);
+    }
+
+    [Fact]
+    public void 启用和停用成功都不弹提示()
+    {
+        var vm = CreateEnabled();
+        Assert.Empty(vm.Message);
+
+        vm.Disable(Id);
+
+        Assert.False(vm.Items.Single().HasNotice);
+        Assert.Empty(vm.Message);
+        Assert.Equal("未启用", vm.Items.Single().Status);
     }
 }

@@ -77,7 +77,7 @@ public sealed partial class MainWindow : Window
             Content = new TextBlock
             {
                 TextWrapping = TextWrapping.Wrap,
-                Text = "这个插件会向游戏进程注入代码，可能违反游戏的用户协议，并有被反作弊系统处理（包括封号）的风险。\n\n启动后插件会以管理员权限运行。同一份插件文件只提示这一次；插件文件变化后会再次提示。",
+                Text = "这个插件会向游戏进程注入代码，可能违反游戏用户协议，有被封号的风险。启动后插件会以管理员权限运行。",
             },
             PrimaryButtonText = "继续启动",
             CloseButtonText = "取消",

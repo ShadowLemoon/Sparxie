@@ -123,8 +123,8 @@ public sealed partial class SettingsDrawer : UserControl
             panel.Children.Add(new InfoBar
             {
                 IsOpen = true, IsClosable = false, Severity = InfoBarSeverity.Warning,
-                Title = "这个插件的文件和你上次确认的不一样",
-                Message = "可能是你更新了插件，也可能是文件被替换了。请对照下面的新旧哈希，确认来源可信再启用。",
+                Title = "插件文件和上次确认的不一样",
+                Message = "请对照下面的新旧哈希，确认来源可信再启用。",
             });
         }
 
@@ -152,14 +152,19 @@ public sealed partial class SettingsDrawer : UserControl
 
         Row("名称 / 标识", $"{d.Name}（{d.Id}）");
         Row("版本 / 许可", string.Join(" · ", new[] { d.Version, d.License }.Where(text => !string.IsNullOrWhiteSpace(text))));
-        Row("主页" + "（作者自述，未经 Sparxie 验证）", d.Homepage);
-        const string ClaimTag = "（作者自述，未经 Sparxie 验证）";
-        Row("作者" + ClaimTag, d.Author);
-        Row("简介" + ClaimTag, d.Description);
-        Row("数据与联网说明" + ClaimTag, d.PrivacyNote);
+        // 作者自述的内容只在最前面标注一次，不在每一行重复。
+        if (new[] { d.Homepage, d.Author, d.Description, d.PrivacyNote }.Any(text => !string.IsNullOrWhiteSpace(text)) || d.Links is { Count: > 0 })
+        {
+            panel.Children.Add(new TextBlock { Text = "以下为作者自述，未经 Sparxie 验证", FontSize = 12, Opacity = 0.7 });
+        }
+
+        Row("主页", d.Homepage);
+        Row("作者", d.Author);
+        Row("简介", d.Description);
+        Row("数据与联网", d.PrivacyNote);
         if (d.Links is { Count: > 0 })
         {
-            Row("相关链接" + ClaimTag, string.Join("\n", d.Links.Select(link => $"{link.Key}：{link.Value}")));
+            Row("链接", string.Join("\n", d.Links.Select(link => $"{link.Key}：{link.Value}")));
         }
 
         if (d.IsChange)
@@ -169,7 +174,7 @@ public sealed partial class SettingsDrawer : UserControl
             {
                 panel.Children.Add(new TextBlock
                 {
-                    Text = "新增的能力：" + string.Join("、", d.AddedCapabilities),
+                    Text = "新增能力：" + string.Join("、", d.AddedCapabilities),
                     TextWrapping = TextWrapping.Wrap, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 });
             }
@@ -218,12 +223,12 @@ public sealed partial class SettingsDrawer : UserControl
         Hash(d.IsChange ? "现在的 plugin.json SHA-256" : "plugin.json SHA-256", d.ManifestSha256);
         Row("module.dll 大小", $"{d.DllSize:N0} 字节");
 
-        var general = new CheckBox { Content = "我已核对上面的来源和哈希，并了解它会以管理员权限运行未经审计的原生代码", Margin = new Thickness(0, 4, 0, 0) };
+        var general = new CheckBox { Content = "我已核对来源和哈希，了解上述风险", Margin = new Thickness(0, 4, 0, 0) };
         acks.Add(general);
         panel.Children.Add(general);
         if (d.RequiresInjectionAck)
         {
-            var inject = new CheckBox { Content = "我了解向游戏注入代码可能违反游戏的用户协议，并有被封号的风险" };
+            var inject = new CheckBox { Content = "我了解注入可能违反游戏用户协议，有被封号的风险" };
             acks.Add(inject);
             panel.Children.Add(inject);
         }
