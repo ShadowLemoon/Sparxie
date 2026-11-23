@@ -57,6 +57,42 @@ public sealed class PluginRemoteTests
     [InlineData(""" , "autoFind": { "registry": [ { "hive": "HKLM", "key": "Software\\Demo", "value": "P", "subdirectory": "..\\x" } ] } """, false)]
     public void Manifest的backgroundUrl_backgroundApi_registry校验(string extra, bool ok) => Assert.Equal(ok, Parse(extra));
 
+    [Fact]
+    public void 鹰角启动器的背景接口响应_按manifest声明取出图片和视频()
+    {
+        const string response = """
+            {"proxy_rsps":[{"kind":"get_main_bg_image","get_main_bg_image_rsp":{"data_version":"","main_bg_image":{"url":"https://hg-utils-public.hycdn.cn/a.webp","md5":"x","video_url":"https://hg-utils-public.hycdn.cn/b.mp4"}}}]}
+            """;
+        var spec = new BackgroundApiSpec
+        {
+            Url = "https://launcher.hypergryph.com/api/proxy/web/batch_proxy",
+            Path = "proxy_rsps.0.get_main_bg_image_rsp.main_bg_image",
+            ItemPath = "url",
+            VideoPath = "video_url",
+        };
+
+        var items = RemoteUrlPolicy.ReadBackgrounds(response, spec);
+
+        Assert.Equal([("https://hg-utils-public.hycdn.cn/a.webp", (string?)"https://hg-utils-public.hycdn.cn/b.mp4")], items.ToArray());
+    }
+
+    [Fact]
+    public void 背景接口返回数组_每项一张_非法地址和超出数量被丢弃()
+    {
+        var urls = string.Join(",", Enumerable.Range(0, 12).Select(i => $$"""{ "u": "https://cdn.example.com/{{i}}.png" }""")) + """, { "u": "http://bad/x.png" }""";
+        var items = RemoteUrlPolicy.ReadBackgrounds($$"""{ "list": [ {{urls}} ] }""", new BackgroundApiSpec { Path = "list", ItemPath = "u" });
+
+        Assert.Equal(RemoteUrlPolicy.MaxBackgrounds, items.Count);
+        Assert.All(items, item => Assert.StartsWith("https://", item.Image));
+        Assert.Empty(RemoteUrlPolicy.ReadBackgrounds("not json", new BackgroundApiSpec { Path = "a" }));
+    }
+
+    [Theory]
+    [InlineData(""" , "backgroundApi": { "url": "https://l.example.com/x", "method": "POST", "body": { "seq": "5" }, "path": "a", "itemPath": "u" } """, true)]
+    [InlineData(""" , "backgroundApi": { "url": "https://l.example.com/x", "method": "DELETE", "path": "a" } """, false)]
+    [InlineData(""" , "backgroundApi": { "url": "https://l.example.com/x", "method": "POST", "body": "text", "path": "a" } """, false)]
+    public void backgroundApi的POST请求体必须是JSON对象(string extra, bool ok) => Assert.Equal(ok, Parse(extra));
+
     private sealed class Env : IGameFinderEnvironment
     {
         public Dictionary<string, string> Registry { get; } = [];

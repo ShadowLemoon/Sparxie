@@ -47,7 +47,11 @@ Sparxie 可以加载第三方提供的游戏模块（插件）。主仓库和主
 - 背景，按优先级：
   1. `background`：插件目录里的图片文件名，规则同上。
   2. `backgroundUrl`：https 图片地址。
-  3. `backgroundApi`：`{ "url": "https://…", "path": "data.0.url" }`。宿主请求这个 JSON（≤ 256 KB），按点分隔的路径取出图片地址（数字是数组下标）。
+  3. `backgroundApi`：宿主请求一个 JSON 接口（≤ 256 KB），按点分隔的路径取出图片地址（数字是数组下标）。
+     - `url`（https）、`path`（必填）。`method` 可选 `GET`（默认）或 `POST`；`body` 是 JSON 对象（≤ 4 KB），有它时按 POST 发送。
+     - `path` 指向字符串时是一张背景；指向数组时每个元素一张（最多 8 张）。元素是对象时，`itemPath` 取图片地址，可选的 `videoPath` 取动态背景（视频）地址。
+     - 对应 Collapse 插件接口里的 `GetBackgroundEntries` + 图片/视频标记，区别是主程序不加载插件 DLL，所以写成声明。
+     - 例（鹰角启动器）：`"path": "proxy_rsps.0.get_main_bg_image_rsp.main_bg_image", "itemPath": "url", "videoPath": "video_url"`。
   
   网络来的图由宿主下载，只允许 https，拒绝本机和内网地址（重定向后的最终地址也检查），限 8 MB，并按文件头确认是位图。图片缓存在背景缓存目录，离线时用旧缓存。
 - `autoFind`：给“自动查找”提供线索。找到的文件名必须在 `exeNames` 里，并且是本机盘符路径。

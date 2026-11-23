@@ -87,13 +87,15 @@ public sealed class GameBackgroundService
         }
     }
 
-    // 第三方游戏背景：优先用插件目录里的图片文件；其次是 manifest 的 backgroundUrl，再其次是 backgroundApi（JSON 里取地址）。
+    // 第三方游戏背景：优先用插件目录里的图片文件；其次是 manifest 的 backgroundUrl，再其次是 backgroundApi（JSON 里取地址，可以是多张，可带视频）。
     // 网络来的图由宿主下载（只允许 https、不碰内网、限大小、按文件头验证是图片），缓存在背景缓存目录，离线用旧缓存。
     private const long MaxRemoteImageBytes = 8 * 1024 * 1024;
 
-    private static string PluginImageFile(string id) => Path.Combine(CacheDir, $"plugin-{HashOf(id)}.img");
+    private sealed record PluginBackgroundEntry(string Image, string? Video);
 
-    private static string PluginUrlFile(string id) => Path.Combine(CacheDir, $"plugin-{HashOf(id)}.url");
+    private static string PluginListFile(string id) => Path.Combine(CacheDir, $"plugin-{HashOf(id)}.list");
+
+    private static string PluginImageFile(string url) => Path.Combine(CacheDir, $"plugin-img-{HashOf(url)}.img");
 
     private static IReadOnlyList<GameBackgroundItem> PluginCachedBackgrounds(GameKey game)
     {
@@ -103,9 +105,23 @@ public sealed class GameBackgroundService
             return [new GameBackgroundItem("plugin", path, null)];
         }
 
-        return descriptor is { BackgroundUrl: not null } or { BackgroundApi: not null } && File.Exists(PluginImageFile(game.Id))
-            ? [new GameBackgroundItem("plugin", PluginImageFile(game.Id), null)]
-            : [];
+        if (descriptor is not ({ BackgroundUrl: not null } or { BackgroundApi: not null }) || !File.Exists(PluginListFile(game.Id)))
+        {
+            return [];
+        }
+
+        try
+        {
+            var entries = JsonSerializer.Deserialize<List<PluginBackgroundEntry>>(File.ReadAllText(PluginListFile(game.Id))) ?? [];
+            return entries
+                .Where(entry => File.Exists(PluginImageFile(entry.Image)))
+                .Select(entry => new GameBackgroundItem(HashOf(entry.Image), PluginImageFile(entry.Image), entry.Video))
+                .ToList();
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+        {
+            return [];
+        }
     }
 
     private static async Task<IReadOnlyList<GameBackgroundItem>> PluginBackgroundsAsync(GameKey game)
@@ -118,29 +134,42 @@ public sealed class GameBackgroundService
 
         try
         {
-            var url = descriptor.BackgroundUrl;
-            if (url is null && descriptor.BackgroundApi is { } api && Sparxie.Infrastructure.Plugins.RemoteUrlPolicy.IsAllowed(api.Url))
+            var entries = new List<PluginBackgroundEntry>();
+            if (descriptor.BackgroundUrl is { } single)
             {
-                var json = await ReadLimitedAsync(api.Url, Sparxie.Infrastructure.Plugins.RemoteUrlPolicy.MaxApiBytes).ConfigureAwait(false);
-                if (json is not null
-                    && Sparxie.Infrastructure.Plugins.RemoteUrlPolicy.TryReadString(System.Text.Encoding.UTF8.GetString(json), api.Path, out var found))
+                entries.Add(new PluginBackgroundEntry(single, null));
+            }
+            else if (descriptor.BackgroundApi is { } api && Sparxie.Infrastructure.Plugins.RemoteUrlPolicy.IsAllowed(api.Url)
+                && await ReadLimitedAsync(api.Url, Sparxie.Infrastructure.Plugins.RemoteUrlPolicy.MaxApiBytes, api.Body).ConfigureAwait(false) is { } json)
+            {
+                foreach (var (image, video) in Sparxie.Infrastructure.Plugins.RemoteUrlPolicy.ReadBackgrounds(System.Text.Encoding.UTF8.GetString(json), api))
                 {
-                    url = found;
+                    entries.Add(new PluginBackgroundEntry(image, video));
                 }
             }
 
-            if (Sparxie.Infrastructure.Plugins.RemoteUrlPolicy.IsAllowed(url))
+            var downloaded = new List<PluginBackgroundEntry>();
+            Directory.CreateDirectory(CacheDir);
+            foreach (var entry in entries)
             {
-                Directory.CreateDirectory(CacheDir);
-                var imageFile = PluginImageFile(game.Id);
-                var urlFile = PluginUrlFile(game.Id);
-                var upToDate = File.Exists(imageFile) && File.Exists(urlFile) && await File.ReadAllTextAsync(urlFile).ConfigureAwait(false) == url;
-                if (!upToDate && await ReadLimitedAsync(url!, MaxRemoteImageBytes).ConfigureAwait(false) is { } bytes
-                    && Sparxie.Infrastructure.Plugins.RemoteUrlPolicy.LooksLikeImage(bytes))
+                var file = PluginImageFile(entry.Image);
+                if (!File.Exists(file))
                 {
-                    await File.WriteAllBytesAsync(imageFile, bytes).ConfigureAwait(false);
-                    await File.WriteAllTextAsync(urlFile, url!).ConfigureAwait(false);
+                    if (await ReadLimitedAsync(entry.Image, MaxRemoteImageBytes).ConfigureAwait(false) is not { } bytes
+                        || !Sparxie.Infrastructure.Plugins.RemoteUrlPolicy.LooksLikeImage(bytes))
+                    {
+                        continue;
+                    }
+
+                    await File.WriteAllBytesAsync(file, bytes).ConfigureAwait(false);
                 }
+
+                downloaded.Add(entry);
+            }
+
+            if (downloaded.Count > 0) // 接口这次没给出有效内容时保留旧列表
+            {
+                await File.WriteAllTextAsync(PluginListFile(game.Id), JsonSerializer.Serialize(downloaded)).ConfigureAwait(false);
             }
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException)
@@ -152,9 +181,15 @@ public sealed class GameBackgroundService
     }
 
     /// <summary>读取响应体，超过上限就放弃（返回 null）。</summary>
-    private static async Task<byte[]?> ReadLimitedAsync(string url, long limit)
+    private static async Task<byte[]?> ReadLimitedAsync(string url, long limit, string? postJson = null)
     {
-        using var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+        using var request = new HttpRequestMessage(postJson is null ? HttpMethod.Get : HttpMethod.Post, url);
+        if (postJson is not null)
+        {
+            request.Content = new StringContent(postJson, System.Text.Encoding.UTF8, "application/json");
+        }
+
+        using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > limit
             || response.RequestMessage?.RequestUri is not { } finalUri || !Sparxie.Infrastructure.Plugins.RemoteUrlPolicy.IsAllowed(finalUri.AbsoluteUri))
         {

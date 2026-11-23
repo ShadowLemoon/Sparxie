@@ -196,7 +196,10 @@ public sealed class PluginManifest
         }
 
         if (parsed.BackgroundApi is { } api
-            && (!RemoteUrlPolicy.IsAllowed(api.Url) || string.IsNullOrWhiteSpace(api.Path) || api.Path.Length > 128))
+            && (!RemoteUrlPolicy.IsAllowed(api.Url) || string.IsNullOrWhiteSpace(api.Path) || api.Path.Length > 128
+                || api.ItemPath?.Length > 128 || api.VideoPath?.Length > 128
+                || (api.Method is not null && api.Method is not ("GET" or "POST"))
+                || (api.Body is not null && (api.Body.Length > 4096 || !IsJsonObject(api.Body)))))
         {
             error = "backgroundApi 需要 https 的 url 和不超过 128 字符的 path（如 data.0.url）";
             return false;
@@ -214,6 +217,19 @@ public sealed class PluginManifest
         return true;
     }
 
+    private static bool IsJsonObject(string text)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(text);
+            return doc.RootElement.ValueKind == JsonValueKind.Object;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
     private static bool IsPlainExeName(string? name) =>
         !string.IsNullOrWhiteSpace(name)
         && name.Length <= 64
@@ -222,7 +238,7 @@ public sealed class PluginManifest
         && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0
         && name.IndexOfAny(['/', '\\', ':']) < 0;
 
-    private sealed class RawJsonConverter : JsonConverter<string?>
+    internal sealed class RawJsonConverter : JsonConverter<string?>
     {
         public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
             reader.TokenType == JsonTokenType.Null ? null : JsonDocument.ParseValue(ref reader).RootElement.GetRawText();

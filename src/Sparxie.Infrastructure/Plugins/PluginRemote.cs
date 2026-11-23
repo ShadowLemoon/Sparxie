@@ -9,6 +9,19 @@ public sealed class BackgroundApiSpec
     public string Url { get; set; } = string.Empty;
 
     public string Path { get; set; } = string.Empty;
+
+    /// <summary>可选：<see cref="Path"/> 取到的是数组（元素是对象）时，每个元素里图片地址的路径；元素直接是字符串时不用填。</summary>
+    public string? ItemPath { get; set; }
+
+    /// <summary>可选：每个元素里动态背景（视频）地址的路径，和 <see cref="ItemPath"/> 同级的相对路径。</summary>
+    public string? VideoPath { get; set; }
+
+    /// <summary>请求方法，只允许 GET（默认）或 POST。</summary>
+    public string? Method { get; set; }
+
+    /// <summary>POST 的 JSON 请求体（写成 JSON 对象，≤ 4 KB）；有它时按 POST 发送。</summary>
+    [System.Text.Json.Serialization.JsonConverter(typeof(PluginManifest.RawJsonConverter))]
+    public string? Body { get; set; }
 }
 
 /// <summary>manifest 里的注册表查找项：读 <see cref="Hive"/>（HKCU / HKLM）下 <see cref="Key"/> 的 <see cref="Value"/>，得到安装目录（或 EXE 路径）。</summary>
@@ -106,6 +119,80 @@ public static class RemoteUrlPolicy
         {
             return false;
         }
+    }
+
+    public const int MaxBackgrounds = 8;
+
+    /// <summary>
+    /// 按 backgroundApi 的声明取出背景（最多 8 张）：path 指向字符串时是一张；指向数组时每个元素是字符串，
+    /// 或是对象（用 itemPath 取图片、videoPath 取可选的视频地址）。地址都要通过 <see cref="IsAllowed"/>。
+    /// </summary>
+    public static IReadOnlyList<(string Image, string? Video)> ReadBackgrounds(string json, BackgroundApiSpec spec)
+    {
+        var result = new List<(string, string?)>();
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (!TryWalk(doc.RootElement, spec.Path, out var node))
+            {
+                return result;
+            }
+
+            var items = node.ValueKind == JsonValueKind.Array ? node.EnumerateArray().ToList() : [node];
+            foreach (var item in items)
+            {
+                var image = ReadAt(item, spec.ItemPath);
+                var video = spec.VideoPath is null ? null : ReadAt(item, spec.VideoPath);
+                if (IsAllowed(image))
+                {
+                    result.Add((image!, IsAllowed(video) ? video : null));
+                }
+
+                if (result.Count >= MaxBackgrounds)
+                {
+                    break;
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // 接口返回的不是 JSON：当作没有背景
+        }
+
+        return result;
+    }
+
+    private static string? ReadAt(JsonElement item, string? path)
+    {
+        var node = item;
+        if (!string.IsNullOrEmpty(path) && !TryWalk(item, path, out node))
+        {
+            return null;
+        }
+
+        return node.ValueKind == JsonValueKind.String ? node.GetString() : null;
+    }
+
+    private static bool TryWalk(JsonElement root, string path, out JsonElement node)
+    {
+        node = root;
+        foreach (var part in path.Split('.', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (node.ValueKind == JsonValueKind.Array && int.TryParse(part, out var index) && index >= 0 && index < node.GetArrayLength())
+            {
+                node = node[index];
+            }
+            else if (node.ValueKind == JsonValueKind.Object && node.TryGetProperty(part, out var child))
+            {
+                node = child;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>用文件头判断是不是我们接受的位图（png / jpg / webp / bmp）；不信任响应的 Content-Type。</summary>
