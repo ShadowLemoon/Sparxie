@@ -154,6 +154,15 @@ powershell -File tests\MockGameModule\build_mock.ps1
 3. 说明插件是否联网、会改哪些注册表项和文件（写进 `privacyNote`）。
 4. 每次发布递增 `version`：导入时主程序据此判断升级或降级。
 
+**发布流程建议**（终末地插件仓库 skyhua0224/endfiled-sparxie 是现成的参考实现，可以直接照着用）：
+
+1. 改 `plugin.json` 的 `version`（与插件里报告的版本一致），合进主分支。
+2. 推一个 `v<版本>` 的 tag（如 `v0.2.0`），由 GitHub Actions 自动构建、跑测试、校验 `plugin.json`、打包，并创建 Release：附 zip 和 SHA-256 清单，发布说明里写明 `module.dll` / `plugin.json` / zip 的哈希、安装步骤和风险提示。
+3. 不要覆盖已经发布的文件（`module.dll` 每次编译哈希都不同，换了文件用户核对过的哈希就对不上），要改版本号重发；发布出去的包应当来自 CI，不要本地构建后手工上传。
+4. 用户在 Sparxie 里导入 zip（或拖进去），点“查看并启用”，对照 Release 说明里的哈希确认。
+
+参考实现里的文件：`.github/workflows/release.yml`（工作流）、`.github/release-notes.template.md`（发布说明模板）、`scripts/package.ps1`、`scripts/make_release_notes.ps1`、`docs/RELEASING.md`（检查清单）。
+
 ## 导入
 
 设置里“第三方游戏插件”卡片支持把 `.zip` 或文件夹直接拖进去（一次最多 8 个，其余文件会被忽略并提示）；也可以点“导入插件…”选择。
