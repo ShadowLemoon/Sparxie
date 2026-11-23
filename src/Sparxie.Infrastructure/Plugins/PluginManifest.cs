@@ -78,6 +78,21 @@ public sealed class PluginManifest
     /// <summary>解析并校验；失败返回 false 并给出原因。</summary>
     public static bool TryParse(byte[] bytes, string expectedId, out PluginManifest manifest, out string error)
     {
+        try
+        {
+            return TryParseCore(bytes, expectedId, out manifest, out error);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // 不兼容 / 畸形的 plugin.json 只让这个插件不可用，不能让扫描（主程序启动、Broker）抛出去。
+            manifest = new PluginManifest();
+            error = $"plugin.json 不兼容: {ex.Message}";
+            return false;
+        }
+    }
+
+    private static bool TryParseCore(byte[] bytes, string expectedId, out PluginManifest manifest, out string error)
+    {
         manifest = new PluginManifest();
         if (bytes.Length > MaxManifestBytes)
         {
@@ -100,6 +115,19 @@ public sealed class PluginManifest
         {
             error = "plugin.json 为空";
             return false;
+        }
+
+        parsed.ExeNames ??= [];
+        parsed.Caps ??= [];
+        if (parsed.AutoFind is not null)
+        {
+            parsed.AutoFind.UninstallNames ??= [];
+            parsed.AutoFind.Registry ??= [];
+        }
+
+        if (parsed.RegistryHooks is not null)
+        {
+            parsed.RegistryHooks.Keys ??= [];
         }
 
         if (parsed.Id != expectedId || !GameIds.IsValidId(parsed.Id) || GameIds.TryGetBuiltIn(parsed.Id, out _))

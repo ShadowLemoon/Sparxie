@@ -14,6 +14,10 @@ public partial class App : Application
     {
         InitializeComponent();
         UnhandledException += (sender, e) => DesktopLog.Write("未捕获异常", e.Exception);
+        // XAML 之外（线程池、任务）的致命异常也留一条日志，方便定位"打不开"。
+        AppDomain.CurrentDomain.UnhandledException += (sender, e) =>
+            DesktopLog.Write("进程级未处理异常", e.ExceptionObject as Exception ?? new InvalidOperationException(e.ExceptionObject?.ToString()));
+        TaskScheduler.UnobservedTaskException += (sender, e) => DesktopLog.Write("未观察到的任务异常", e.Exception);
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)

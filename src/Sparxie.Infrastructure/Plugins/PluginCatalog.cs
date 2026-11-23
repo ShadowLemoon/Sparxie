@@ -69,7 +69,15 @@ public sealed class PluginCatalog(string pluginsRoot, PluginTrustStore trust) : 
                 continue;
             }
 
-            entries.Add(ScanOne(dir, trusted));
+            try
+            {
+                entries.Add(ScanOne(dir, trusted));
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                // 一个插件的任何异常都只让它自己不可用，不能拖垮主程序启动。
+                entries.Add(new PluginEntry(Path.GetFileName(dir), dir, PluginAvailability.Invalid, $"无法读取插件：{ex.Message}", null, null, null, 0));
+            }
         }
 
         return entries;

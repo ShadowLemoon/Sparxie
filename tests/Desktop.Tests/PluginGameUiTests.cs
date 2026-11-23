@@ -244,6 +244,27 @@ public sealed class PluginGameUiTests : IDisposable
     }
 
     [Fact]
+    public void 配置里有插件游戏的配置但插件当前不可用_启动路径不抛异常_配置原样保留()
+    {
+        // 复现用户的场景：config.json 里已有终末地的配置和 selectedGame，随后插件文件被换成别的版本（哈希变了/不兼容），目录里不再有这款游戏。
+        var first = NewData();
+        first.AddProfile(new ProfileMutation(Id: "p1", DisplayName: "演示配置", GameId: PluginId, ExecutablePath: @"D:\Games\Demo\Demo.exe"));
+        first.Preferences.SelectedGame = PluginId;
+        first.Preferences.LastProfileByGame[PluginId] = "p1";
+        first.SavePreferences();
+        SetPlugin(installed: false);
+
+        var data = NewData();
+        var home = new HomeViewModel(data, new LauncherService());
+        var manager = new ProfileManagerViewModel(data, new EmptyFinder());
+        manager.SetScope(home.SelectedGame);
+        home.Refresh();
+
+        Assert.NotEqual(PluginId, home.SelectedGame.Id);
+        Assert.Contains(data.Config.Profiles, profile => profile.Game == PluginId);
+    }
+
+    [Fact]
     public void 主页选中内置游戏的偏好键仍兼容旧版PascalCase()
     {
         var data = NewData();

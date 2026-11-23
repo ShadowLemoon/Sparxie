@@ -53,7 +53,7 @@ public static class GameDirectory
         {
             loaded = PluginSource();
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is not OutOfMemoryException) // 任何插件目录问题都按"没有插件游戏"处理，不能阻断启动
         {
             loaded = [];
         }
