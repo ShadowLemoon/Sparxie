@@ -238,7 +238,12 @@ public sealed class PluginsViewModel : ObservableObject
     /// <summary>导入压缩包或文件夹。只拷贝和校验，不启用：之后仍要用户在列表里"查看并启用"。</summary>
     public async Task ImportAsync(string source)
     {
-        var staging = ChooseStagingRoot();
+        if (TryPrepareStagingRoot(out var denied) is not { } staging)
+        {
+            ReportImportFailure(denied!);
+            return;
+        }
+
         var inspection = await Task.Run(() => PluginInstaller.Inspect(source, _catalog.PluginsRoot, staging)).ConfigureAwait(true);
         if (!inspection.Success)
         {
@@ -297,26 +302,34 @@ public sealed class PluginsViewModel : ObservableObject
     }
 
     /// <summary>
-    /// 暂存目录优先放在 plugins 目录所在的盘（数据目录下），这样提交时是同盘改名，不用二次拷贝；
-    /// 那里写不进去（Sparxie 装在需要管理员权限的位置）才退回系统临时目录，让检查阶段仍能进行，
-    /// 提交阶段再给出明确的权限提示。
+    /// 暂存目录放在数据目录下（和 plugins 同一个盘），提交时是同盘改名。
+    /// 数据目录写不进去时（Sparxie 装在需要管理员权限的位置）plugins 目录同样写不进去，继续检查只会白解压一遍再在最后一步失败，
+    /// 所以这里先探测，写不进去就一开始给出明确的权限提示。
     /// </summary>
-    private string ChooseStagingRoot()
+    private string? TryPrepareStagingRoot(out string? deniedMessage)
     {
-        var preferred = Path.Combine(_dataRoot, "plugin-staging");
+        var staging = Path.Combine(_dataRoot, "plugin-staging");
         try
         {
-            Directory.CreateDirectory(preferred);
-            var probe = Path.Combine(preferred, ".write-test-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(staging);
+            var probe = Path.Combine(staging, ".write-test-" + Guid.NewGuid().ToString("N"));
             File.WriteAllText(probe, string.Empty);
             File.Delete(probe);
-            return preferred;
+            deniedMessage = null;
+            return staging;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (UnauthorizedAccessException)
         {
-            return Path.Combine(Path.GetTempPath(), "sparxie-plugin-staging");
+            deniedMessage = $"没有权限写入 Sparxie 的数据目录：{_dataRoot}。Sparxie 装在需要管理员权限的位置时，请以管理员身份运行 Sparxie 后再导入，或手动把插件文件夹复制到 {_catalog.PluginsRoot}。";
+            return null;
+        }
+        catch (IOException ex)
+        {
+            deniedMessage = $"无法使用数据目录 {_dataRoot}：{ex.Message}";
+            return null;
         }
     }
+
 
     private void ReportImportFailure(string message)
     {
