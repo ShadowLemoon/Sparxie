@@ -20,11 +20,9 @@ $release = Join-Path $mainRepo '.pai\release'
 $out = Join-Path $release 'out'
 $runtime = Join-Path $release '_cache\zzz-runtime'
 $sha = (& git -C $repo rev-parse --short HEAD).Trim()
-if (-not $Version) { $Version = "0.1.0-dev.$sha" }
+# unique per build (commit + time) so the new app-<version> folder never collides with one that is still running
+if (-not $Version) { $Version = "0.1.0-dev.$sha." + (Get-Date -Format "HHmmss") }
 
-# Refuse to start (before deleting anything) while Sparxie from the release folder is running: its files are locked.
-$running = Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith((Join-Path $release 'Sparxie'), [System.StringComparison]::OrdinalIgnoreCase) }
-if ($running) { throw ('Sparxie from the release folder is still running (' + (($running | ForEach-Object { $_.ProcessName }) -join ', ') + '). Close it and run again.') }
 
 if (-not (Test-Path (Join-Path $runtime 'ZZZTouchCore.dll'))) {
     throw "ZZZ runtime not prepared: $runtime`nRun: python build/package_runtime.py download-runtime --destination zzz-runtime.zip ; python build/package_runtime.py prepare-runtime --archive zzz-runtime.zip --destination `"$runtime`""
@@ -34,15 +32,14 @@ New-Item -ItemType Directory -Force $out | Out-Null
 Get-ChildItem $out -Filter '*.zip' -ErrorAction SilentlyContinue | Remove-Item -Force
 
 & (Join-Path $PSScriptRoot 'package_desktop.ps1') -Version $Version -RuntimeDirectory $runtime -OutputDirectory $out
-if ($LASTEXITCODE -ne 0) { throw 'package_desktop.ps1 failed (is Sparxie from the release folder still running?)' }
+if ($LASTEXITCODE -ne 0) { throw 'package_desktop.ps1 failed' }
 
-# Fixed names at the top of the release folder. Only the app-<version>\ folder(s) and version.ini are replaced.
-# Everything else next to them (Sparxie.exe, config.json, plugins\, plugin-trust.json, logs\, cache\ ...) is left alone;
-# Sparxie.exe is only copied when it is missing.
+# Fixed names at the top of the release folder. A NEW app-<version>\ folder is ADDED next to the old ones and version.ini is
+# switched to it; old folders (possibly in use by a running Sparxie) are not touched - the shell launcher cleans them up later.
+# Everything else (Sparxie.exe, config.json, plugins\, plugin-trust.json, logs\, cache\ ...) is left alone; Sparxie.exe is only copied when missing.
 $app = Join-Path $release 'Sparxie'
 $built = Join-Path $out 'Sparxie'
 New-Item -ItemType Directory -Force $app | Out-Null
-Get-ChildItem $app -Directory -Filter 'app-*' | Remove-Item -Recurse -Force
 Get-ChildItem $built -Directory -Filter 'app-*' | Move-Item -Destination $app -Force
 Copy-Item (Join-Path $built 'version.ini') (Join-Path $app 'version.ini') -Force
 if (-not (Test-Path (Join-Path $app 'Sparxie.exe'))) { Copy-Item (Join-Path $built 'Sparxie.exe') $app }
