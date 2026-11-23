@@ -39,6 +39,28 @@ Sparxie 可以加载第三方提供的游戏模块（插件）。主仓库和主
 - `caps`：`createsProcess`（模块自己创建游戏进程）、`injects`（会向游戏注入代码，启用确认里会醒目提示）、`needsArgs`（需要宿主生成命令行参数）、`hotParams`（支持热调）。必须与模块 `get_info` 返回的能力位**完全一致**。
 - `plugin.json` 不超过 64 KB。
 
+## 图标、背景与自动查找（可选）
+
+都写在 `plugin.json` 里，由宿主执行，插件 DLL 不参与：
+
+- `icon`：插件目录里的图片文件名（ico/png/jpg/webp/bmp，≤ 8 MB，不能带路径，不能是链接）。用在游戏标签和标题。不写 `icon` 时，包里有 `icon.ico` 或 `icon.png`（按这个顺序）就自动用它。
+- 背景，按优先级：
+  1. `background`：插件目录里的图片文件名，规则同上。
+  2. `backgroundUrl`：https 图片地址。
+  3. `backgroundApi`：宿主请求一个 JSON 接口（≤ 256 KB），按点分隔的路径取出图片地址（数字是数组下标）。
+     - `url`（https）、`path`（必填）。`method` 可选 `GET`（默认）或 `POST`；`body` 是 JSON 对象（≤ 4 KB），有它时按 POST 发送。
+     - `path` 指向字符串时是一张背景；指向数组时每个元素一张（最多 8 张）。元素是对象时，`itemPath` 取图片地址，可选的 `videoPath` 取动态背景（视频）地址。
+     - 对应 Collapse 插件接口里的 `GetBackgroundEntries` + 图片/视频标记，区别是主程序不加载插件 DLL，所以写成声明。
+     - 例（鹰角启动器）：`"path": "proxy_rsps.0.get_main_bg_image_rsp.main_bg_image", "itemPath": "url", "videoPath": "video_url"`。
+  
+  网络来的图由宿主下载，只允许 https，拒绝本机和内网地址（重定向后的最终地址也检查），限 8 MB，并按文件头确认是位图。图片缓存在背景缓存目录，离线时用旧缓存。
+- `autoFind`：给“自动查找”提供线索。找到的文件名必须在 `exeNames` 里，并且是本机盘符路径。
+  - `uninstallNames`：卸载项键名里包含的关键字（≤ 8 项），命中的安装目录下会搜索白名单 EXE。
+  - `registry`：`[{ "hive": "HKCU" | "HKLM", "key": "Software\\…", "value": "InstallPath", "subdirectory": "game" }]`（≤ 8 项）。读到的值是安装目录或 EXE 路径，`subdirectory` 可选。
+  - 另外总会用 Windows 的最近运行记录和正在运行的进程。
+
+图片和这些线索不参与信任哈希（只影响显示和查找，不会让插件加载或运行任何东西）。
+
 ## 注册表键备份/恢复钩子（可选）
 
 插件如果需要修改 HKCU 下的某些键，不能自己写，而要通过宿主提供的回调（`SpxHostApi`：`registry_set_dword` / `registry_set_string` / `registry_delete_value`，在 `SpxLaunchRequest.host` 里传入）。这套机制**与分辨率、全屏等画面设置无关**，也不改变画面设置的行为。
@@ -51,7 +73,7 @@ Sparxie 可以加载第三方提供的游戏模块（插件）。主仓库和主
 
 - 前缀必须形如 `Software\<厂商>\<游戏>`（至少三段，只在 HKCU 下），不得包含 `Run`、`RunOnce`、`Policies`、`Winlogon`、`Classes`、`Microsoft`、`Wow6432Node` 等自启动/策略/系统类路径段，最多 8 个。
 - 回调传入的 key 必须落在声明的前缀内（前缀边界按路径段判断，不区分大小写），否则返回 `SPX_ERR_INVALID_ARGUMENT`，不会写入。
-- 某个值第一次被改动前，宿主先把原值（包括"原本不存在"）写进 `recovery\\registry-hook-<id>.json`，再写入；只支持 DWORD 和字符串，其他类型的值无法安全备份，宿主会拒绝改动它。
+- 某个值第一次被改动前，宿主先把原值（包括"原本不存在"）写进 `recovery\registry-hook-<id>.json`，再写入；只支持 DWORD 和字符串，其他类型的值无法安全备份，宿主会拒绝改动它。
 - 会话结束（含失败）时由宿主恢复；SessionHost 异常退出留下的备份，下次启动该插件前先恢复，备份里记录了当时的前缀，所以插件被删除后也能恢复。恢复失败时备份保留，且该插件拒绝启动，直到处理完；部分恢复后，已恢复的条目会从备份里去掉，避免下次重放旧原值。key、值名最长 255 个字符，字符串值最长 4096 个字符，超过的调用会被拒绝（不会被截断）；回调里的 `result` 可以为 NULL（宿主不会写）。
 
 ## 信任与加载
@@ -110,7 +132,28 @@ powershell -File tests\MockGameModule\build_mock.ps1
 
 ## 下架与清理
 
-- Desktop「停用」：撤销信任，保留文件；「删除」：撤销信任、删除 `plugins\<id>\`、删除遗留的 `recovery\registry-backup-<id>.json`，并清掉偏好里记住的该游戏。
+- Desktop「停用」：撤销信任，保留文件；「删除」：撤销信任、删除 `plugins\<id>\`、删除遗留的 `recovery\registry-hook-<id>.json`，并清掉偏好里记住的该游戏。
 - 使用该游戏的配置会保留，只是无法启动；重新安装同 id 的插件并确认后即可恢复。
 - 删除或停用时，Desktop 会先尝试恢复该插件遗留的注册表钩子备份（游戏正在运行时不动注册表）；删除遇到无法恢复的备份会**拒绝删除**，停用则照常停用并提示备份仍保留。
 - 手工下架：删除 `plugins\<id>\` 并从 `plugin-trust.json` 里删掉对应记录即可，主程序照常启动。
+
+## 作者自述字段与发布清单（可选）
+
+`plugin.json` 里这些字段只用于展示，主程序会标注“作者自述，未经 Sparxie 验证”：
+
+- `author`（≤ 64 字）、`description`（≤ 300 字）、`privacyNote`（≤ 300 字，说明是否联网、读写哪些数据）。
+- `links`：最多 4 项 `{ "title": "…", "url": "https://…" }`，只接受 https。
+- settingsSchema 字段可加 `group`（≤ 32 字）：同组的相邻字段在设置页共用一个分组标题。
+
+**建议插件作者发布时提供**：
+
+1. 256 px 的图标（`icon`）和一张背景（`background` 或 `backgroundApi`）。
+2. 在发布页公布 `module.dll` 的 SHA-256。用户可以和确认框里显示的哈希手动核对。
+3. 说明插件是否联网、会改哪些注册表项和文件（写进 `privacyNote`）。
+4. 每次发布递增 `version`：导入时主程序据此判断升级或降级。
+
+## 导入
+
+设置里“第三方游戏插件”卡片支持把 `.zip` 或文件夹直接拖进去（一次最多 8 个，其余文件会被忽略并提示）；也可以点“导入插件…”选择。
+
+导入分两步：先检查（解到暂存目录、校验），再提交（换进 plugins 目录）。已有同 id 的插件时，会按版本提示“升级 / 降级 / 替换”，内容完全相同则直接跳过；对应游戏正在运行时拒绝替换。失败分类：不支持的文件、过大、路径越界、含链接、缺 plugin.json、manifest 无效、缺 module.dll、id 非法、被占用。

@@ -19,4 +19,7 @@ public sealed class DesktopSettings
 
     /// <summary>每个游戏上次使用的配置 ID（键为 GameType 名）。点游戏标题时据此恢复，保证结果可预期。</summary>
     public Dictionary<string, string> LastProfileByGame { get; set; } = new();
+
+    /// <summary>已经提示过“首次启动会注入游戏”的插件（键为 id:module.dll 哈希）；插件文件变化后会再提示一次。</summary>
+    public List<string> AcknowledgedPluginLaunches { get; set; } = new();
 }

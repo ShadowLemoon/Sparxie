@@ -3,7 +3,16 @@ using Sparxie.Infrastructure.Configuration;
 
 namespace Sparxie.Infrastructure.Plugins;
 
-public sealed record PluginTrustRecord(string Id, string DllSha256, string ManifestSha256, long Size, DateTimeOffset ConfirmedAt);
+/// <summary>用户确认时的记录。Version / DisplayName / Caps 只用于“文件已变化”时展示差异（旧记录里没有，为 null）。</summary>
+public sealed record PluginTrustRecord(
+    string Id,
+    string DllSha256,
+    string ManifestSha256,
+    long Size,
+    DateTimeOffset ConfirmedAt,
+    string? Version = null,
+    string? DisplayName = null,
+    IReadOnlyList<string>? Caps = null);
 
 /// <summary>
 /// plugin-trust.json：用户确认过的插件哈希。作用是发现文件变化（DLL 或 manifest 被替换），

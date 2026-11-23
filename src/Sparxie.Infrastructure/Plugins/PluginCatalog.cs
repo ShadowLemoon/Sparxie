@@ -41,6 +41,8 @@ public sealed class PluginCatalog(string pluginsRoot, PluginTrustStore trust) : 
 {
     public const string ManifestFileName = "plugin.json";
 
+    public string PluginsRoot => pluginsRoot;
+
     public IReadOnlyList<PluginEntry> Scan()
     {
         if (!Directory.Exists(pluginsRoot))
@@ -62,12 +64,20 @@ public sealed class PluginCatalog(string pluginsRoot, PluginTrustStore trust) : 
 
         foreach (var dir in directories)
         {
-            if (IsReparsePoint(dir))
+            if (Path.GetFileName(dir).StartsWith(".", StringComparison.Ordinal) || IsReparsePoint(dir))
             {
                 continue;
             }
 
-            entries.Add(ScanOne(dir, trusted));
+            try
+            {
+                entries.Add(ScanOne(dir, trusted));
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                // 一个插件的任何异常都只让它自己不可用，不能拖垮主程序启动。
+                entries.Add(new PluginEntry(Path.GetFileName(dir), dir, PluginAvailability.Invalid, $"无法读取插件：{ex.Message}", null, null, null, 0));
+            }
         }
 
         return entries;
@@ -83,7 +93,15 @@ public sealed class PluginCatalog(string pluginsRoot, PluginTrustStore trust) : 
     public PluginAvailability? Availability(string id) => Scan().FirstOrDefault(entry => entry.Id == id)?.Availability;
 
     private static GameDescriptor ToDescriptor(PluginEntry entry) =>
-        new(entry.Id, entry.Manifest!.DisplayName, entry.Manifest.ExeNames, entry.Manifest.Schema);
+        new(entry.Id, entry.Manifest!.DisplayName, entry.Manifest.ExeNames, entry.Manifest.Schema,
+            PluginAssets.ResolveIcon(entry.Directory, entry.Manifest.Icon),
+            PluginAssets.Resolve(entry.Directory, entry.Manifest.Background),
+            entry.Manifest.AutoFind?.UninstallNames,
+            entry.Manifest.BackgroundUrl,
+            entry.Manifest.BackgroundApi,
+            entry.Manifest.AutoFind?.Registry,
+            entry.Manifest.Caps,
+            entry.DllSha256);
 
     private static PluginEntry ScanOne(string dir, Dictionary<string, PluginTrustRecord> trusted)
     {

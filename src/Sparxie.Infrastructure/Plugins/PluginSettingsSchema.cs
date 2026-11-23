@@ -29,7 +29,8 @@ public sealed record PluginField(
     IReadOnlyList<PluginFieldOption> Options,
     int MaxLength,
     PluginFieldCondition? ShowWhen,
-    string? Hint);
+    string? Hint,
+    string? Group = null);
 
 /// <summary>
 /// 插件设置的声明式 schema（plugin.json 的 settingsSchema）：由核心据此校验、补默认值并生成设置表单，插件自己不提供界面。
@@ -211,6 +212,13 @@ public sealed class PluginSettingsSchema
             return false;
         }
 
+        var group = Text("group");
+        if (group is { Length: > 32 })
+        {
+            error = $"字段 {key} 的 group 过长";
+            return false;
+        }
+
         var hint = Text("hint");
         if (hint is { Length: > 200 })
         {
@@ -244,7 +252,7 @@ public sealed class PluginSettingsSchema
                     return false;
                 }
 
-                field = new PluginField(key, label, PluginFieldKind.Bool, JsonValue.Create(defaultElement.GetBoolean())!, 0, 0, 1, [], 0, showWhen, hint);
+                field = new PluginField(key, label, PluginFieldKind.Bool, JsonValue.Create(defaultElement.GetBoolean())!, 0, 0, 1, [], 0, showWhen, hint, group);
                 return true;
 
             case "int":
@@ -266,7 +274,7 @@ public sealed class PluginSettingsSchema
                     return false;
                 }
 
-                field = new PluginField(key, label, PluginFieldKind.Int, JsonValue.Create(defaultValue)!, minValue, maxValue, step, [], 0, showWhen, hint);
+                field = new PluginField(key, label, PluginFieldKind.Int, JsonValue.Create(defaultValue)!, minValue, maxValue, step, [], 0, showWhen, hint, group);
                 return true;
             }
 
@@ -299,7 +307,7 @@ public sealed class PluginSettingsSchema
                     return false;
                 }
 
-                field = new PluginField(key, label, PluginFieldKind.Enum, JsonValue.Create(defaultElement.GetString()!)!, 0, 0, 1, options, 0, showWhen, hint);
+                field = new PluginField(key, label, PluginFieldKind.Enum, JsonValue.Create(defaultElement.GetString()!)!, 0, 0, 1, options, 0, showWhen, hint, group);
                 return true;
             }
 
@@ -318,7 +326,7 @@ public sealed class PluginSettingsSchema
                     return false;
                 }
 
-                field = new PluginField(key, label, PluginFieldKind.String, JsonValue.Create(defaultElement.GetString()!)!, 0, 0, 1, [], maxLength, showWhen, hint);
+                field = new PluginField(key, label, PluginFieldKind.String, JsonValue.Create(defaultElement.GetString()!)!, 0, 0, 1, [], maxLength, showWhen, hint, group);
                 return true;
             }
 

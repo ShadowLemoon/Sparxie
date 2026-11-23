@@ -25,6 +25,9 @@ public interface IGameFinderEnvironment
 
     bool FileExists(string path);
 
+    /// <summary>读插件声明的注册表值（目录或 EXE 路径）；读不到返回空。默认实现什么都不读，便于测试替身。</summary>
+    IEnumerable<string> RegistryDirectories(Plugins.RegistryLookupSpec lookup) => [];
+
     /// <summary>在目录下按深度上限查找指定文件名（只用来在启动器安装目录里找游戏子目录）。</summary>
     IEnumerable<string> FindFiles(string directory, string fileName, int maxDepth);
 }
@@ -116,6 +119,91 @@ public static class GameExecutableFinder
         }
 
         // 4) 正在运行的游戏进程
+        foreach (var name in names)
+        {
+            foreach (var path in environment.RunningExecutablePaths(System.IO.Path.GetFileNameWithoutExtension(name)))
+            {
+                Add(path, "正在运行的游戏", 2);
+            }
+        }
+
+        return found.OrderBy(item => item.Priority).ToList();
+    }
+
+    /// <summary>
+    /// 第三方游戏的自动查找：只用通用来源——卸载项（要插件在 manifest 里声明键名关键字）、最近运行过的程序记录、正在运行的进程。
+    /// 文件名必须在插件声明的白名单里。
+    /// </summary>
+    public static IReadOnlyList<GameExecutableCandidate> FindThirdParty(GameDescriptor game, IGameFinderEnvironment environment)
+    {
+        ArgumentNullException.ThrowIfNull(game);
+        ArgumentNullException.ThrowIfNull(environment);
+        var names = game.ExeNames;
+        var found = new List<GameExecutableCandidate>();
+
+        void Add(string path, string source, int priority)
+        {
+            var normalized = path.Replace('/', '\\');
+            if (normalized.Length > 2 && char.IsLetter(normalized[0]) && normalized[1] == ':'
+                && names.Contains(System.IO.Path.GetFileName(normalized), StringComparer.OrdinalIgnoreCase)
+                && environment.FileExists(normalized)
+                && !found.Any(item => string.Equals(item.Path, normalized, StringComparison.OrdinalIgnoreCase)))
+            {
+                found.Add(new GameExecutableCandidate(normalized, source, priority));
+            }
+        }
+
+        if (game.UninstallNames is { Count: > 0 } hints)
+        {
+            foreach (var (key, directory) in environment.UninstallInstallDirectories())
+            {
+                if (!hints.Any(hint => key.Contains(hint, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                foreach (var name in names)
+                {
+                    foreach (var file in environment.FindFiles(directory.Replace('/', '\\'), name, maxDepth: 3))
+                    {
+                        Add(file, "卸载项里的安装目录", 0);
+                    }
+                }
+            }
+        }
+
+        foreach (var lookup in game.RegistryLookups ?? [])
+        {
+            foreach (var value in environment.RegistryDirectories(lookup))
+            {
+                var directory = value.Replace('/', '\\').Trim().Trim('"');
+                if (directory.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                {
+                    Add(directory, "插件指定的注册表项", 0);
+                    directory = System.IO.Path.GetDirectoryName(directory) ?? directory;
+                }
+
+                if (!string.IsNullOrEmpty(lookup.Subdirectory))
+                {
+                    directory = System.IO.Path.Combine(directory, lookup.Subdirectory);
+                }
+
+                foreach (var name in names)
+                {
+                    Add(System.IO.Path.Combine(directory, name), "插件指定的注册表项", 0);
+                    foreach (var file in environment.FindFiles(directory, name, maxDepth: 3))
+                    {
+                        Add(file, "插件指定的注册表项", 0);
+                    }
+                }
+            }
+        }
+
+        foreach (var path in environment.RecentExecutablePaths())
+        {
+            Add(path, "最近运行过的程序记录", 1);
+        }
+
         foreach (var name in names)
         {
             foreach (var path in environment.RunningExecutablePaths(System.IO.Path.GetFileNameWithoutExtension(name)))
@@ -310,6 +398,30 @@ public sealed class SystemGameFinderEnvironment : IGameFinderEnvironment
     }
 
     public bool FileExists(string path) => File.Exists(path);
+
+    public IEnumerable<string> RegistryDirectories(Plugins.RegistryLookupSpec lookup)
+    {
+        var results = new List<string>();
+        var hive = lookup.Hive == "HKLM" ? RegistryHive.LocalMachine : RegistryHive.CurrentUser;
+        foreach (var view in hive == RegistryHive.LocalMachine ? new[] { RegistryView.Registry64, RegistryView.Registry32 } : new[] { RegistryView.Registry64 })
+        {
+            try
+            {
+                using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+                using var key = baseKey.OpenSubKey(lookup.Key);
+                if (key?.GetValue(lookup.Value) is string text && !string.IsNullOrWhiteSpace(text))
+                {
+                    results.Add(text);
+                }
+            }
+            catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+            {
+                // 读不到就当没有
+            }
+        }
+
+        return results;
+    }
 
     public IEnumerable<string> FindFiles(string directory, string fileName, int maxDepth)
     {
