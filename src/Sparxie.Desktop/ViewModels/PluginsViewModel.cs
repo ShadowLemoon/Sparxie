@@ -6,7 +6,26 @@ using Sparxie.Infrastructure.Processes;
 namespace Sparxie.Desktop.ViewModels;
 
 /// <summary>需要用户确认的操作（标题 + 正文）；由界面层用对话框显示。</summary>
-public sealed record PluginConfirmation(string Title, string Body, string PrimaryText);
+public sealed record PluginConfirmation(string Title, string Body, string PrimaryText, PluginEnableDetails? Enable = null);
+
+/// <summary>启用确认框用的结构化信息（界面层据此排版：风险句、能力、等宽分组哈希、变化时的新旧对比、必选勾选框）。</summary>
+public sealed record PluginEnableDetails(
+    string Name,
+    string Id,
+    string? Version,
+    string? License,
+    string? Homepage,
+    IReadOnlyList<string> ExeNames,
+    IReadOnlyList<string> Capabilities,
+    IReadOnlyList<string> RiskSentences,
+    string DllSha256,
+    string ManifestSha256,
+    long DllSize,
+    string Directory,
+    string? PreviousDllSha256,
+    string? PreviousManifestSha256,
+    bool IsChange,
+    bool RequiresInjectionAck);
 
 /// <summary>设置页里的一个第三方插件。</summary>
 public sealed class PluginItemViewModel
@@ -137,7 +156,9 @@ public sealed class PluginsViewModel : ObservableObject
             return;
         }
 
-        var confirmed = await Confirm(new PluginConfirmation("启用第三方插件？", BuildRiskText(entry), "我已了解风险，启用")).ConfigureAwait(true);
+        var details = BuildEnableDetails(entry, _trust.Find(id));
+        var title = details.IsChange ? "插件文件已变化，重新确认？" : "启用第三方插件？";
+        var confirmed = await Confirm(new PluginConfirmation(title, BuildRiskText(entry), "我已了解风险，启用", details)).ConfigureAwait(true);
         if (!confirmed)
         {
             return;
@@ -254,7 +275,75 @@ public sealed class PluginsViewModel : ObservableObject
     {
         if (manifest.HasCap("injects")) { yield return "会注入游戏进程"; }
         if (manifest.HasCap("createsProcess")) { yield return "自行创建游戏进程"; }
+        if (manifest.HasCap("needsArgs")) { yield return "需要启动参数"; }
         if (manifest.HasCap("hotParams")) { yield return "支持热调"; }
+        if (manifest.RegistryHooks is { Keys.Count: > 0 }) { yield return "会修改注册表（仅限声明的 HKCU 项）"; }
+    }
+
+    /// <summary>每 8 位一组、空格分隔，便于逐段核对（不改变哈希本身：复制时用原值）。</summary>
+    public static string FormatHash(string? hash)
+    {
+        if (string.IsNullOrEmpty(hash))
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder(hash.Length + hash.Length / 8);
+        for (var i = 0; i < hash.Length; i += 8)
+        {
+            if (i > 0) { builder.Append(' '); }
+            builder.Append(hash, i, Math.Min(8, hash.Length - i));
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// 启用确认框的结构化内容。<paramref name="previous"/> 是该插件上次被确认时记录的哈希：
+    /// 有记录且与当前不同就是“文件已变化”，界面要把新旧哈希并排给用户看。
+    /// </summary>
+    public static PluginEnableDetails BuildEnableDetails(PluginEntry entry, PluginTrustRecord? previous)
+    {
+        var manifest = entry.Manifest!;
+        var injects = manifest.HasCap("injects");
+        var risks = new List<string>
+        {
+            "它是第三方插件，未经 Sparxie 审计，没有沙箱。",
+            "启用后它会以管理员权限运行原生代码，可能读取或修改你的文件和游戏进程。",
+        };
+        if (injects)
+        {
+            risks.Add("它声明会向游戏进程注入代码：可能违反游戏的用户协议，并有被反作弊系统处理（包括封号）的风险。");
+        }
+
+        if (manifest.HasCap("createsProcess"))
+        {
+            risks.Add("它会自己创建游戏进程。");
+        }
+
+        if (manifest.RegistryHooks is { Keys.Count: > 0 } hooks)
+        {
+            risks.Add($"它会修改 {hooks.Keys.Count} 个声明的当前用户注册表项，Sparxie 会在改动前备份、结束后恢复。");
+        }
+
+        var isChange = previous is not null && (previous.DllSha256 != entry.DllSha256 || previous.ManifestSha256 != entry.ManifestSha256);
+        return new PluginEnableDetails(
+            manifest.DisplayName,
+            entry.Id,
+            manifest.Version,
+            manifest.License,
+            manifest.Homepage,
+            manifest.ExeNames,
+            CapabilityLabels(manifest).ToList(),
+            risks,
+            entry.DllSha256 ?? string.Empty,
+            entry.ManifestSha256 ?? string.Empty,
+            entry.DllSize,
+            entry.Directory,
+            isChange ? previous!.DllSha256 : null,
+            isChange ? previous!.ManifestSha256 : null,
+            isChange,
+            injects);
     }
 
     /// <summary>启用前给用户看的完整信息：来源、哈希、能力与风险。</summary>
