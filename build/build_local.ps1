@@ -22,6 +22,10 @@ $runtime = Join-Path $release '_cache\zzz-runtime'
 $sha = (& git -C $repo rev-parse --short HEAD).Trim()
 if (-not $Version) { $Version = "0.1.0-dev.$sha" }
 
+# Refuse to start (before deleting anything) while Sparxie from the release folder is running: its files are locked.
+$running = Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith((Join-Path $release 'Sparxie'), [System.StringComparison]::OrdinalIgnoreCase) }
+if ($running) { throw ('Sparxie from the release folder is still running (' + (($running | ForEach-Object { $_.ProcessName }) -join ', ') + '). Close it and run again.') }
+
 if (-not (Test-Path (Join-Path $runtime 'ZZZTouchCore.dll'))) {
     throw "ZZZ runtime not prepared: $runtime`nRun: python build/package_runtime.py download-runtime --destination zzz-runtime.zip ; python build/package_runtime.py prepare-runtime --archive zzz-runtime.zip --destination `"$runtime`""
 }
@@ -32,10 +36,17 @@ Get-ChildItem $out -Filter '*.zip' -ErrorAction SilentlyContinue | Remove-Item -
 & (Join-Path $PSScriptRoot 'package_desktop.ps1') -Version $Version -RuntimeDirectory $runtime -OutputDirectory $out
 if ($LASTEXITCODE -ne 0) { throw 'package_desktop.ps1 failed (is Sparxie from the release folder still running?)' }
 
-# fixed names at the top of the release folder
+# Fixed names at the top of the release folder. User data next to Sparxie.exe (config.json, plugins\, plugin-trust.json,
+# logs\, cache\ ...) is KEPT: only the program files (Sparxie.exe, version.ini, app-*\) are replaced.
 $app = Join-Path $release 'Sparxie'
-if (Test-Path $app) { Remove-Item $app -Recurse -Force }
-Move-Item (Join-Path $out 'Sparxie') $app
+$built = Join-Path $out 'Sparxie'
+New-Item -ItemType Directory -Force $app | Out-Null
+Get-ChildItem $app -Directory -Filter 'app-*' | Remove-Item -Recurse -Force
+foreach ($file in 'Sparxie.exe', 'version.ini') {
+    $old = Join-Path $app $file
+    if (Test-Path $old) { Remove-Item $old -Force }
+}
+Get-ChildItem $built | Move-Item -Destination $app -Force
 $zip = Get-ChildItem $out -Filter 'Sparxie-desktop-*.zip' | Select-Object -First 1
 $fixedZip = Join-Path $release 'Sparxie-desktop-win-x64.zip'
 Move-Item $zip.FullName $fixedZip -Force
