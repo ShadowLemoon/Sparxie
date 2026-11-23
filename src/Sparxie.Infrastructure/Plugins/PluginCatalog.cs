@@ -86,7 +86,10 @@ public sealed class PluginCatalog(string pluginsRoot, PluginTrustStore trust) : 
         new(entry.Id, entry.Manifest!.DisplayName, entry.Manifest.ExeNames, entry.Manifest.Schema,
             PluginAssets.Resolve(entry.Directory, entry.Manifest.Icon),
             PluginAssets.Resolve(entry.Directory, entry.Manifest.Background),
-            entry.Manifest.AutoFind?.UninstallNames);
+            entry.Manifest.AutoFind?.UninstallNames,
+            entry.Manifest.BackgroundUrl,
+            entry.Manifest.BackgroundApi,
+            entry.Manifest.AutoFind?.Registry);
 
     private static PluginEntry ScanOne(string dir, Dictionary<string, PluginTrustRecord> trusted)
     {

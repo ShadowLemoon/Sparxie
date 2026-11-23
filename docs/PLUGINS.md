@@ -39,6 +39,24 @@ Sparxie 可以加载第三方提供的游戏模块（插件）。主仓库和主
 - `caps`：`createsProcess`（模块自己创建游戏进程）、`injects`（会向游戏注入代码，启用确认里会醒目提示）、`needsArgs`（需要宿主生成命令行参数）、`hotParams`（支持热调）。必须与模块 `get_info` 返回的能力位**完全一致**。
 - `plugin.json` 不超过 64 KB。
 
+## 图标、背景与自动查找（可选）
+
+都写在 `plugin.json` 里，由宿主执行，插件 DLL 不参与：
+
+- `icon`：插件目录里的图片文件名（png/jpg/webp/bmp，≤ 8 MB，不能带路径，不能是链接）。用在游戏标签和标题。
+- 背景，按优先级：
+  1. `background`：插件目录里的图片文件名，规则同上。
+  2. `backgroundUrl`：https 图片地址。
+  3. `backgroundApi`：`{ "url": "https://…", "path": "data.0.url" }`。宿主请求这个 JSON（≤ 256 KB），按点分隔的路径取出图片地址（数字是数组下标）。
+  
+  网络来的图由宿主下载，只允许 https，拒绝本机和内网地址（重定向后的最终地址也检查），限 8 MB，并按文件头确认是位图。图片缓存在背景缓存目录，离线时用旧缓存。
+- `autoFind`：给“自动查找”提供线索。找到的文件名必须在 `exeNames` 里，并且是本机盘符路径。
+  - `uninstallNames`：卸载项键名里包含的关键字（≤ 8 项），命中的安装目录下会搜索白名单 EXE。
+  - `registry`：`[{ "hive": "HKCU" | "HKLM", "key": "Software\\…", "value": "InstallPath", "subdirectory": "game" }]`（≤ 8 项）。读到的值是安装目录或 EXE 路径，`subdirectory` 可选。
+  - 另外总会用 Windows 的最近运行记录和正在运行的进程。
+
+图片和这些线索不参与信任哈希（只影响显示和查找，不会让插件加载或运行任何东西）。
+
 ## 注册表键备份/恢复钩子（可选）
 
 插件如果需要修改 HKCU 下的某些键，不能自己写，而要通过宿主提供的回调（`SpxHostApi`：`registry_set_dword` / `registry_set_string` / `registry_delete_value`，在 `SpxLaunchRequest.host` 里传入）。这套机制**与分辨率、全屏等画面设置无关**，也不改变画面设置的行为。

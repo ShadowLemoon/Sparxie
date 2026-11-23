@@ -56,6 +56,12 @@ public sealed class PluginManifest
     /// <summary>可选：插件目录里的主页背景图片文件名。</summary>
     public string? Background { get; set; }
 
+    /// <summary>可选：背景图片的 https 地址（由宿主下载并缓存；<see cref="Background"/> 文件优先）。</summary>
+    public string? BackgroundUrl { get; set; }
+
+    /// <summary>可选：返回 JSON 的接口，宿主按 path 取出背景图片地址（<see cref="BackgroundUrl"/> 优先）。</summary>
+    public BackgroundApiSpec? BackgroundApi { get; set; }
+
     /// <summary>可选：自动查找 EXE 的提示。</summary>
     public AutoFindSpec? AutoFind { get; set; }
 
@@ -149,6 +155,25 @@ public sealed class PluginManifest
             return false;
         }
 
+        if (parsed.AutoFind is { } registry && (registry.Registry.Count > 8 || !registry.Registry.All(RegistryLookupSpec.IsValid)))
+        {
+            error = "autoFind.registry 最多 8 项；hive 只能是 HKCU / HKLM，key 与 value 不能为空，不能含 ..";
+            return false;
+        }
+
+        if (parsed.BackgroundUrl is not null && !RemoteUrlPolicy.IsAllowed(parsed.BackgroundUrl))
+        {
+            error = "backgroundUrl 必须是 https 地址，且不能指向本机或内网";
+            return false;
+        }
+
+        if (parsed.BackgroundApi is { } api
+            && (!RemoteUrlPolicy.IsAllowed(api.Url) || string.IsNullOrWhiteSpace(api.Path) || api.Path.Length > 128))
+        {
+            error = "backgroundApi 需要 https 的 url 和不超过 128 字符的 path（如 data.0.url）";
+            return false;
+        }
+
         if (!PluginSettingsSchema.TryParse(parsed.SettingsSchema, out var schema, out var schemaError))
         {
             error = schemaError;
@@ -192,6 +217,9 @@ public sealed class AutoFindSpec
 {
     /// <summary>卸载项（注册表 Uninstall 下的键名）里包含的关键字；命中的安装目录下会搜索白名单 EXE。</summary>
     public List<string> UninstallNames { get; set; } = [];
+
+    /// <summary>注册表查找项：读到的值是安装目录（或 EXE 路径），宿主在其下找白名单 EXE。</summary>
+    public List<RegistryLookupSpec> Registry { get; set; } = [];
 }
 
 public sealed class RegistryHooksSpec

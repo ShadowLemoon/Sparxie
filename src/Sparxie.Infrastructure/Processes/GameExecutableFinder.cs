@@ -25,6 +25,9 @@ public interface IGameFinderEnvironment
 
     bool FileExists(string path);
 
+    /// <summary>读插件声明的注册表值（目录或 EXE 路径）；读不到返回空。默认实现什么都不读，便于测试替身。</summary>
+    IEnumerable<string> RegistryDirectories(Plugins.RegistryLookupSpec lookup) => [];
+
     /// <summary>在目录下按深度上限查找指定文件名（只用来在启动器安装目录里找游戏子目录）。</summary>
     IEnumerable<string> FindFiles(string directory, string fileName, int maxDepth);
 }
@@ -164,6 +167,33 @@ public static class GameExecutableFinder
                     foreach (var file in environment.FindFiles(directory.Replace('/', '\\'), name, maxDepth: 3))
                     {
                         Add(file, "卸载项里的安装目录", 0);
+                    }
+                }
+            }
+        }
+
+        foreach (var lookup in game.RegistryLookups ?? [])
+        {
+            foreach (var value in environment.RegistryDirectories(lookup))
+            {
+                var directory = value.Replace('/', '\\').Trim().Trim('"');
+                if (directory.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                {
+                    Add(directory, "插件指定的注册表项", 0);
+                    directory = System.IO.Path.GetDirectoryName(directory) ?? directory;
+                }
+
+                if (!string.IsNullOrEmpty(lookup.Subdirectory))
+                {
+                    directory = System.IO.Path.Combine(directory, lookup.Subdirectory);
+                }
+
+                foreach (var name in names)
+                {
+                    Add(System.IO.Path.Combine(directory, name), "插件指定的注册表项", 0);
+                    foreach (var file in environment.FindFiles(directory, name, maxDepth: 3))
+                    {
+                        Add(file, "插件指定的注册表项", 0);
                     }
                 }
             }
@@ -368,6 +398,30 @@ public sealed class SystemGameFinderEnvironment : IGameFinderEnvironment
     }
 
     public bool FileExists(string path) => File.Exists(path);
+
+    public IEnumerable<string> RegistryDirectories(Plugins.RegistryLookupSpec lookup)
+    {
+        var results = new List<string>();
+        var hive = lookup.Hive == "HKLM" ? RegistryHive.LocalMachine : RegistryHive.CurrentUser;
+        foreach (var view in hive == RegistryHive.LocalMachine ? new[] { RegistryView.Registry64, RegistryView.Registry32 } : new[] { RegistryView.Registry64 })
+        {
+            try
+            {
+                using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+                using var key = baseKey.OpenSubKey(lookup.Key);
+                if (key?.GetValue(lookup.Value) is string text && !string.IsNullOrWhiteSpace(text))
+                {
+                    results.Add(text);
+                }
+            }
+            catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+            {
+                // 读不到就当没有
+            }
+        }
+
+        return results;
+    }
 
     public IEnumerable<string> FindFiles(string directory, string fileName, int maxDepth)
     {
