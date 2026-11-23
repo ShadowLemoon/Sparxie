@@ -238,7 +238,8 @@ public sealed class PluginsViewModel : ObservableObject
     /// <summary>导入压缩包或文件夹。只拷贝和校验，不启用：之后仍要用户在列表里"查看并启用"。</summary>
     public async Task ImportAsync(string source)
     {
-        var staging = Path.Combine(_dataRoot, "plugin-staging");
+        // 暂存放在系统临时目录：Sparxie 装在需要管理员权限的位置时，检查阶段也不需要写安装目录。
+        var staging = Path.Combine(Path.GetTempPath(), "sparxie-plugin-staging");
         var inspection = await Task.Run(() => PluginInstaller.Inspect(source, _catalog.PluginsRoot, staging)).ConfigureAwait(true);
         if (!inspection.Success)
         {

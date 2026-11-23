@@ -64,7 +64,7 @@ public sealed class PluginCatalog(string pluginsRoot, PluginTrustStore trust) : 
 
         foreach (var dir in directories)
         {
-            if (IsReparsePoint(dir))
+            if (Path.GetFileName(dir).StartsWith(".", StringComparison.Ordinal) || IsReparsePoint(dir))
             {
                 continue;
             }

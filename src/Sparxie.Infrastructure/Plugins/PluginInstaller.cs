@@ -17,6 +17,7 @@ public enum PluginInstallFailure
     InvalidId,
     Locked,
     Io,
+    AccessDenied,
 }
 
 /// <summary>导入与已有插件的关系：新装 / 升级 / 同版本重装 / 降级 / 内容完全相同。</summary>
@@ -235,35 +236,41 @@ public static class PluginInstaller
 
     private static PluginInstallResult Place(string root, string id, string pluginsRoot, string stagingRoot)
     {
-        Directory.CreateDirectory(pluginsRoot);
-        var target = Path.Combine(pluginsRoot, id);
-        var replaced = Directory.Exists(target);
         string? backup = null;
-        if (replaced)
-        {
-            backup = Path.Combine(stagingRoot, "old-" + Guid.NewGuid().ToString("N"));
-            try
-            {
-                Directory.Move(target, backup);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                return new PluginInstallResult(false, $"无法替换已有插件（文件可能正被占用，请先退出游戏）：{ex.Message}", Failure: PluginInstallFailure.Locked);
-            }
-        }
-
+        var target = Path.Combine(pluginsRoot, id);
+        var replaced = false;
         try
         {
-            Directory.Move(root, target);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            if (backup is not null)
+            Directory.CreateDirectory(pluginsRoot);
+            replaced = Directory.Exists(target);
+            if (replaced)
             {
-                try { Directory.Move(backup, target); } catch (Exception restore) when (restore is IOException or UnauthorizedAccessException) { }
+                // 备份放在目标旁边（同一个盘，改名即可）；以 . 开头，目录扫描会忽略。
+                backup = Path.Combine(pluginsRoot, ".old-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    Directory.Move(target, backup);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    backup = null;
+                    return ex is UnauthorizedAccessException && !IsLockedByProcess(target)
+                        ? AccessDenied(pluginsRoot)
+                        : new PluginInstallResult(false, $"无法替换已有插件（文件可能正被占用，请先退出游戏）：{ex.Message}", Failure: PluginInstallFailure.Locked);
+                }
             }
 
-            return new PluginInstallResult(false, $"导入失败：{ex.Message}");
+            MoveDirectory(root, target);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            RestoreBackup(backup, target);
+            return AccessDenied(pluginsRoot);
+        }
+        catch (IOException ex)
+        {
+            RestoreBackup(backup, target);
+            return new PluginInstallResult(false, $"导入失败：{ex.Message}", Failure: PluginInstallFailure.Io);
         }
 
         if (backup is not null)
@@ -272,6 +279,82 @@ public static class PluginInstaller
         }
 
         return new PluginInstallResult(true, replaced ? "已替换同名插件" : "已导入", id, replaced);
+    }
+
+    private static PluginInstallResult AccessDenied(string pluginsRoot) => new(
+        false,
+        $"没有权限写入插件目录：{pluginsRoot}。Sparxie 装在需要管理员权限的位置时，请以管理员身份运行 Sparxie 后再导入，或手动把插件文件夹复制到该目录。",
+        Failure: PluginInstallFailure.AccessDenied);
+
+    /// <summary>目录里有文件正被进程占用时 Windows 也可能报“拒绝访问”：粗略区分，占用走“被占用”的提示。</summary>
+    private static bool IsLockedByProcess(string directory)
+    {
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
+            {
+                using var stream = new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            }
+
+            return false;
+        }
+        catch (IOException)
+        {
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static void RestoreBackup(string? backup, string target)
+    {
+        if (backup is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (Directory.Exists(target)) { Directory.Delete(target, recursive: true); }
+            Directory.Move(backup, target);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // 恢复失败时旧版本仍在 .old-* 里，不会丢
+        }
+    }
+
+    /// <summary>同一个盘改名；暂存目录在别的盘（例如系统临时目录）时退回复制再删除。</summary>
+    private static void MoveDirectory(string source, string target)
+    {
+        try
+        {
+            Directory.Move(source, target);
+            return;
+        }
+        catch (IOException) when (!Directory.Exists(target))
+        {
+            // 跨盘：往下走复制
+        }
+
+        CopyTree(source, target);
+        TryDelete(source);
+    }
+
+    private static void CopyTree(string source, string target)
+    {
+        Directory.CreateDirectory(target);
+        foreach (var file in Directory.GetFiles(source))
+        {
+            File.Copy(file, Path.Combine(target, Path.GetFileName(file)));
+        }
+
+        foreach (var directory in Directory.GetDirectories(source))
+        {
+            CopyTree(directory, Path.Combine(target, Path.GetFileName(directory)));
+        }
     }
 
     private static string? FindPluginRoot(string staging)
