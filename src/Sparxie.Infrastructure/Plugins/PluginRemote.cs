@@ -39,10 +39,17 @@ public sealed class RegistryLookupSpec
     public static bool IsValid(RegistryLookupSpec? spec) =>
         spec is not null
         && (spec.Hive is "HKCU" or "HKLM")
-        && !string.IsNullOrWhiteSpace(spec.Key) && spec.Key.Length <= 260 && !spec.Key.Contains("..", StringComparison.Ordinal)
+        && !string.IsNullOrWhiteSpace(spec.Key) && spec.Key.Length <= 260 && !spec.Key.Contains("..", StringComparison.Ordinal) && WildcardsAreWholeSegments(spec.Key)
         && !spec.Key.StartsWith('\\') && !spec.Key.EndsWith('\\')
         && !string.IsNullOrWhiteSpace(spec.Value) && spec.Value.Length <= 64
         && (spec.Subdirectory is null || (spec.Subdirectory.Length <= 64 && !spec.Subdirectory.Contains("..", StringComparison.Ordinal) && !Path.IsPathRooted(spec.Subdirectory)));
+
+    /// <summary>key 里的 <c>*</c> 只能是完整的一段（枚举这一层的所有子键），最多 2 个；不支持 <c>Foo*</c> 这类部分匹配。</summary>
+    private static bool WildcardsAreWholeSegments(string key)
+    {
+        var segments = key.Split('\\');
+        return segments.Count(segment => segment == "*") <= 2 && segments.All(segment => !segment.Contains('*') || segment == "*");
+    }
 }
 
 /// <summary>宿主替插件发起的网络请求的限制：只允许 https、不允许本机/内网字面地址。</summary>

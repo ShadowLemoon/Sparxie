@@ -57,6 +57,8 @@ Sparxie 可以加载第三方提供的游戏模块（插件）。主仓库和主
 - `autoFind`：给“自动查找”提供线索。找到的文件名必须在 `exeNames` 里，并且是本机盘符路径。
   - `uninstallNames`：卸载项键名里包含的关键字（≤ 8 项），命中的安装目录下会搜索白名单 EXE。
   - `registry`：`[{ "hive": "HKCU" | "HKLM", "key": "Software\\…", "value": "InstallPath", "subdirectory": "game" }]`（≤ 8 项）。读到的值是安装目录或 EXE 路径，`subdirectory` 可选。
+    `key` 里可以用 `*` 代表“这一层的任意子键”（必须是完整的一段，最多 2 个，每层最多枚举 200 个子键），用来处理键名里带哈希或 GUID 的情形，例如鹰角启动器把安装目录登记在 `HKCU\Software\Hypergryph\Launcher\<一串哈希>\install_path`，可以写成 `"key": "Software\\Hypergryph\\Launcher\\*", "value": "install_path"`。
+    读到启动器目录后，宿主在它（及 `subdirectory`）下最多 3 层内找 `exeNames` 里的文件。注意区分“安装位置”和“游戏自己的设置”：例如 `HKCU\Software\Hypergryph\Endfield` 是游戏的 Unity 设置，不含安装路径。
   - 另外总会用 Windows 的最近运行记录和正在运行的进程。
 
 图片和这些线索不参与信任哈希（只影响显示和查找，不会让插件加载或运行任何东西）。

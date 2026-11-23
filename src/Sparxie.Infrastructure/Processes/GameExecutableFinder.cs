@@ -408,11 +408,7 @@ public sealed class SystemGameFinderEnvironment : IGameFinderEnvironment
             try
             {
                 using var baseKey = RegistryKey.OpenBaseKey(hive, view);
-                using var key = baseKey.OpenSubKey(lookup.Key);
-                if (key?.GetValue(lookup.Value) is string text && !string.IsNullOrWhiteSpace(text))
-                {
-                    results.Add(text);
-                }
+                Collect(baseKey, lookup.Key.Split('\\'), 0, lookup.Value, results);
             }
             catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
             {
@@ -428,6 +424,46 @@ public sealed class SystemGameFinderEnvironment : IGameFinderEnvironment
         var results = new List<string>();
         Search(directory, fileName, maxDepth, results);
         return results;
+    }
+
+    private const int MaxWildcardSubkeys = 200;
+
+    /// <summary>
+    /// 沿 <paramref name="segments"/> 逐级打开子键；某一段是 <c>*</c> 就枚举该层的所有子键（最多 200 个）并对每个继续往下走
+    /// （例如鹰角启动器把安装目录登记在 HKCU\Software\Hypergryph\Launcher\&lt;一串哈希&gt;\install_path，哈希段无法写死）。
+    /// 走到最后一段后读取 <paramref name="valueName"/>，非空字符串加入结果。
+    /// </summary>
+    private static void Collect(RegistryKey key, string[] segments, int index, string valueName, List<string> results)
+    {
+        if (index == segments.Length)
+        {
+            if (key.GetValue(valueName) is string text && !string.IsNullOrWhiteSpace(text))
+            {
+                results.Add(text);
+            }
+
+            return;
+        }
+
+        if (segments[index] == "*")
+        {
+            foreach (var name in key.GetSubKeyNames().Take(MaxWildcardSubkeys))
+            {
+                using var child = key.OpenSubKey(name);
+                if (child is not null)
+                {
+                    Collect(child, segments, index + 1, valueName, results);
+                }
+            }
+
+            return;
+        }
+
+        using var next = key.OpenSubKey(segments[index]);
+        if (next is not null)
+        {
+            Collect(next, segments, index + 1, valueName, results);
+        }
     }
 
     private static void Search(string directory, string fileName, int depth, List<string> results)
