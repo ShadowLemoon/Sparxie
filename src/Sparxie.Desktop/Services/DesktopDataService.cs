@@ -11,7 +11,7 @@ public sealed class DesktopDataService
 
     public DesktopDataService(string? configPath = null)
     {
-        _configStore = new AppConfigStore(configPath ?? Path.Combine(AppDataDirectory.Resolve(), "config.json"));
+        _configStore = new AppConfigStore(configPath ?? AppPaths.ConfigFilePath());
     }
 
     public AppConfig Config { get; private set; } = new();

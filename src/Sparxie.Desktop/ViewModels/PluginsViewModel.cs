@@ -331,6 +331,14 @@ public sealed class PluginsViewModel : ObservableObject
     }
 
 
+    /// <summary>
+    /// 写插件目录/信任记录失败的提示。没有权限（Sparxie 装在需要管理员权限的位置）和其它原因分开说：
+    /// 插件和信任记录放在程序目录里（以管理员权限运行的 Broker 从那里读），所以管理插件需要管理员身份运行 Sparxie。
+    /// </summary>
+    internal static string WriteFailure(string what, Exception ex) => ex is UnauthorizedAccessException
+        ? $"{what}：没有权限写入 Sparxie 的程序目录。Sparxie 装在需要管理员权限的位置时，管理插件（启用、停用、导入、删除）需要以管理员身份运行 Sparxie。"
+        : $"{what}：{ex.Message}";
+
     private void ReportImportFailure(string message)
     {
         _notices.Clear();
@@ -399,7 +407,7 @@ public sealed class PluginsViewModel : ObservableObject
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Report(id, $"保存信任记录失败：{ex.Message}");
+            Report(id, WriteFailure("保存信任记录失败", ex));
         }
 
         Refresh();
@@ -448,7 +456,7 @@ public sealed class PluginsViewModel : ObservableObject
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Report(id, $"保存信任记录失败：{ex.Message}");
+            Report(id, WriteFailure("保存信任记录失败", ex));
         }
 
         Refresh();
@@ -487,7 +495,7 @@ public sealed class PluginsViewModel : ObservableObject
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Report(id, $"删除失败（文件可能正被占用）：{ex.Message}");
+            Report(id, WriteFailure("删除失败（文件可能正被占用）", ex));
         }
 
         Refresh();
