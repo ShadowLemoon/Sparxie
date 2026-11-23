@@ -99,7 +99,29 @@ public sealed partial class SettingsDrawer : UserControl
 
         Row("名称 / 标识", $"{d.Name}（{d.Id}）");
         Row("版本 / 许可", string.Join(" · ", new[] { d.Version, d.License }.Where(text => !string.IsNullOrWhiteSpace(text))));
-        Row("作者公布的主页（作者自述，未经 Sparxie 验证）", d.Homepage);
+        Row("主页" + "（作者自述，未经 Sparxie 验证）", d.Homepage);
+        const string ClaimTag = "（作者自述，未经 Sparxie 验证）";
+        Row("作者" + ClaimTag, d.Author);
+        Row("简介" + ClaimTag, d.Description);
+        Row("数据与联网说明" + ClaimTag, d.PrivacyNote);
+        if (d.Links is { Count: > 0 })
+        {
+            Row("相关链接" + ClaimTag, string.Join("\n", d.Links.Select(link => $"{link.Key}：{link.Value}")));
+        }
+
+        if (d.IsChange)
+        {
+            Row("版本变化", d.PreviousVersion is null ? null : $"{d.PreviousVersion} → {d.Version ?? "（未声明）"}");
+            if (d.AddedCapabilities is { Count: > 0 })
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text = "新增的能力：" + string.Join("、", d.AddedCapabilities),
+                    TextWrapping = TextWrapping.Wrap, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                });
+            }
+        }
+
         Row("可启动的程序", string.Join("、", d.ExeNames));
         Row("位置", d.Directory);
 
@@ -141,6 +163,19 @@ public sealed partial class SettingsDrawer : UserControl
         }
 
         Hash(d.IsChange ? "现在的 plugin.json SHA-256" : "plugin.json SHA-256", d.ManifestSha256);
+        // 作者在发布页公布了哈希时，粘贴到这里自动比对（可选）。
+        var compareBox = new TextBox { Header = "作者公布的 module.dll SHA-256（可选，粘贴后自动比对）", PlaceholderText = "粘贴作者发布页上的哈希", FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas") };
+        var compareResult = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 13, Visibility = Visibility.Collapsed };
+        compareBox.TextChanged += (_, _) =>
+        {
+            var typed = new string(compareBox.Text.Where(c => !char.IsWhiteSpace(c)).ToArray()).ToLowerInvariant();
+            compareResult.Visibility = typed.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+            var match = string.Equals(typed, d.DllSha256, StringComparison.OrdinalIgnoreCase);
+            compareResult.Text = match ? "✓ 与上面的 module.dll 哈希一致" : "✗ 与上面的 module.dll 哈希不一致：请不要启用，先向作者确认";
+            compareResult.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[match ? "SystemFillColorSuccessBrush" : "SystemFillColorCriticalBrush"];
+        };
+        panel.Children.Add(compareBox);
+        panel.Children.Add(compareResult);
         Row("module.dll 大小", $"{d.DllSize:N0} 字节");
 
         var general = new CheckBox { Content = "我已核对上面的来源和哈希，并了解它会以管理员权限运行未经审计的原生代码", Margin = new Thickness(0, 4, 0, 0) };

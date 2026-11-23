@@ -62,6 +62,17 @@ public sealed class PluginManifest
     /// <summary>可选：返回 JSON 的接口，宿主按 path 取出背景图片地址（<see cref="BackgroundUrl"/> 优先）。</summary>
     public BackgroundApiSpec? BackgroundApi { get; set; }
 
+    /// <summary>可选：作者自述（显示时标注“作者自述，未经验证”）。</summary>
+    public string? Author { get; set; }
+
+    public string? Description { get; set; }
+
+    /// <summary>可选：作者对数据/联网行为的说明。</summary>
+    public string? PrivacyNote { get; set; }
+
+    /// <summary>可选：相关链接（https，最多 4 项）。</summary>
+    public List<PluginLink>? Links { get; set; }
+
     /// <summary>可选：自动查找 EXE 的提示。</summary>
     public AutoFindSpec? AutoFind { get; set; }
 
@@ -169,6 +180,19 @@ public sealed class PluginManifest
             return false;
         }
 
+        if (parsed.Author?.Length > 64 || parsed.Description?.Length > 300 || parsed.PrivacyNote?.Length > 300)
+        {
+            error = "author（≤64）/ description（≤300）/ privacyNote（≤300）过长";
+            return false;
+        }
+
+        if (parsed.Links is { } links
+            && (links.Count > 4 || links.Any(link => link is null || string.IsNullOrWhiteSpace(link.Title) || link.Title.Length > 32 || !RemoteUrlPolicy.IsAllowed(link.Url))))
+        {
+            error = "links 最多 4 项，每项需要 title（≤32）和 https 的 url";
+            return false;
+        }
+
         if ((parsed.Icon is not null && !PluginAssets.IsValidFileName(parsed.Icon))
             || (parsed.Background is not null && !PluginAssets.IsValidFileName(parsed.Background)))
         {
@@ -255,6 +279,13 @@ public sealed class PluginManifest
             }
         }
     }
+}
+
+public sealed class PluginLink
+{
+    public string Title { get; set; } = string.Empty;
+
+    public string Url { get; set; } = string.Empty;
 }
 
 public sealed class AutoFindSpec

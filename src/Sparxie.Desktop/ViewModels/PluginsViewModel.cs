@@ -25,7 +25,13 @@ public sealed record PluginEnableDetails(
     string? PreviousDllSha256,
     string? PreviousManifestSha256,
     bool IsChange,
-    bool RequiresInjectionAck);
+    bool RequiresInjectionAck,
+    string? Author = null,
+    string? Description = null,
+    string? PrivacyNote = null,
+    IReadOnlyList<KeyValuePair<string, string>>? Links = null,
+    string? PreviousVersion = null,
+    IReadOnlyList<string>? AddedCapabilities = null);
 
 /// <summary>设置页里的一个第三方插件（一张卡片）。</summary>
 public sealed class PluginItemViewModel
@@ -301,7 +307,7 @@ public sealed class PluginsViewModel : ObservableObject
 
         try
         {
-            _trust.Confirm(new PluginTrustRecord(id, latest.DllSha256!, latest.ManifestSha256!, latest.DllSize, DateTimeOffset.UtcNow));
+            _trust.Confirm(new PluginTrustRecord(id, latest.DllSha256!, latest.ManifestSha256!, latest.DllSize, DateTimeOffset.UtcNow, entry.Manifest.Version, entry.Manifest.DisplayName, entry.Manifest.Caps.ToList()));
             Report(id, $"已启用 {entry.Manifest.DisplayName}。");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -469,7 +475,13 @@ public sealed class PluginsViewModel : ObservableObject
             isChange ? previous!.DllSha256 : null,
             isChange ? previous!.ManifestSha256 : null,
             isChange,
-            injects);
+            injects,
+            manifest.Author,
+            manifest.Description,
+            manifest.PrivacyNote,
+            manifest.Links?.Select(link => new KeyValuePair<string, string>(link.Title, link.Url)).ToList(),
+            isChange ? previous!.Version : null,
+            isChange && previous!.Caps is { } oldCaps ? manifest.Caps.Except(oldCaps, StringComparer.Ordinal).ToList() : null);
     }
 
     /// <summary>启用前给用户看的完整信息：来源、哈希、能力与风险。</summary>

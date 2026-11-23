@@ -509,18 +509,41 @@ public sealed class ProfileEditorViewModel : ObservableObject
 
     private PluginSettingsSchema? _schema;
 
+    /// <summary>全部插件设置恢复为插件声明的默认值。</summary>
+    public void ResetPluginFieldsToDefaults()
+    {
+        foreach (var field in PluginFields)
+        {
+            field.ResetToDefault();
+        }
+    }
+
+    public RelayCommand ResetPluginFieldsCommand => _resetPluginFieldsCommand ??= new RelayCommand(ResetPluginFieldsToDefaults);
+
+    private RelayCommand? _resetPluginFieldsCommand;
+
+    public bool CanResetPluginFields => PluginFields.Any(item => item.CanReset);
+
     /// <summary>按当前游戏的 schema 重建字段；<paramref name="values"/> 是已保存的值（缺的用默认值）。</summary>
     public void RebuildPluginFields(System.Text.Json.Nodes.JsonObject? values)
     {
         PluginFields.Clear();
         _schema = Game.IsThirdParty ? GameDirectory.Schema(Game.Id) : null;
+        string? lastGroup = null;
         if (_schema is not null)
         {
             foreach (var field in _schema.Fields)
             {
                 System.Text.Json.Nodes.JsonNode? initial = null;
                 values?.TryGetPropertyValue(field.Key, out initial);
-                PluginFields.Add(new PluginFieldViewModel(field, initial, OnPluginFieldChanged));
+                var item = new PluginFieldViewModel(field, initial, OnPluginFieldChanged);
+                if (field.Group is { Length: > 0 } group && group != lastGroup)
+                {
+                    item.GroupHeader = group;
+                }
+
+                lastGroup = field.Group;
+                PluginFields.Add(item);
             }
         }
 
@@ -533,6 +556,7 @@ public sealed class ProfileEditorViewModel : ObservableObject
         UpdatePluginFieldVisibility();
         PluginSettingsRevision++;
         OnPropertyChanged(nameof(PluginSettingsRevision));
+        OnPropertyChanged(nameof(CanResetPluginFields));
     }
 
     private void UpdatePluginFieldVisibility()

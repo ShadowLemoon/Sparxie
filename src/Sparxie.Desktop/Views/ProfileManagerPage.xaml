@@ -334,6 +334,8 @@
                                         <DataTemplate>
                                             <StackPanel Spacing="6" Margin="0,0,0,10"
                                                         Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <TextBlock Text="{Binding GroupHeader}" FontWeight="SemiBold" Margin="0,8,0,0"
+                                                           Visibility="{Binding HasGroupHeader, Converter={StaticResource BoolToVisibilityConverter}}" />
                                                 <ToggleSwitch Header="{Binding Label}" IsOn="{Binding BoolValue, Mode=TwoWay}"
                                                               Visibility="{Binding IsBool, Converter={StaticResource BoolToVisibilityConverter}}" />
                                                 <!-- 整数字段：标签 + 范围说明在左，步进控件在右（与同页帧率卡一致）。 -->
@@ -359,10 +361,15 @@
                                                          Visibility="{Binding IsText, Converter={StaticResource BoolToVisibilityConverter}}" />
                                                 <TextBlock Text="{Binding Hint}" Style="{StaticResource CaptionText}" TextWrapping="Wrap"
                                                            Visibility="{Binding HasHint, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                <HyperlinkButton Content="恢复默认" Padding="0" Command="{Binding ResetCommand}"
+                                                                 Visibility="{Binding CanReset, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                                 AutomationProperties.Name="恢复该项默认值" />
                                             </StackPanel>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
+                                <Button Content="全部恢复默认" Command="{Binding ResetPluginFieldsCommand}" IsEnabled="{Binding CanResetPluginFields}"
+                                        HorizontalAlignment="Left" MinHeight="40" AutomationProperties.Name="全部恢复默认" />
                             </StackPanel>
                         </Border>
                         <views:LaunchSettingsCard />
