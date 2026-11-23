@@ -8,7 +8,10 @@ public static class PluginAssets
 {
     public const long MaxBytes = 8 * 1024 * 1024;
 
-    private static readonly string[] Extensions = [".png", ".jpg", ".jpeg", ".webp", ".bmp"];
+    private static readonly string[] Extensions = [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".ico"];
+
+    /// <summary>没有在 manifest 里声明 icon 时，按约定在包里找的文件名（先 .ico 再 .png）。</summary>
+    private static readonly string[] ConventionalIconNames = ["icon.ico", "icon.png"];
 
     public static bool IsValidFileName(string? name) =>
         !string.IsNullOrWhiteSpace(name)
@@ -16,6 +19,10 @@ public static class PluginAssets
         && Path.GetFileName(name) == name
         && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0
         && Extensions.Contains(Path.GetExtension(name), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>manifest 声明的 icon 优先；没声明（或文件不可用）时，用包里约定名字的 icon.ico / icon.png。</summary>
+    public static string? ResolveIcon(string pluginDirectory, string? declared) =>
+        Resolve(pluginDirectory, declared) ?? ConventionalIconNames.Select(name => Resolve(pluginDirectory, name)).FirstOrDefault(path => path is not null);
 
     /// <summary>返回图片完整路径；不存在、过大或是链接时返回 null（界面按"没有"处理）。</summary>
     public static string? Resolve(string pluginDirectory, string? fileName)

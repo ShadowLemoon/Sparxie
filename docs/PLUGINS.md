@@ -43,7 +43,7 @@ Sparxie 可以加载第三方提供的游戏模块（插件）。主仓库和主
 
 都写在 `plugin.json` 里，由宿主执行，插件 DLL 不参与：
 
-- `icon`：插件目录里的图片文件名（png/jpg/webp/bmp，≤ 8 MB，不能带路径，不能是链接）。用在游戏标签和标题。
+- `icon`：插件目录里的图片文件名（ico/png/jpg/webp/bmp，≤ 8 MB，不能带路径，不能是链接）。用在游戏标签和标题。不写 `icon` 时，包里有 `icon.ico` 或 `icon.png`（按这个顺序）就自动用它。
 - 背景，按优先级：
   1. `background`：插件目录里的图片文件名，规则同上。
   2. `backgroundUrl`：https 图片地址。
