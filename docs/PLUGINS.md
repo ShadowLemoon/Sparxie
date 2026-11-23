@@ -148,7 +148,7 @@ powershell -File tests\MockGameModule\build_mock.ps1
 **建议插件作者发布时提供**：
 
 1. 256 px 的图标（`icon`）和一张背景（`background` 或 `backgroundApi`）。
-2. 在发布页公布 `module.dll` 的 SHA-256。用户在确认框里可以粘贴它自动比对。
+2. 在发布页公布 `module.dll` 的 SHA-256。用户可以和确认框里显示的哈希手动核对。
 3. 说明插件是否联网、会改哪些注册表项和文件（写进 `privacyNote`）。
 4. 每次发布递增 `version`：导入时主程序据此判断升级或降级。
 
