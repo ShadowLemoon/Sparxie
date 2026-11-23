@@ -121,7 +121,7 @@
                                 CornerRadius="20,0,0,20" Background="Transparent" BorderThickness="0" Foreground="White"
                                 AutomationProperties.Name="{Binding Home.SwitcherAutomationName}">
                             <Button.Flyout>
-                                <Flyout x:Name="SwitcherFlyout" Placement="TopEdgeAlignedLeft">
+                                <Flyout x:Name="SwitcherFlyout" Placement="TopEdgeAlignedLeft" Opening="SwitcherFlyoutOpening">
                                     <Flyout.FlyoutPresenterStyle>
                                         <Style TargetType="FlyoutPresenter">
                                             <Setter Property="Background" Value="{StaticResource GlassPanelBrush}" />
@@ -131,6 +131,7 @@
                                             <Setter Property="Padding" Value="8" />
                                         </Style>
                                     </Flyout.FlyoutPresenterStyle>
+                                    <ScrollViewer x:Name="SwitcherScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                                     <StackPanel Width="344" Spacing="2">
                                         <ItemsControl ItemsSource="{Binding Home.GameEntries}">
                                             <ItemsControl.ItemTemplate>
@@ -187,6 +188,7 @@
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
                                     </StackPanel>
+                                    </ScrollViewer>
                                 </Flyout>
                             </Button.Flyout>
                             <Grid ColumnSpacing="12">

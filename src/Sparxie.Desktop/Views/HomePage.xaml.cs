@@ -6,6 +6,13 @@ public sealed partial class HomePage : Page
 {
     public HomePage() => InitializeComponent();
 
+    /// <summary>屏幕矮时限制 Flyout 内容高度，列表在上方可用空间内滚动，避免被挤到按钮侧边。</summary>
+    private void SwitcherFlyoutOpening(object? sender, object e)
+    {
+        var top = SwitcherButton.TransformToVisual(null).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
+        SwitcherScroll.MaxHeight = Math.Max(120, top - 34);
+    }
+
     private void CopyLaunchErrorClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
         if (DataContext is ViewModels.MainWindowViewModel { Home: { HasLaunchError: true } home })
