@@ -34,6 +34,11 @@ public sealed class GameEntryViewModel
 
     public ImageSource? Icon => GameTabBinding.Icon(Game);
 
+    /// <summary>没有图标时的占位：显示名的第一个字。</summary>
+    public bool HasIcon => GameTabAssetsInfo.HasIcon(Game);
+
+    public string Initial => GameTabAssetsInfo.Initial(Title);
+
     public bool IsSelected { get; }
 
     /// <summary>单配置的游戏没有 Chip，标题行本身就是“配置”：激活时整行用主题色。</summary>

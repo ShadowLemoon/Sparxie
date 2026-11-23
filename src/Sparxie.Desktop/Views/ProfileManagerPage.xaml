@@ -323,7 +323,12 @@
                         <Border Style="{StaticResource GlassCard}"
                                 Visibility="{Binding HasPluginFields, Converter={StaticResource BoolToVisibilityConverter}}">
                             <StackPanel Spacing="14">
-                                <TextBlock Text="游戏设置" Style="{StaticResource SectionHeading}" />
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="插件设置" Style="{StaticResource SectionHeading}" />
+                                    <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
+                                        <Run Text="由插件「" /><Run Text="{Binding Game.Display}" /><Run Text="」提供，设置项由插件声明；Sparxie 会把超出范围的值修正后再传给插件。" />
+                                    </TextBlock>
+                                </StackPanel>
                                 <ItemsControl ItemsSource="{Binding PluginFields}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
@@ -331,10 +336,21 @@
                                                         Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibilityConverter}}">
                                                 <ToggleSwitch Header="{Binding Label}" IsOn="{Binding BoolValue, Mode=TwoWay}"
                                                               Visibility="{Binding IsBool, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                                <NumberBox Header="{Binding Label}" Value="{Binding NumberValue, Mode=TwoWay}"
-                                                           Minimum="{Binding Minimum}" Maximum="{Binding Maximum}" SmallChange="{Binding Step}"
-                                                           SpinButtonPlacementMode="Compact"
-                                                           Visibility="{Binding IsNumber, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                <!-- 整数字段：标签 + 范围说明在左，步进控件在右（与同页帧率卡一致）。 -->
+                                                <Grid ColumnSpacing="12"
+                                                      Visibility="{Binding IsNumber, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+                                                        <TextBlock Text="{Binding RangeText}" Style="{StaticResource CaptionText}" />
+                                                    </StackPanel>
+                                                    <controls:NumberStepper Grid.Column="1" VerticalAlignment="Center"
+                                                                            Minimum="{Binding Minimum}" Maximum="{Binding Maximum}" Step="{Binding Step}"
+                                                                            Value="{Binding NumberValue, Mode=TwoWay}" />
+                                                </Grid>
                                                 <ComboBox Header="{Binding Label}" ItemsSource="{Binding Options}" DisplayMemberPath="Label"
                                                           SelectedValuePath="Value" SelectedValue="{Binding TextValue, Mode=TwoWay}"
                                                           HorizontalAlignment="Stretch" MinHeight="48"

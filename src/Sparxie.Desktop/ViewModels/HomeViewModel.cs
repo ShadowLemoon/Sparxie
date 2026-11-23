@@ -722,6 +722,10 @@ public sealed class HomeViewModel : ObservableObject
 
     public Microsoft.UI.Xaml.Media.ImageSource? CurrentGameIcon => GameTabBinding.Icon(SelectedGame);
 
+    public bool HasCurrentGameIcon => GameTabAssetsInfo.HasIcon(SelectedGame);
+
+    public string CurrentGameInitial => GameTabAssetsInfo.Initial(GameNames.Display(SelectedGame));
+
     public string SwitcherAutomationName => $"当前：{SwitcherLabel}。切换游戏或配置";
 
     public string GameSettingsAutomationName => $"{GameNames.Display(SelectedGame)} 游戏设置";
@@ -729,7 +733,12 @@ public sealed class HomeViewModel : ObservableObject
     public string LaunchAutomationName => IsSelectedGameActive ? $"{SwitcherLabel} 运行中" : $"启动 {SwitcherLabel}";
 
     /// <summary>游戏图标是异步下载的，加载完后补发属性变更并重建 Flyout 内容。</summary>
-    public void NotifyGameIconsLoaded() => RebuildEntries();
+    public void NotifyGameIconsLoaded()
+    {
+        RebuildEntries();
+        OnPropertyChanged(nameof(CurrentGameIcon));
+        OnPropertyChanged(nameof(HasCurrentGameIcon));
+    }
 
     private void RebuildEntries()
     {
@@ -754,6 +763,8 @@ public sealed class HomeViewModel : ObservableObject
         OnPropertyChanged(nameof(SwitcherLabel));
         OnPropertyChanged(nameof(SwitcherText));
         OnPropertyChanged(nameof(CurrentGameIcon));
+        OnPropertyChanged(nameof(HasCurrentGameIcon));
+        OnPropertyChanged(nameof(CurrentGameInitial));
         OnPropertyChanged(nameof(SwitcherAutomationName));
         OnPropertyChanged(nameof(GameSettingsAutomationName));
         OnPropertyChanged(nameof(LaunchAutomationName));

@@ -312,7 +312,6 @@ public sealed class PluginsViewModel : ObservableObject
         Refresh();
     }
 
-    /// <summary>停用：只撤销信任，文件保留；之后需要重新确认才能启用。</summary>
     /// <summary>
     /// 停用/删除之前处理该插件遗留的注册表钩子备份（SessionHost 异常退出后可能还留着）。
     /// 游戏正在运行时不动注册表（会和运行中的游戏冲突）。返回 null 表示没问题，否则是给用户看的原因。
@@ -330,6 +329,7 @@ public sealed class PluginsViewModel : ObservableObject
             : $"该插件遗留的注册表备份无法恢复，已保留在 {backup}";
     }
 
+    /// <summary>停用：只撤销信任，文件保留；之后需要重新确认才能启用。</summary>
     public void Disable(string id)
     {
         // 停用后插件不再 Ready，遗留备份就没有机会在启动前被恢复，所以先尝试恢复；做不到也不阻止停用，但要告诉用户。

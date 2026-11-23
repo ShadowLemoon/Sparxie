@@ -148,7 +148,13 @@
                                                                     <ColumnDefinition Width="*" />
                                                                     <ColumnDefinition Width="Auto" />
                                                                 </Grid.ColumnDefinitions>
-                                                                <Image Source="{x:Bind Icon}" Width="28" Height="28" />
+                                                                <Grid Width="28" Height="28">
+                                                                    <Image Source="{x:Bind Icon}" Width="28" Height="28" />
+                                                                    <Border CornerRadius="14" Background="{ThemeResource ControlFillColorSecondaryBrush}"
+                                                                            Visibility="{x:Bind HasIcon, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                                                                        <TextBlock Text="{x:Bind Initial}" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                                    </Border>
+                                                                </Grid>
                                                                 <TextBlock Grid.Column="1" Text="{x:Bind Title}" FontSize="15" VerticalAlignment="Center"
                                                                            Foreground="{x:Bind TitleForeground}" />
                                                             </Grid>
@@ -189,7 +195,13 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <Image Source="{Binding Home.CurrentGameIcon}" Width="40" Height="40" />
+                                <Grid Width="40" Height="40">
+                                    <Image Source="{Binding Home.CurrentGameIcon}" Width="40" Height="40" />
+                                    <Border CornerRadius="20" Background="{ThemeResource ControlFillColorSecondaryBrush}"
+                                            Visibility="{Binding Home.HasCurrentGameIcon, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                                        <TextBlock Text="{Binding Home.CurrentGameInitial}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                </Grid>
                                 <TextBlock Grid.Column="1" Text="{Binding Home.SwitcherText}" FontSize="18" FontWeight="SemiBold"
                                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                 <FontIcon Grid.Column="2" Glyph="&#xE70E;" FontSize="12" Opacity="0.7" />

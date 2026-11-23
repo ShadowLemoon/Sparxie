@@ -61,6 +61,13 @@ public sealed class PluginFieldViewModel : ObservableObject
 
     public double Step => Field.Step;
 
+    /// <summary>自动生成的范围说明（整数字段）：让用户知道能填什么，而不是填错后被静默改掉。</summary>
+    public string RangeText => Field.Kind == PluginFieldKind.Int
+        ? (Field.Step > 1 ? $"范围 {Field.Min:0}–{Field.Max:0}，步长 {Field.Step:0}" : $"范围 {Field.Min:0}–{Field.Max:0}")
+        : string.Empty;
+
+    public bool HasRange => RangeText.Length > 0;
+
     public int MaxLength => Field.MaxLength;
 
     public bool IsVisible
