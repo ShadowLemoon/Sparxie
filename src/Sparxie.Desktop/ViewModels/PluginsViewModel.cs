@@ -36,7 +36,7 @@ public sealed record PluginEnableDetails(
 /// <summary>设置页里的一个第三方插件（一张卡片）。</summary>
 public sealed class PluginItemViewModel
 {
-    public PluginItemViewModel(PluginEntry entry, PluginsViewModel owner, string? notice = null, bool highlighted = false)
+    public PluginItemViewModel(PluginEntry entry, PluginsViewModel owner, string? notice = null)
     {
         Entry = entry;
         DisplayName = entry.Manifest?.DisplayName is { Length: > 0 } name ? name : entry.Id;
@@ -62,7 +62,6 @@ public sealed class PluginItemViewModel
         CanDisableVisible = entry.Availability == PluginAvailability.Ready;
         CanDelete = !running;
         Notice = notice ?? string.Empty;
-        IsHighlighted = highlighted;
         EnableCommand = new AsyncRelayCommand(() => owner.EnableAsync(entry.Id));
         DisableCommand = new RelayCommand(() => owner.Disable(entry.Id));
         DeleteCommand = new AsyncRelayCommand(() => owner.DeleteAsync(entry.Id));
@@ -122,9 +121,6 @@ public sealed class PluginItemViewModel
 
     public bool HasNotice => Notice.Length > 0;
 
-    /// <summary>刚导入或刚操作过的条目：卡片加高亮边框，便于在列表里找到。</summary>
-    public bool IsHighlighted { get; }
-
     public string EnableLabel => Entry.Availability == PluginAvailability.HashChanged ? "重新确认并启用" : "查看并启用";
 
     public AsyncRelayCommand EnableCommand { get; }
@@ -171,7 +167,6 @@ public sealed class PluginsViewModel : ObservableObject
     private readonly IRegistryHookStore _registry;
     private string _message = string.Empty;
     private readonly Dictionary<string, string> _notices = [];
-    private string? _highlightId;
     private bool _ready;
 
     public PluginsViewModel(PluginCatalog catalog, PluginTrustStore trust, string dataRoot, Action<string>? onRemoved = null, IRegistryHookStore? registry = null)
@@ -224,7 +219,7 @@ public sealed class PluginsViewModel : ObservableObject
         Items.Clear();
         // 需要处理的排前面（文件已变化 → 未启用 → 其它/无效 → 已启用）；同一档按标识排序。
         foreach (var entry in _catalog.Scan()
-                     .Select(item => new PluginItemViewModel(item, this, _notices.GetValueOrDefault(item.Id), item.Id == _highlightId))
+                     .Select(item => new PluginItemViewModel(item, this, _notices.GetValueOrDefault(item.Id)))
                      .OrderBy(item => item.SortRank)
                      .ThenBy(item => item.Entry.Id, StringComparer.Ordinal))
         {
@@ -304,7 +299,6 @@ public sealed class PluginsViewModel : ObservableObject
     private void ReportImportFailure(string message)
     {
         _notices.Clear();
-        _highlightId = null;
         Message = message;
         Refresh();
     }
@@ -314,7 +308,6 @@ public sealed class PluginsViewModel : ObservableObject
     {
         _notices.Clear();
         _notices[id] = text;
-        _highlightId = id;
         Message = text;
         Refresh();
     }

@@ -93,9 +93,6 @@
                                                     <ColumnDefinition Width="Auto" />
                                                     <ColumnDefinition Width="*" />
                                                 </Grid.ColumnDefinitions>
-                                                <!-- 刚导入 / 刚操作过的插件：左侧强调条。 -->
-                                                <Border Width="4" CornerRadius="14,0,0,14" Background="{ThemeResource AccentFillColorDefaultBrush}"
-                                                        Visibility="{x:Bind IsHighlighted, Converter={StaticResource BoolToVisibilityConverter}}" />
                                                 <StackPanel Grid.Column="1" Spacing="8" Padding="14,12">
                                                     <Grid ColumnSpacing="8">
                                                         <Grid.ColumnDefinitions>
@@ -125,7 +122,7 @@
                                                                Visibility="{x:Bind HasDetail, Converter={StaticResource BoolToVisibilityConverter}}" />
                                                     <!-- 这个插件自己的操作结果（导入 / 启用 / 停用…）。 -->
                                                     <TextBlock Text="{x:Bind Notice}" TextWrapping="Wrap" FontSize="13"
-                                                               Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                                AutomationProperties.LiveSetting="Polite"
                                                                Visibility="{x:Bind HasNotice, Converter={StaticResource BoolToVisibilityConverter}}" />
                                                     <TextBlock Text="{x:Bind BlockReason}" TextWrapping="Wrap" FontSize="12"

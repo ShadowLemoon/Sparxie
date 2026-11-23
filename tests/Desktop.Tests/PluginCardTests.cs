@@ -66,7 +66,6 @@ public sealed class PluginCardTests : IDisposable
         vm.ImportAsync(source).GetAwaiter().GetResult();
 
         var card = Assert.Single(vm.Items);
-        Assert.True(card.IsHighlighted);
         Assert.True(card.HasNotice);
         Assert.Contains("还没有启用", card.Notice);
         Assert.True(card.CanEnable);
