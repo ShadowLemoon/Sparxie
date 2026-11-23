@@ -4,11 +4,50 @@ using Sparxie.Contracts.Models;
 
 namespace Sparxie.Infrastructure.Plugins;
 
-public sealed record PluginInstallResult(bool Success, string Message, string? Id = null, bool Replaced = false);
+public enum PluginInstallFailure
+{
+    None,
+    NotSupported,
+    TooLarge,
+    UnsafePath,
+    LinkInside,
+    NoManifest,
+    ManifestInvalid,
+    NoModule,
+    InvalidId,
+    Locked,
+    Io,
+}
+
+/// <summary>导入与已有插件的关系：新装 / 升级 / 同版本重装 / 降级 / 内容完全相同。</summary>
+public enum PluginInstallKind
+{
+    New,
+    Upgrade,
+    Reinstall,
+    Downgrade,
+    Identical,
+}
+
+public sealed record PluginInstallResult(bool Success, string Message, string? Id = null, bool Replaced = false, PluginInstallFailure Failure = PluginInstallFailure.None);
+
+/// <summary>第一阶段（检查）的结果：包已解到暂存目录并通过校验，但还没有动 plugins 目录。用户确认后 <see cref="PluginInstaller.Commit"/>，放弃则 <see cref="PluginInstaller.Discard"/>。</summary>
+public sealed record PluginInspection(
+    bool Success,
+    string Message,
+    PluginInstallFailure Failure = PluginInstallFailure.None,
+    string? Id = null,
+    string? DisplayName = null,
+    string? Version = null,
+    string? ExistingVersion = null,
+    PluginInstallKind Kind = PluginInstallKind.New,
+    string? StagingDirectory = null,
+    string? PluginRoot = null);
 
 /// <summary>
 /// 把压缩包（.zip）或文件夹导入成 &lt;plugins&gt;\&lt;id&gt;\。只做"拷贝 + 校验"，<b>不会启用</b>：导入后仍要用户在设置页看哈希并确认。
-/// 先放进暂存目录并校验 plugin.json 与 module.dll，通过后才原子地换进 plugins 目录；已有同 id 插件时整体替换（哈希变了，需要重新确认）。
+/// 两段式：<see cref="Inspect"/> 先放进暂存目录并校验 plugin.json 与 module.dll、判断与已有插件的关系（新装/升级/降级/相同）；
+/// <see cref="Commit"/> 才原子地换进 plugins 目录（已有同 id 插件时整体替换，哈希变了需要重新确认）。
 /// 压缩包按 zip-slip、文件数、总大小做限制；文件夹里有链接（重解析点）直接拒绝。
 /// </summary>
 public static class PluginInstaller
@@ -16,9 +55,17 @@ public static class PluginInstaller
     public const int MaxFiles = 200;
     public const long MaxTotalBytes = 256L * 1024 * 1024;
 
+    /// <summary>一步导入（检查通过就直接提交）。</summary>
     public static PluginInstallResult Install(string source, string pluginsRoot, string stagingRoot)
     {
+        var inspection = Inspect(source, pluginsRoot, stagingRoot);
+        return inspection.Success ? Commit(inspection, pluginsRoot, stagingRoot) : new PluginInstallResult(false, inspection.Message, Failure: inspection.Failure);
+    }
+
+    public static PluginInspection Inspect(string source, string pluginsRoot, string stagingRoot)
+    {
         var staging = Path.Combine(stagingRoot, Guid.NewGuid().ToString("N"));
+        var keep = false;
         try
         {
             Directory.CreateDirectory(staging);
@@ -27,30 +74,125 @@ public static class PluginInstaller
                 : "请选择 .zip 压缩包或插件文件夹";
             if (extractError is not null)
             {
-                return new PluginInstallResult(false, extractError);
+                return new PluginInspection(false, extractError, KindOfExtractError(extractError));
             }
 
             if (FindPluginRoot(staging) is not { } root)
             {
-                return new PluginInstallResult(false, "没有找到 plugin.json（应在压缩包/文件夹的根目录，或唯一的一层子目录里）");
+                return new PluginInspection(false, "没有找到 plugin.json（应在压缩包/文件夹的根目录，或唯一的一层子目录里）", PluginInstallFailure.NoManifest);
             }
 
             var (id, problem) = Validate(root);
             if (id is null)
             {
-                return new PluginInstallResult(false, problem);
+                return new PluginInspection(false, problem, problem.StartsWith("缺少 ", StringComparison.Ordinal) ? PluginInstallFailure.NoModule
+                    : problem.StartsWith("插件 id 非法", StringComparison.Ordinal) ? PluginInstallFailure.InvalidId : PluginInstallFailure.ManifestInvalid);
             }
 
-            return Place(root, id, pluginsRoot, stagingRoot);
+            PluginManifest.TryParse(File.ReadAllBytes(Path.Combine(root, PluginCatalog.ManifestFileName)), id, out var manifest, out _);
+            var (kind, existingVersion) = Compare(Path.Combine(pluginsRoot, id), root, manifest.Version);
+            keep = true;
+            return new PluginInspection(true, string.Empty, PluginInstallFailure.None, id, manifest.DisplayName, manifest.Version, existingVersion, kind, staging, root);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            return new PluginInstallResult(false, $"导入失败：{ex.Message}");
+            return new PluginInspection(false, $"导入失败：{ex.Message}", PluginInstallFailure.Io);
         }
         finally
         {
+            if (!keep)
+            {
+                TryDelete(staging);
+            }
+        }
+    }
+
+    /// <summary>第二阶段：把检查通过的包换进 plugins 目录。无论成败都会清理暂存目录。</summary>
+    public static PluginInstallResult Commit(PluginInspection inspection, string pluginsRoot, string stagingRoot)
+    {
+        if (!inspection.Success || inspection.PluginRoot is null || inspection.Id is null)
+        {
+            return new PluginInstallResult(false, inspection.Message, Failure: inspection.Failure);
+        }
+
+        try
+        {
+            return Place(inspection.PluginRoot, inspection.Id, pluginsRoot, stagingRoot);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new PluginInstallResult(false, $"导入失败：{ex.Message}", Failure: PluginInstallFailure.Io);
+        }
+        finally
+        {
+            Discard(inspection);
+        }
+    }
+
+    /// <summary>放弃检查通过的包，删除暂存目录。</summary>
+    public static void Discard(PluginInspection inspection)
+    {
+        if (inspection.StagingDirectory is { } staging)
+        {
             TryDelete(staging);
         }
+    }
+
+    private static PluginInstallFailure KindOfExtractError(string message) =>
+        message.Contains("越界", StringComparison.Ordinal) ? PluginInstallFailure.UnsafePath
+        : message.Contains("链接", StringComparison.Ordinal) ? PluginInstallFailure.LinkInside
+        : message.Contains("超过", StringComparison.Ordinal) || message.Contains("过大", StringComparison.Ordinal) ? PluginInstallFailure.TooLarge
+        : PluginInstallFailure.NotSupported;
+
+    /// <summary>和已安装的同 id 插件比较：新装 / 内容相同 / 升级 / 降级 / 同版本重装。</summary>
+    private static (PluginInstallKind Kind, string? ExistingVersion) Compare(string existingDirectory, string newRoot, string? newVersion)
+    {
+        var existingManifest = Path.Combine(existingDirectory, PluginCatalog.ManifestFileName);
+        if (!File.Exists(existingManifest))
+        {
+            return (PluginInstallKind.New, null);
+        }
+
+        string? existingVersion = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllBytes(existingManifest));
+            existingVersion = doc.RootElement.TryGetProperty("version", out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            // 旧的读不了就当没有版本信息
+        }
+
+        if (SameContent(existingDirectory, newRoot))
+        {
+            return (PluginInstallKind.Identical, existingVersion);
+        }
+
+        if (Version.TryParse(Normalize(newVersion), out var next) && Version.TryParse(Normalize(existingVersion), out var current))
+        {
+            return (next > current ? PluginInstallKind.Upgrade : next < current ? PluginInstallKind.Downgrade : PluginInstallKind.Reinstall, existingVersion);
+        }
+
+        return (PluginInstallKind.Reinstall, existingVersion);
+    }
+
+    private static string? Normalize(string? version) => version is null ? null : (version.Count(c => c == '.') == 0 ? version + ".0" : version);
+
+    private static bool SameContent(string a, string b)
+    {
+        foreach (var name in new[] { PluginCatalog.ManifestFileName, PluginManifest.ModuleFileName })
+        {
+            var left = Path.Combine(a, name);
+            var right = Path.Combine(b, name);
+            if (!File.Exists(left) || !File.Exists(right) || new FileInfo(left).Length != new FileInfo(right).Length
+                || !File.ReadAllBytes(left).AsSpan().SequenceEqual(File.ReadAllBytes(right)))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>通过时返回 (id, 空)；不通过返回 (null, 原因)。</summary>
@@ -106,7 +248,7 @@ public static class PluginInstaller
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                return new PluginInstallResult(false, $"无法替换已有插件（文件可能正被占用，请先退出游戏）：{ex.Message}");
+                return new PluginInstallResult(false, $"无法替换已有插件（文件可能正被占用，请先退出游戏）：{ex.Message}", Failure: PluginInstallFailure.Locked);
             }
         }
 

@@ -236,18 +236,70 @@ public sealed class PluginsViewModel : ObservableObject
     /// <summary>导入压缩包或文件夹。只拷贝和校验，不启用：之后仍要用户在列表里"查看并启用"。</summary>
     public async Task ImportAsync(string source)
     {
-        var result = await Task.Run(() => PluginInstaller.Install(source, _catalog.PluginsRoot, Path.Combine(_dataRoot, "plugin-staging"))).ConfigureAwait(true);
-        if (result.Success && result.Id is { } id)
+        var staging = Path.Combine(_dataRoot, "plugin-staging");
+        var inspection = await Task.Run(() => PluginInstaller.Inspect(source, _catalog.PluginsRoot, staging)).ConfigureAwait(true);
+        if (!inspection.Success)
         {
-            Report(id, $"{result.Message}。{(result.Replaced ? "文件已变化，需要重新确认后才能使用。" : "还没有启用：请查看哈希并确认后再启用。")}");
+            ReportImportFailure(inspection.Message);
+            return;
+        }
+
+        var id = inspection.Id!;
+        var name = inspection.DisplayName ?? id;
+
+        // 内容和已安装的完全一样：不用换，也不改变任何状态。
+        if (inspection.Kind == PluginInstallKind.Identical)
+        {
+            PluginInstaller.Discard(inspection);
+            Report(id, "这个插件已经安装，文件完全相同，没有改动。");
+            return;
+        }
+
+        // 要替换已有插件：游戏正在运行时先拒绝（文件被占用，也会和运行中的游戏冲突）。
+        if (inspection.Kind != PluginInstallKind.New
+            && _catalog.Scan().FirstOrDefault(item => item.Id == id)?.Manifest is { } existing
+            && GameProcessDetector.IsAnyRunning(existing.ExeNames))
+        {
+            PluginInstaller.Discard(inspection);
+            ReportImportFailure("该插件对应的游戏正在运行，请先退出游戏再导入。");
+            return;
+        }
+
+        if (inspection.Kind != PluginInstallKind.New)
+        {
+            var from = inspection.ExistingVersion is { Length: > 0 } old ? "v" + old : "未声明版本";
+            var to = inspection.Version is { Length: > 0 } now ? "v" + now : "未声明版本";
+            var headline = inspection.Kind switch
+            {
+                PluginInstallKind.Upgrade => $"升级「{name}」：{from} → {to}",
+                PluginInstallKind.Downgrade => $"降级「{name}」：{from} → {to}（版本比已安装的更旧）",
+                _ => $"用新文件替换「{name}」（{from} → {to}）",
+            };
+            var body = headline + "\n\n替换后插件文件会变化，需要你重新核对哈希并确认才能使用；游戏配置会保留。";
+            if (!await Confirm(new PluginConfirmation("替换已安装的插件？", body, "替换")).ConfigureAwait(true))
+            {
+                PluginInstaller.Discard(inspection);
+                return;
+            }
+        }
+
+        var result = await Task.Run(() => PluginInstaller.Commit(inspection, _catalog.PluginsRoot, staging)).ConfigureAwait(true);
+        if (result.Success && result.Id is { } committed)
+        {
+            Report(committed, $"{result.Message}。{(result.Replaced ? "文件已变化，需要重新确认后才能使用。" : "还没有启用：请查看哈希并确认后再启用。")}");
         }
         else
         {
-            _notices.Clear();
-            _highlightId = null;
-            Message = result.Message;
-            Refresh();
+            ReportImportFailure(result.Message);
         }
+    }
+
+    private void ReportImportFailure(string message)
+    {
+        _notices.Clear();
+        _highlightId = null;
+        Message = message;
+        Refresh();
     }
 
     /// <summary>记录某个插件自己的操作结果：显示在它的卡片里并高亮；同时保留全局消息（供测试和无障碍朗读）。</summary>
