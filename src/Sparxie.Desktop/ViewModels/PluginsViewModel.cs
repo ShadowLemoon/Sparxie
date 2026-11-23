@@ -67,6 +67,8 @@ public sealed class PluginItemViewModel
         DisableCommand = new RelayCommand(() => owner.Disable(entry.Id));
         DeleteCommand = new AsyncRelayCommand(() => owner.DeleteAsync(entry.Id));
         OpenFolderCommand = new RelayCommand(() => owner.OpenFolder(entry.Directory));
+        HasPendingBackup = owner.HasPendingRegistryBackup(entry.Id);
+        RestoreBackupCommand = new RelayCommand(() => owner.RestoreBackupNow(entry.Id));
     }
 
     public PluginEntry Entry { get; }
@@ -132,6 +134,11 @@ public sealed class PluginItemViewModel
     public AsyncRelayCommand DeleteCommand { get; }
 
     public RelayCommand OpenFolderCommand { get; }
+
+    /// <summary>插件改过的注册表项还没有恢复（宿主异常退出后可能遗留）：卡片上标记并提供“立即恢复”。</summary>
+    public bool HasPendingBackup { get; }
+
+    public RelayCommand RestoreBackupCommand { get; }
 
     private static string StatusGlyphFor(PluginAvailability availability) => availability switch
     {
@@ -385,6 +392,18 @@ public sealed class PluginsViewModel : ObservableObject
         return RegistryHookSession.RestoreLeftover(backup, _registry)
             ? null
             : $"该插件遗留的注册表备份无法恢复，已保留在 {backup}";
+    }
+
+    /// <summary>该插件是否有遗留的注册表钩子备份（只读检查文件是否存在）。</summary>
+    public bool HasPendingRegistryBackup(string id) => File.Exists(RegistryHookSession.BackupPathFor(_dataRoot, id));
+
+    /// <summary>用户点“立即恢复”：游戏运行中不动注册表；成功后备份文件由恢复逻辑清理。</summary>
+    public void RestoreBackupNow(string id)
+    {
+        var entry = _catalog.Scan().FirstOrDefault(item => item.Id == id);
+        Report(id, RestoreLeftoverBackup(entry, id) is { } problem
+            ? $"未能恢复：{problem}。"
+            : "已恢复该插件改过的注册表项。");
     }
 
     /// <summary>停用：只撤销信任，文件保留；之后需要重新确认才能启用。</summary>

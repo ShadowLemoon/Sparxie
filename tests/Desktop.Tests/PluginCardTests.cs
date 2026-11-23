@@ -105,6 +105,21 @@ public sealed class PluginCardTests : IDisposable
     }
 
     [Fact]
+    public void 有遗留的注册表备份时卡片标记待恢复()
+    {
+        Install("ext.acme.reg", "有备份", "SurelyNotRunning-5.exe");
+        var backup = RegistryHookSession.BackupPathFor(_root, "ext.acme.reg");
+        Directory.CreateDirectory(Path.GetDirectoryName(backup)!);
+        File.WriteAllText(backup, "{}");
+        var (vm, _) = Create();
+
+        Assert.True(vm.Items.Single().HasPendingBackup);
+        File.Delete(backup);
+        vm.Refresh();
+        Assert.False(vm.Items.Single().HasPendingBackup);
+    }
+
+    [Fact]
     public void 游戏没运行时可以停用和删除()
     {
         Install("ext.acme.idle", "空闲", "SurelyNotRunning-123.exe");

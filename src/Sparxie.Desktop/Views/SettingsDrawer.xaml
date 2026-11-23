@@ -131,6 +131,9 @@
                                                     <TextBlock Text="{x:Bind BlockReason}" TextWrapping="Wrap" FontSize="12"
                                                                Foreground="{ThemeResource SystemFillColorCautionBrush}"
                                                                Visibility="{x:Bind HasBlockReason, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                    <TextBlock Text="插件改过的注册表项还没有恢复：请先关闭游戏，再点“⋯ → 立即恢复注册表”。" TextWrapping="Wrap" FontSize="12"
+                                                               Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                                               Visibility="{x:Bind HasPendingBackup, Converter={StaticResource BoolToVisibilityConverter}}" />
                                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                                         <Button Content="{x:Bind EnableLabel}" Command="{x:Bind EnableCommand}" MinHeight="40"
                                                                 Style="{StaticResource AccentButtonStyle}"
@@ -142,6 +145,8 @@
                                                                     <MenuFlyoutItem Text="停用" Command="{x:Bind DisableCommand}" IsEnabled="{x:Bind CanDisable}"
                                                                                     Visibility="{x:Bind CanDisableVisible, Converter={StaticResource BoolToVisibilityConverter}}" />
                                                                     <MenuFlyoutItem Text="打开所在文件夹" Command="{x:Bind OpenFolderCommand}" />
+                                                                    <MenuFlyoutItem Text="立即恢复注册表" Command="{x:Bind RestoreBackupCommand}"
+                                                                                    Visibility="{x:Bind HasPendingBackup, Converter={StaticResource BoolToVisibilityConverter}}" />
                                                                     <MenuFlyoutSeparator />
                                                                     <MenuFlyoutItem Text="删除…" Command="{x:Bind DeleteCommand}" IsEnabled="{x:Bind CanDelete}"
                                                                                     Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
