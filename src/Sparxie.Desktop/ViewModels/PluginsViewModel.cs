@@ -294,7 +294,7 @@ public sealed class PluginsViewModel : ObservableObject
         var result = await Task.Run(() => PluginInstaller.Commit(inspection, _catalog.PluginsRoot, staging)).ConfigureAwait(true);
         if (result.Success && result.Id is { } committed)
         {
-            Report(committed, $"{result.Message}。{(result.Replaced ? "文件已变化，需要重新确认后才能使用。" : "还没有启用：请查看哈希并确认后再启用。")}");
+            Report(committed, $"{result.Message}。{AfterImportHint(committed)}");
         }
         else
         {
@@ -366,6 +366,15 @@ public sealed class PluginsViewModel : ObservableObject
             Refresh();
         }
     }
+
+    /// <summary>导入完成后按插件<b>实际的</b>状态给下一步提示：模块和 manifest 的哈希没变（例如只换了图标）仍保持启用；变了才需要重新确认。</summary>
+    private string AfterImportHint(string id) => _catalog.Scan().FirstOrDefault(item => item.Id == id)?.Availability switch
+    {
+        PluginAvailability.Ready => "module.dll 和 plugin.json 没有变化，仍保持启用。",
+        PluginAvailability.HashChanged => "文件已变化，需要重新确认后才能使用：点“重新确认并启用”。",
+        PluginAvailability.Untrusted => "还没有启用：请查看哈希并确认后再启用。",
+        _ => "导入后的插件当前不可用，详见上面的状态。",
+    };
 
     private void ReportImportFailure(string message)
     {
