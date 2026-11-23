@@ -407,6 +407,46 @@ public sealed class GameBackgroundService
         return await DownloadOrCacheAsync(url, imageFile, urlFile).ConfigureAwait(false);
     }
 
+    /// <summary>取 EXE 自带的图标（系统缩略图）存成缓存文件；插件没声明 icon 时的后备。失败返回 null。</summary>
+    public async Task<string?> GetExecutableIconPathAsync(string? exePath)
+    {
+        if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
+        {
+            return null;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(CacheDir);
+            var target = Path.Combine(CacheDir, $"exeicon-{HashOf(exePath.ToLowerInvariant())}-{File.GetLastWriteTimeUtc(exePath).Ticks}.img");
+            if (File.Exists(target))
+            {
+                return target;
+            }
+
+            var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(exePath);
+            using var thumbnail = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.SingleItem, 128);
+            if (thumbnail is null || thumbnail.Size == 0 || thumbnail.Size > 4 * 1024 * 1024)
+            {
+                return null;
+            }
+
+            var bytes = new byte[thumbnail.Size];
+            using (var reader = new Windows.Storage.Streams.DataReader(thumbnail))
+            {
+                await reader.LoadAsync((uint)thumbnail.Size);
+                reader.ReadBytes(bytes);
+            }
+
+            await File.WriteAllBytesAsync(target, bytes).ConfigureAwait(false);
+            return target;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
     private static async Task<string?> DownloadOrCacheAsync(string? url, string imageFile, string urlFile)
     {
         if (!string.IsNullOrWhiteSpace(url))

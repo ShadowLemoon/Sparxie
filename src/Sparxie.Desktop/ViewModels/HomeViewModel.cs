@@ -590,6 +590,13 @@ public sealed class HomeViewModel : ObservableObject
     private GameKey? RestoreSelectedGame() =>
         GameIds.Normalize(_data.Preferences.SelectedGame) is { } saved && Games.Contains(new GameKey(saved)) ? new GameKey(saved) : null;
 
+    /// <summary>该游戏第一个已填写且文件存在的 EXE 路径（插件没有自带图标时，用它的图标作游戏图标）。</summary>
+    public string? FirstExecutablePath(GameKey game) =>
+        _data.Config.Profiles
+            .Where(item => item.Game == game.Id && !string.IsNullOrWhiteSpace(item.ExecutablePath))
+            .Select(item => item.ExecutablePath)
+            .FirstOrDefault(File.Exists);
+
     private void RefreshProfiles()
     {
         Profiles.Clear();

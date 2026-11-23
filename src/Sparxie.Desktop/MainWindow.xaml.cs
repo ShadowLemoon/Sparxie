@@ -68,7 +68,8 @@ public sealed partial class MainWindow : Window
         {
             try
             {
-                var path = await service.GetGameIconPathAsync(game).ConfigureAwait(true);
+                var path = await service.GetGameIconPathAsync(game).ConfigureAwait(true)
+                    ?? (game.IsThirdParty ? await service.GetExecutableIconPathAsync(_viewModel.Home.FirstExecutablePath(game)).ConfigureAwait(true) : null);
                 if (path is not null)
                 {
                     Services.GameIconCache.Set(game, path);
@@ -85,6 +86,11 @@ public sealed partial class MainWindow : Window
 
     private void OnHomePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(HomeViewModel.SelectedGame))
+        {
+            _ = LoadGameIconsAsync(); // 填好 EXE 路径后，没有自带图标的插件游戏用 EXE 图标
+        }
+
         if (e.PropertyName == nameof(HomeViewModel.BackgroundPath))
         {
             UpdateWindowBackground(_viewModel.Home.BackgroundPath);

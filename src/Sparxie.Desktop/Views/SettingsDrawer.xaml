@@ -97,16 +97,14 @@
                             </ItemsControl>
                             <TextBlock Text="{Binding Settings.Plugins.Message}" TextWrapping="Wrap"
                                        Visibility="{Binding Settings.Plugins.HasMessage, Converter={StaticResource BoolToVisibilityConverter}}" />
-                            <Grid ColumnSpacing="8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <Button Grid.Column="0" Content="导入压缩包…" HorizontalAlignment="Stretch" MinHeight="48" Click="ImportPluginZipClick"
-                                        AutomationProperties.Name="导入插件压缩包" />
-                                <Button Grid.Column="1" Content="导入文件夹…" HorizontalAlignment="Stretch" MinHeight="48" Click="ImportPluginFolderClick"
-                                        AutomationProperties.Name="导入插件文件夹" />
-                            </Grid>
+                            <Button Content="导入插件…" HorizontalAlignment="Stretch" MinHeight="48" AutomationProperties.Name="导入插件">
+                                <Button.Flyout>
+                                    <MenuFlyout Placement="Bottom">
+                                        <MenuFlyoutItem Text="从压缩包导入（.zip）" Click="ImportPluginZipClick" />
+                                        <MenuFlyoutItem Text="从文件夹导入" Click="ImportPluginFolderClick" />
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                            </Button>
                             <Button Content="刷新插件列表" HorizontalAlignment="Stretch" MinHeight="48" Command="{Binding Settings.Plugins.RefreshCommand}" />
                         </StackPanel>
                     </Border>
