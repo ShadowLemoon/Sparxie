@@ -614,6 +614,9 @@ public sealed partial class MainWindow : Window
         AppWindow.Hide();
     }
 
+    /// <summary>重复启动时由单实例通知调用：显示、还原并激活窗口。</summary>
+    public void BringToFront() => ShowFromTray();
+
     private void ShowFromTray()
     {
         AppWindow.Show();
