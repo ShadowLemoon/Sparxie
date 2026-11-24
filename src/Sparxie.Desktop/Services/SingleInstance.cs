@@ -1,18 +1,17 @@
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace Sparxie.Desktop.Services;
 
 /// <summary>
-/// 同一程序目录只允许一个桌面实例：重复启动时通知已有实例显示并激活窗口，自己随即退出。
-/// 以数据根目录（即程序目录）区分，所以不同路径的副本互不影响。
+/// 桌面端单实例：重复启动时通知已有实例显示并激活窗口，自己随即退出。
+/// 互斥体名固定、不含路径和版本（与 Starward 一致）：同一用户会话里只允许一个实例。
 /// </summary>
 public sealed class SingleInstance : IDisposable
 {
     private readonly Mutex _mutex;
     private readonly EventWaitHandle _activateEvent;
     private readonly RegisteredWaitHandle _wait;
+    private bool _disposed;
 
     private SingleInstance(Mutex mutex, EventWaitHandle activateEvent, Action onActivate)
     {
@@ -22,14 +21,13 @@ public sealed class SingleInstance : IDisposable
     }
 
     /// <summary>
-    /// 尝试成为主实例。成功返回对象（需持有到进程结束）；已有实例时通知它并返回 null。
+    /// 尝试成为主实例。成功返回对象；已有实例时通知它并返回 null。
     /// <paramref name="onActivate"/> 在线程池线程上回调，需自行切回 UI 线程。
     /// </summary>
-    public static SingleInstance? TryAcquire(string dataRoot, Action onActivate)
+    public static SingleInstance? TryAcquire(Action onActivate)
     {
-        var name = NameFor(dataRoot);
-        var mutex = new Mutex(true, $@"Local\Sparxie.Instance.{name}", out var created);
-        var activateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, $@"Local\Sparxie.Activate.{name}");
+        var mutex = new Mutex(true, @"Local\Sparxie.Instance", out var created);
+        var activateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\Sparxie.Activate");
         if (!created)
         {
             try
@@ -49,15 +47,15 @@ public sealed class SingleInstance : IDisposable
         return new SingleInstance(mutex, activateEvent, onActivate);
     }
 
-    /// <summary>路径不区分大小写与末尾分隔符，取哈希避免互斥体名里出现非法字符。</summary>
-    internal static string NameFor(string dataRoot)
-    {
-        var normalized = Path.GetFullPath(dataRoot).TrimEnd('\\', '/').ToUpperInvariant();
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalized)))[..32];
-    }
-
+    /// <summary>退出开始时就释放，避免收尾较慢期间新启动被误判为重复实例；必须在获取它的线程调用。</summary>
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
         _wait.Unregister(null);
         _activateEvent.Dispose();
         _mutex.ReleaseMutex();
