@@ -19,8 +19,8 @@
                     Visibility="{Binding Home.ShowBackgroundControls, Converter={StaticResource BoolToVisibilityConverter}}">
                 <Border.Background>
                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                        <GradientStop Offset="0.0" Color="#00000000" />
-                        <GradientStop Offset="1.0" Color="#88000000" />
+                        <GradientStop Offset="0.0" Color="{ThemeResource ShadeClearColor}" />
+                        <GradientStop Offset="1.0" Color="{ThemeResource ShadeStripColor}" />
                     </LinearGradientBrush>
                 </Border.Background>
                 <Border.OpacityTransition>
@@ -39,7 +39,7 @@
                                 <Button Width="24" Height="28" Padding="0" Background="Transparent" BorderThickness="0"
                                         Tag="{Binding Index}" Click="BackgroundDotClick"
                                         AutomationProperties.Name="{Binding AutomationName}">
-                                    <Ellipse Width="10" Height="10" Fill="White" Opacity="{Binding DotOpacity}" />
+                                    <Ellipse Width="10" Height="10" Fill="{ThemeResource OnGlassTextBrush}" Opacity="{Binding DotOpacity}" />
                                 </Button>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
@@ -59,7 +59,7 @@
                     Visibility="{Binding IsHomeChromeVisible, Converter={StaticResource BoolToVisibilityConverter}}">
             <!-- 路径异常：EXE 未设置 / 找不到 / 不属于该游戏时提示，并直达当前游戏设置页。 -->
             <Border HorizontalAlignment="Right" Margin="0,0,0,12" Padding="16,8,8,8" CornerRadius="16" MaxWidth="720"
-                    Background="{StaticResource GlassAcrylicBrush}"
+                    Background="{ThemeResource GlassAcrylicBrush}"
                     BorderBrush="{ThemeResource SystemFillColorCautionBrush}" BorderThickness="1"
                     Visibility="{Binding Home.HasPathIssue, Converter={StaticResource BoolToVisibilityConverter}}">
                 <StackPanel Orientation="Horizontal" Spacing="12">
@@ -71,7 +71,7 @@
             </Border>
             <!-- 启动错误：所有用户可见（之前只在调试模式显示）。三段式：发生了什么 / 可以怎么做 / 技术详情。 -->
             <Border HorizontalAlignment="Right" Margin="0,0,0,12" Padding="16,12" CornerRadius="16" MaxWidth="720"
-                    Background="{StaticResource GlassAcrylicBrush}"
+                    Background="{ThemeResource GlassAcrylicBrush}"
                     BorderBrush="{ThemeResource SystemFillColorCriticalBrush}" BorderThickness="1"
                     AutomationProperties.LiveSetting="Assertive"
                     Visibility="{Binding Home.HasLaunchError, Converter={StaticResource BoolToVisibilityConverter}}">
@@ -93,8 +93,8 @@
             </Border>
             <!-- 启动状态条：启动/注入各阶段与失败原因（调试模式）。 -->
             <Border HorizontalAlignment="Right" Margin="0,0,0,12" Padding="16,10" CornerRadius="16" MaxWidth="720"
-                    Background="{StaticResource GlassAcrylicBrush}"
-                    BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1"
+                    Background="{ThemeResource GlassAcrylicBrush}"
+                    BorderBrush="{ThemeResource GlassStrokeBrush}" BorderThickness="1"
                     Visibility="{Binding Home.HasStatusMessage, Converter={StaticResource BoolToVisibilityConverter}}">
                 <TextBlock Text="{Binding Home.StatusMessage}" TextWrapping="Wrap" FontSize="14" />
             </Border>
@@ -107,8 +107,8 @@
 
                 <!-- 游戏 + 配置合并切换：一张固定宽度的卡。左侧切换区点开 Flyout 选游戏（多配置的游戏下挂配置 Chip），右侧齿轮进入当前游戏设置。 -->
                 <Border Width="380" Height="68" CornerRadius="20"
-                        Background="{StaticResource GlassAcrylicBrush}"
-                        BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1">
+                        Background="{ThemeResource GlassAcrylicBrush}"
+                        BorderBrush="{ThemeResource GlassStrokeBrush}" BorderThickness="1">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -118,14 +118,14 @@
 
                         <Button x:Name="SwitcherButton" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                                 HorizontalContentAlignment="Stretch" Padding="12,0,14,0"
-                                CornerRadius="20,0,0,20" Background="Transparent" BorderThickness="0" Foreground="White"
+                                CornerRadius="20,0,0,20" Background="Transparent" BorderThickness="0" Foreground="{ThemeResource OnGlassTextBrush}"
                                 AutomationProperties.Name="{Binding Home.SwitcherAutomationName}">
                             <Button.Flyout>
                                 <Flyout x:Name="SwitcherFlyout" Placement="TopEdgeAlignedLeft" Opening="SwitcherFlyoutOpening">
                                     <Flyout.FlyoutPresenterStyle>
                                         <Style TargetType="FlyoutPresenter">
-                                            <Setter Property="Background" Value="{StaticResource GlassPanelBrush}" />
-                                            <Setter Property="BorderBrush" Value="{StaticResource GlassStrokeBrush}" />
+                                            <Setter Property="Background" Value="{ThemeResource GlassPanelBrush}" />
+                                            <Setter Property="BorderBrush" Value="{ThemeResource GlassStrokeBrush}" />
                                             <Setter Property="BorderThickness" Value="1" />
                                             <Setter Property="CornerRadius" Value="{StaticResource PanelRadius}" />
                                             <Setter Property="Padding" Value="8" />
@@ -173,7 +173,7 @@
                                                                             MinHeight="48" Padding="16,0" CornerRadius="24"
                                                                             Background="{x:Bind ChipBackground}"
                                                                             Foreground="{x:Bind ChipForeground}"
-                                                                            BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1"
+                                                                            BorderBrush="{ThemeResource GlassStrokeBrush}" BorderThickness="1"
                                                                             AutomationProperties.Name="{x:Bind AutomationName}">
                                                                         <StackPanel Orientation="Horizontal" Spacing="6">
                                                                             <TextBlock Text="{x:Bind DisplayName}" MaxWidth="160" TextTrimming="CharacterEllipsis" />
@@ -206,16 +206,16 @@
                                 </Grid>
                                 <!-- 游戏名大字 + 配置名小字，同一个 TextBlock 的两个 Run：共用基线，没有左边缘对齐问题；名字太长时先截断末尾的配置名。 -->
                                 <TextBlock Grid.Column="1" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
-                                    <Run Text="{Binding Home.SwitcherText}" FontSize="18" FontWeight="SemiBold" /><Run Text="  " FontSize="12" /><Run Text="{Binding Home.SwitcherSubText}" FontSize="13" Foreground="#B3FFFFFF" />
+                                    <Run Text="{Binding Home.SwitcherText}" FontSize="18" FontWeight="SemiBold" /><Run Text="  " FontSize="12" /><Run Text="{Binding Home.SwitcherSubText}" FontSize="13" Foreground="{ThemeResource GlassMutedTextBrush}" />
                                 </TextBlock>
                                 <FontIcon Grid.Column="2" Glyph="&#xE70E;" FontSize="12" Opacity="0.7" />
                             </Grid>
                         </Button>
 
-                        <Rectangle Grid.Column="1" Fill="{StaticResource GlassStrokeBrush}" Margin="0,12" />
+                        <Rectangle Grid.Column="1" Fill="{ThemeResource GlassStrokeBrush}" Margin="0,12" />
 
                         <Button Grid.Column="2" Width="68" Height="68" Padding="0" CornerRadius="0,20,20,0"
-                                Background="Transparent" BorderThickness="0" Foreground="White"
+                                Background="Transparent" BorderThickness="0" Foreground="{ThemeResource OnGlassTextBrush}"
                                 Command="{Binding ShowProfilesCommand}" ToolTipService.ToolTip="游戏设置"
                                 AutomationProperties.Name="{Binding Home.GameSettingsAutomationName}">
                             <FontIcon Glyph="&#xE713;" FontSize="16" />
@@ -225,7 +225,7 @@
 
                 <!-- 系统强调色按钮样式（悬停/按下由 SystemAccentColor 的亮/暗变体自动派生）+ 圆角 + 双箭头图标。 -->
                 <Grid Grid.Column="2" Width="320" Height="68" CornerRadius="34"
-                      Background="{StaticResource GlassOverlayBrush}">
+                      Background="{ThemeResource GlassOverlayBrush}">
                     <Button HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                             BorderThickness="0" CornerRadius="34" FontSize="22" FontWeight="Bold"
                             Style="{ThemeResource AccentButtonStyle}"

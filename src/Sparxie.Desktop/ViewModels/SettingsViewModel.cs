@@ -14,6 +14,7 @@ public sealed class SettingsViewModel : ObservableObject
     private int _closeBehaviorIndex;
     private int _afterLaunchIndex;
     private bool _debugMode;
+    private int _themeIndex;
     private bool _loading;
     private string _toolMessage = string.Empty;
 
@@ -23,6 +24,7 @@ public sealed class SettingsViewModel : ObservableObject
         _closeBehaviorIndex = (int)data.Preferences.ResolveCloseBehavior();
         _afterLaunchIndex = data.Preferences.ResolveAfterLaunch() == AfterLaunchBehavior.Minimize ? 1 : 0;
         _debugMode = data.Preferences.DebugMode;
+        _themeIndex = ThemeNames.IndexOf(data.Preferences.Theme);
         OpenDataFolderCommand = new RelayCommand(() => OpenFolder(AppPaths.DataRoot));
         OpenLogsFolderCommand = new RelayCommand(() => OpenFolder(AppPaths.LogsDirectory));
         OpenInstallFolderCommand = new RelayCommand(() => OpenFolder(AppContext.BaseDirectory));
@@ -87,6 +89,24 @@ public sealed class SettingsViewModel : ObservableObject
     }
 
     public AfterLaunchBehavior CurrentAfterLaunch => _afterLaunchIndex == 1 ? AfterLaunchBehavior.Minimize : AfterLaunchBehavior.Keep;
+
+    /// <summary>界面主题：0 跟随系统，1 浅色，2 深色（见 <see cref="ThemeNames"/>）。</summary>
+    public int ThemeIndex
+    {
+        get => _themeIndex;
+        set
+        {
+            if (value < 0 || value > 2)
+            {
+                return;
+            }
+
+            if (SetProperty(ref _themeIndex, value))
+            {
+                SaveNow();
+            }
+        }
+    }
 
     public bool DebugMode
     {
@@ -183,6 +203,7 @@ public sealed class SettingsViewModel : ObservableObject
             _data.Preferences.CloseAction = ((CloseBehavior)_closeBehaviorIndex).ToString();
             _data.Preferences.AfterLaunch = CurrentAfterLaunch.ToString();
             _data.Preferences.DebugMode = _debugMode;
+            _data.Preferences.Theme = ThemeNames.FromIndex(_themeIndex);
             _data.SavePreferences();
             Saved?.Invoke();
         }

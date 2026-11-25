@@ -1,3 +1,4 @@
+using Sparxie.Desktop.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -254,6 +255,7 @@ public sealed partial class SettingsDrawer : UserControl
             var dialog = new ContentDialog
             {
                 XamlRoot = XamlRoot,
+                RequestedTheme = DialogTheme.For(XamlRoot),
                 Title = confirmation.Title,
                 Content = new ScrollViewer { MaxHeight = 480, Content = body },
                 PrimaryButtonText = confirmation.PrimaryText,

@@ -42,6 +42,13 @@ public sealed partial class MainWindow : Window
         };
         VisibilityChanged += (_, _) => UpdateWindowHidden();
         _viewModel.Settings.Saved += ApplyCloseBehavior;
+        _viewModel.Settings.Saved += ApplyTheme;
+        if (Content is FrameworkElement themeRoot)
+        {
+            themeRoot.ActualThemeChanged += (_, _) => UpdateThemeDependents();
+        }
+
+        ApplyTheme();
         ApplyCloseBehavior();
         Activated += OnFirstActivated;
 
@@ -73,6 +80,7 @@ public sealed partial class MainWindow : Window
         var dialog = new ContentDialog
         {
             XamlRoot = root,
+            RequestedTheme = DialogTheme.For(root),
             Title = $"首次启动「{prompt.GameName}」",
             Content = new TextBlock
             {
@@ -407,6 +415,62 @@ public sealed partial class MainWindow : Window
     /// 覆盖 SystemAccentColor 及其亮/暗变体（按 20% 递进与白/黑混合），
     /// 系统强调色按钮的悬停、按下色由它们派生；随后翻转一次 RequestedTheme 让 ThemeResource 重新取值。
     /// </summary>
+    private Microsoft.UI.Windowing.AppWindowTitleBar? _titleBar;
+
+    private ElementTheme ChosenTheme() => _viewModel.Settings.ThemeIndex switch
+    {
+        1 => ElementTheme.Light,
+        2 => ElementTheme.Dark,
+        _ => ElementTheme.Default,
+    };
+
+    /// <summary>应用设置里选的主题（Default = 跟随系统），再刷新不随 ThemeResource 自动变化的部分。</summary>
+    private void ApplyTheme()
+    {
+        if (Content is FrameworkElement root)
+        {
+            var chosen = ChosenTheme();
+            if (root.RequestedTheme != chosen)
+            {
+                root.RequestedTheme = chosen;
+            }
+        }
+
+        UpdateThemeDependents();
+    }
+
+    private bool IsLightTheme => Content is FrameworkElement { ActualTheme: ElementTheme.Light };
+
+    private void UpdateThemeDependents()
+    {
+        if (SwitcherBrushes.IsLight != IsLightTheme)
+        {
+            SwitcherBrushes.IsLight = IsLightTheme;
+            _viewModel.Home.NotifyGameIconsLoaded(); // 重建切换菜单里用代码建画刷的行
+        }
+
+        ApplyTitleBarColors();
+    }
+
+    /// <summary>系统最小化 / 最大化 / 关闭按钮压在壁纸上，随主题换成白色或深色图标，悬停 / 按下给半透明底。</summary>
+    private void ApplyTitleBarColors()
+    {
+        if (_titleBar is null)
+        {
+            return;
+        }
+
+        var light = IsLightTheme;
+        var ink = light ? Windows.UI.Color.FromArgb(0xFF, 0x14, 0x16, 0x1A) : Colors.White;
+        byte tone = light ? (byte)0x00 : (byte)0xFF;
+        _titleBar.ButtonForegroundColor = ink;
+        _titleBar.ButtonHoverForegroundColor = ink;
+        _titleBar.ButtonPressedForegroundColor = ink;
+        _titleBar.ButtonInactiveForegroundColor = Windows.UI.Color.FromArgb(0xB3, ink.R, ink.G, ink.B);
+        _titleBar.ButtonHoverBackgroundColor = Windows.UI.Color.FromArgb(light ? (byte)0x1F : (byte)0x40, tone, tone, tone);
+        _titleBar.ButtonPressedBackgroundColor = Windows.UI.Color.FromArgb(light ? (byte)0x33 : (byte)0x66, tone, tone, tone);
+    }
+
     private void ApplySystemAccent(Windows.UI.Color color)
     {
         var res = Application.Current.Resources;
@@ -420,8 +484,8 @@ public sealed partial class MainWindow : Window
 
         if (Content is FrameworkElement root)
         {
-            root.RequestedTheme = ElementTheme.Light;
-            root.RequestedTheme = ElementTheme.Default;
+            root.RequestedTheme = root.ActualTheme == ElementTheme.Light ? ElementTheme.Dark : ElementTheme.Light;
+            root.RequestedTheme = ChosenTheme();
         }
     }
 
@@ -657,6 +721,7 @@ public sealed partial class MainWindow : Window
             var dialog = new ContentDialog
             {
                 XamlRoot = xamlRoot,
+                RequestedTheme = DialogTheme.For(xamlRoot),
                 Title = "退出 Sparxie？",
                 Content = new StackPanel
                 {
@@ -717,13 +782,8 @@ public sealed partial class MainWindow : Window
         appWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
         appWindow.TitleBar.ButtonBackgroundColor = Colors.Transparent;
         appWindow.TitleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
-        // 系统最小化/最大化/关闭按钮压在壁纸上，默认前景色随主题可能看不清：统一白色图标，悬停/按下给半透明白底。
-        appWindow.TitleBar.ButtonForegroundColor = Colors.White;
-        appWindow.TitleBar.ButtonHoverForegroundColor = Colors.White;
-        appWindow.TitleBar.ButtonPressedForegroundColor = Colors.White;
-        appWindow.TitleBar.ButtonInactiveForegroundColor = Windows.UI.Color.FromArgb(0xB3, 0xFF, 0xFF, 0xFF);
-        appWindow.TitleBar.ButtonHoverBackgroundColor = Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF);
-        appWindow.TitleBar.ButtonPressedBackgroundColor = Windows.UI.Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF);
+        _titleBar = appWindow.TitleBar;
+        ApplyTitleBarColors();
 
         if (appWindow.Presenter is OverlappedPresenter presenter)
         {

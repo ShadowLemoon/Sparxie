@@ -9,8 +9,18 @@ namespace Sparxie.Desktop.ViewModels;
 internal static class SwitcherBrushes
 {
     public static readonly Brush Transparent = new SolidColorBrush(Windows.UI.Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF));
-    public static readonly Brush Gray = new SolidColorBrush(Windows.UI.Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF));
-    public static readonly Brush White = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
+    /// <summary>当前是否浅色主题：Flyout 里这几个画刷是在代码里建的，不会随 ThemeResource 自动切换。</summary>
+    public static bool IsLight { get; set; }
+
+    private static readonly Brush DarkGray = new SolidColorBrush(Windows.UI.Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF));
+    private static readonly Brush LightGray = new SolidColorBrush(Windows.UI.Color.FromArgb(0x1F, 0x00, 0x00, 0x00));
+    private static readonly Brush DarkText = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
+    private static readonly Brush LightText = new SolidColorBrush(Windows.UI.Color.FromArgb(0xE6, 0x00, 0x00, 0x00));
+
+    public static Brush Gray => IsLight ? LightGray : DarkGray;
+
+    /// <summary>未激活项的文字色（深色主题为白，浅色主题为近黑）。</summary>
+    public static Brush Text => IsLight ? LightText : DarkText;
 
     public static Brush Accent => (Brush)Application.Current.Resources["LaunchAccentBrush"];
 
@@ -47,7 +57,7 @@ public sealed class GameEntryViewModel
     public Brush RowBackground => IsActiveSingle ? SwitcherBrushes.Accent : SwitcherBrushes.Transparent;
 
     /// <summary>激活的单配置行用主题色底配对比色字；多配置游戏的标题保持白色，激活态由其下的 Chip 表示。</summary>
-    public Brush TitleForeground => IsActiveSingle ? SwitcherBrushes.OnAccent : SwitcherBrushes.White;
+    public Brush TitleForeground => IsActiveSingle ? SwitcherBrushes.OnAccent : SwitcherBrushes.Text;
 
     public IReadOnlyList<ProfileChipViewModel> Profiles { get; }
 
@@ -80,7 +90,7 @@ public sealed class ProfileChipViewModel
         ? SwitcherBrushes.Accent
         : _isRemembered ? SwitcherBrushes.Gray : SwitcherBrushes.Transparent;
 
-    public Brush ChipForeground => _isActive ? SwitcherBrushes.OnAccent : SwitcherBrushes.White;
+    public Brush ChipForeground => _isActive ? SwitcherBrushes.OnAccent : SwitcherBrushes.Text;
 
     public string AutomationName => _isActive ? $"{DisplayName}，当前配置" : $"切换到 {DisplayName}";
 

@@ -4,8 +4,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:Sparxie.Desktop.ViewModels">
     <Border Width="480" CornerRadius="20,0,0,20"
-            Background="{StaticResource GlassPanelBrush}"
-            BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1,0,0,0">
+            Background="{ThemeResource GlassPanelBrush}"
+            BorderBrush="{ThemeResource GlassStrokeBrush}" BorderThickness="1,0,0,0">
         <Grid Padding="28,76,28,28">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -29,6 +29,16 @@
 
             <ScrollViewer Grid.Row="1" Margin="0,28,0,20">
                 <StackPanel Spacing="20">
+                    <Border Style="{StaticResource GlassCard}">
+                        <StackPanel Spacing="8">
+                            <ComboBox Header="主题" HorizontalAlignment="Stretch" MinHeight="48"
+                                      SelectedIndex="{Binding Settings.ThemeIndex, Mode=TwoWay}">
+                                <ComboBoxItem Content="跟随系统" />
+                                <ComboBoxItem Content="浅色" />
+                                <ComboBoxItem Content="深色" />
+                            </ComboBox>
+                        </StackPanel>
+                    </Border>
                     <Border Style="{StaticResource GlassCard}">
                         <StackPanel Spacing="8">
                             <ComboBox Header="点击关闭按钮时" HorizontalAlignment="Stretch" MinHeight="48"
@@ -79,8 +89,8 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:PluginItemViewModel">
                                         <Border Margin="0,0,0,10" Padding="0" CornerRadius="14"
-                                                Background="{StaticResource GlassAcrylicBrush}"
-                                                BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1">
+                                                Background="{ThemeResource GlassAcrylicBrush}"
+                                                BorderBrush="{ThemeResource GlassStrokeBrush}" BorderThickness="1">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="Auto" />

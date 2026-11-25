@@ -53,6 +53,7 @@ public sealed partial class ProfileManagerPage : Page
         var dialog = new ContentDialog
         {
             XamlRoot = XamlRoot,
+            RequestedTheme = DialogTheme.For(XamlRoot),
             Title = "删除此配置？",
             Content = $"将删除“{selected.DisplayName}”，此操作不可撤销。",
             PrimaryButtonText = "删除",
@@ -147,6 +148,7 @@ public sealed partial class ProfileManagerPage : Page
         var dialog = new ContentDialog
         {
             XamlRoot = XamlRoot,
+            RequestedTheme = DialogTheme.For(XamlRoot),
             Title = "找到多个安装，选择一个",
             Content = list,
             PrimaryButtonText = "使用所选",
@@ -205,6 +207,7 @@ public sealed partial class ProfileManagerPage : Page
             await new ContentDialog
             {
                 XamlRoot = XamlRoot,
+                RequestedTheme = DialogTheme.For(XamlRoot),
                 Title = "游戏 EXE",
                 Content = message,
                 CloseButtonText = "知道了",

@@ -2,25 +2,59 @@
     x:Class="Sparxie.Desktop.App"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    RequestedTheme="Dark"
     xmlns:converters="using:Sparxie.Desktop.Converters">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
+            <!-- 统一视觉令牌：玻璃面板、描边、圆角。各页面只引用（用 ThemeResource，切换主题即时生效），不再各写各的色值。
+                 Default = 深色（原有取值不变），Light = 浅色。
+                 游戏卡 / 提示条的底不用 AcrylicBrush：动态背景的视频是交换链渲染，应用内亚克力采样不到它。 -->
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Default">
+                    <SolidColorBrush x:Key="GlassPanelBrush" Color="#E6111315" />
+                    <SolidColorBrush x:Key="GlassCardBrush" Color="#1FFFFFFF" />
+                    <SolidColorBrush x:Key="GlassOverlayBrush" Color="#66000000" />
+                    <SolidColorBrush x:Key="GlassStrokeBrush" Color="#26FFFFFF" />
+                    <SolidColorBrush x:Key="GlassMutedTextBrush" Color="#B3FFFFFF" />
+                    <SolidColorBrush x:Key="GlassAcrylicBrush" Color="#8C0B0E14" />
+                    <SolidColorBrush x:Key="OnGlassTextBrush" Color="#FFFFFFFF" />
+                    <SolidColorBrush x:Key="GlassHoverBrush" Color="#29FFFFFF" />
+                    <SolidColorBrush x:Key="WindowBaseBrush" Color="#FF111315" />
+                    <SolidColorBrush x:Key="PageScrimBrush" Color="#B3111315" />
+                    <Color x:Key="ShadeStrongColor">#CC000000</Color>
+                    <Color x:Key="ShadeBottomColor">#99000000</Color>
+                    <Color x:Key="ShadeMidColor">#66000000</Color>
+                    <Color x:Key="ShadeSoftColor">#33000000</Color>
+                    <Color x:Key="ShadeStripColor">#88000000</Color>
+                    <Color x:Key="ShadeClearColor">#00000000</Color>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="GlassPanelBrush" Color="#F2F5F6F8" />
+                    <SolidColorBrush x:Key="GlassCardBrush" Color="#CCFFFFFF" />
+                    <SolidColorBrush x:Key="GlassOverlayBrush" Color="#40000000" />
+                    <SolidColorBrush x:Key="GlassStrokeBrush" Color="#1F000000" />
+                    <SolidColorBrush x:Key="GlassMutedTextBrush" Color="#A6000000" />
+                    <SolidColorBrush x:Key="GlassAcrylicBrush" Color="#D9FFFFFF" />
+                    <SolidColorBrush x:Key="OnGlassTextBrush" Color="#E6000000" />
+                    <SolidColorBrush x:Key="GlassHoverBrush" Color="#14000000" />
+                    <SolidColorBrush x:Key="WindowBaseBrush" Color="#FFF3F4F6" />
+                    <SolidColorBrush x:Key="PageScrimBrush" Color="#CCE9ECF1" />
+                    <Color x:Key="ShadeStrongColor">#E6FFFFFF</Color>
+                    <Color x:Key="ShadeBottomColor">#99FFFFFF</Color>
+                    <Color x:Key="ShadeMidColor">#80FFFFFF</Color>
+                    <Color x:Key="ShadeSoftColor">#33FFFFFF</Color>
+                    <Color x:Key="ShadeStripColor">#B3FFFFFF</Color>
+                    <Color x:Key="ShadeClearColor">#00FFFFFF</Color>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
             <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
             <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
             <converters:GameDisplayConverter x:Key="GameDisplayConverter" />
             <converters:GameIconConverter x:Key="GameIconConverter" />
             <converters:PriorityDisplayConverter x:Key="PriorityDisplayConverter" />
 
-            <!-- 统一视觉令牌：玻璃面板、描边、圆角。各页面只引用，不再各写各的色值。 -->
-            <SolidColorBrush x:Key="GlassPanelBrush" Color="#E6111315" />
-            <SolidColorBrush x:Key="GlassCardBrush" Color="#1FFFFFFF" />
-            <SolidColorBrush x:Key="GlassOverlayBrush" Color="#66000000" />
-            <SolidColorBrush x:Key="GlassStrokeBrush" Color="#26FFFFFF" />
-            <SolidColorBrush x:Key="GlassMutedTextBrush" Color="#B3FFFFFF" />
             <!-- 启动按钮主题色：随当前游戏背景图提取，由 MainWindow 在运行时改 Color。 -->
             <SolidColorBrush x:Key="LaunchAccentBrush" Color="#FF5B8DEF" />
             <SolidColorBrush x:Key="LaunchAccentForegroundBrush" Color="#FFFFFFFF" />
@@ -31,9 +65,6 @@
             <SolidColorBrush x:Key="StartButtonHoverBrush" Color="#FFE8C96A" />
             <SolidColorBrush x:Key="StartButtonPressedBrush" Color="#FFD6B552" />
             <SolidColorBrush x:Key="StartButtonForegroundBrush" Color="#FF2B2118" />
-            <!-- 游戏卡 / 提示条 / 设置按钮的底：半透明深色。不用 AcrylicBrush —— 动态背景的视频是交换链渲染，
-                 应用内亚克力采样不到它，会退化成纯黑。 -->
-            <SolidColorBrush x:Key="GlassAcrylicBrush" Color="#8C0B0E14" />
             <SolidColorBrush x:Key="LaunchAccentPressedBrush" Color="#FF4D75CC" />
             <CornerRadius x:Key="PanelRadius">20</CornerRadius>
             <CornerRadius x:Key="CardRadius">14</CornerRadius>
@@ -42,8 +73,8 @@
             <Style x:Key="GlassCard" TargetType="Border">
                 <Setter Property="CornerRadius" Value="{StaticResource CardRadius}" />
                 <Setter Property="Padding" Value="20" />
-                <Setter Property="Background" Value="{StaticResource GlassCardBrush}" />
-                <Setter Property="BorderBrush" Value="{StaticResource GlassStrokeBrush}" />
+                <Setter Property="Background" Value="{ThemeResource GlassCardBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource GlassStrokeBrush}" />
                 <Setter Property="BorderThickness" Value="1" />
             </Style>
             <Style x:Key="PageTitle" TargetType="TextBlock">
@@ -56,14 +87,14 @@
             </Style>
             <Style x:Key="CaptionText" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="12" />
-                <Setter Property="Foreground" Value="{StaticResource GlassMutedTextBrush}" />
+                <Setter Property="Foreground" Value="{ThemeResource GlassMutedTextBrush}" />
                 <Setter Property="TextWrapping" Value="Wrap" />
             </Style>
 
                 <Style x:Key="PillTabStyle" TargetType="ToggleButton">
                     <Setter Property="MinHeight" Value="36" />
                     <Setter Property="Padding" Value="14,0" />
-                    <Setter Property="Foreground" Value="White" />
+                    <Setter Property="Foreground" Value="{ThemeResource OnGlassTextBrush}" />
                     <Setter Property="Template">
                         <Setter.Value>
                             <ControlTemplate TargetType="ToggleButton">
@@ -89,7 +120,7 @@
                                         </VisualStateGroup>
                                     </VisualStateManager.VisualStateGroups>
                                     <Grid>
-                                        <Border x:Name="Hover" CornerRadius="22" Background="#29FFFFFF" Opacity="0"
+                                        <Border x:Name="Hover" CornerRadius="22" Background="{ThemeResource GlassHoverBrush}" Opacity="0"
                                                 IsHitTestVisible="False" />
                                         <Border Padding="{TemplateBinding Padding}">
                                             <ContentPresenter x:Name="Content" HorizontalAlignment="Center" VerticalAlignment="Center" />
