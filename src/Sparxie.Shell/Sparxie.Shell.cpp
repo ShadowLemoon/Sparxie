@@ -198,6 +198,9 @@ int wmain(int, wchar_t* argv[])
         return 1;
     }
 
+    // 把壳（用户刚双击的进程）拥有的前台权限交给本体：重复启动时本体要靠它让已有实例的窗口提到前台。
+    AllowSetForegroundWindow(process.dwProcessId);
+
     CloseHandle(process.hProcess);
     CloseHandle(process.hThread);
 
