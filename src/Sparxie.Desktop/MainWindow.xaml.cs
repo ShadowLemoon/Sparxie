@@ -567,6 +567,7 @@ public sealed partial class MainWindow : Window
 
     private async void OnClosed(object sender, WindowEventArgs args)
     {
+        App.ReleaseSingleInstance();
         _viewModel.Profiles.Flush();
         _tray?.Dispose();
         await _launcher.DisposeAsync();
@@ -614,20 +615,27 @@ public sealed partial class MainWindow : Window
         AppWindow.Hide();
     }
 
+    /// <summary>重复启动时由单实例通知调用：显示、还原并激活窗口。</summary>
+    public void BringToFront() => ShowFromTray();
+
     private void ShowFromTray()
     {
         AppWindow.Show();
-        if (AppWindow.Presenter is OverlappedPresenter presenter)
+        // 只还原最小化的窗口：对最大化窗口调用 Restore 会把它缩回普通大小。
+        if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } presenter)
         {
             presenter.Restore();
         }
 
+        // 窗口可见但被别的窗口盖住时，Activate 不一定能提到前台，需要显式 SetForegroundWindow。
         Activate();
+        SetForegroundWindow(WindowNative.GetWindowHandle(this));
     }
 
     private void ExitApplication()
     {
         _forceClose = true;
+        App.ReleaseSingleInstance();
         _viewModel.Profiles.Flush();
         _tray?.Dispose();
         _tray = null;
@@ -737,6 +745,10 @@ public sealed partial class MainWindow : Window
 
     [System.Runtime.InteropServices.LibraryImport("User32.dll")]
     private static partial uint GetDpiForWindow(nint hwnd);
+
+    [System.Runtime.InteropServices.LibraryImport("User32.dll")]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static partial bool SetForegroundWindow(nint hwnd);
 
     [System.Runtime.InteropServices.LibraryImport("User32.dll", EntryPoint = "GetWindowRect")]
     [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]

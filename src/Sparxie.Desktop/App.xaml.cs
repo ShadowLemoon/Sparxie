@@ -9,6 +9,10 @@ public partial class App : Application
     public static Window? MainWindow { get; private set; }
 
     private Window? _window;
+    private static SingleInstance? _singleInstance;
+
+    /// <summary>开始退出时调用，提前释放单实例互斥体。</summary>
+    public static void ReleaseSingleInstance() => _singleInstance?.Dispose();
 
     public App()
     {
@@ -22,6 +26,15 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        // 同一目录已有实例在运行：通知它显示窗口，本进程直接退出。
+        _singleInstance = SingleInstance.TryAcquire(() =>
+            _window?.DispatcherQueue.TryEnqueue(() => (_window as MainWindow)?.BringToFront()));
+        if (_singleInstance is null)
+        {
+            Environment.Exit(0);
+            return;
+        }
+
         var data = new DesktopDataService();
         try
         {
