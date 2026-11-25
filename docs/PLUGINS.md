@@ -154,6 +154,13 @@ powershell -File tests\MockGameModule\build_mock.ps1
 3. 说明插件是否联网、会改哪些注册表项和文件（写进 `privacyNote`）。
 4. 每次发布递增 `version`：导入时主程序据此判断升级或降级。
 
+## 新建与发布插件
+
+- 从 [sparxie-dev/plugin-template](https://github.com/sparxie-dev/plugin-template) 建仓（Use this template）。示例插件只负责启动游戏。
+- 校验、构建打包和发布由 [sparxie-dev/plugin-tools](https://github.com/sparxie-dev/plugin-tools) 的可复用工作流完成，插件仓库只放两个调用方（`validate.yml`、`release.yml`），不用复制脚本。仓库只需要满足：根目录有 CMake 工程和 `plugin.json`，Release 构建产出唯一一个 `module.dll`。
+- 发布：改版本号、合进默认分支、推 `v<版本>` tag。工作流会创建带 SHA-256 的 GitHub Release；同名 Release 已存在时失败（`module.dll` 每次编译哈希都不同，不覆盖已发布文件）。
+- `plugin-tools` 里的清单校验规则对齐本程序的 `PluginManifest` / `PluginSettingsSchema`。**改这两处的规则时要同步改 `plugin-tools` 的 `scripts/manifest_utils.py`**；本程序是最终裁判。
+
 ## 导入
 
 设置里“第三方游戏插件”卡片支持把 `.zip` 或文件夹直接拖进去（一次最多 8 个，其余文件会被忽略并提示）；也可以点“导入插件…”选择。
