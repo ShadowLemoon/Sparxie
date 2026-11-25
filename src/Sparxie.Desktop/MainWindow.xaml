@@ -33,21 +33,23 @@
                 </Image>
             </Grid>
         </Viewbox>
+        <!-- 上下两条渐变是压在游戏背景图上的照片遮罩，和界面主题无关：深浅色都用同一组深色（浅色版的白色渐变很难看）。
+             压在它们上面的内容（标题栏、背景切换条）也固定用深色主题的白字。 -->
         <Rectangle Grid.RowSpan="2">
             <Rectangle.Fill>
                 <LinearGradientBrush StartPoint="0,1" EndPoint="0,0">
-                    <GradientStop Color="{ThemeResource ShadeBottomColor}" Offset="0" />
-                    <GradientStop Color="{ThemeResource ShadeSoftColor}" Offset="0.1" />
-                    <GradientStop Color="{ThemeResource ShadeClearColor}" Offset="0.18" />
+                    <GradientStop Color="#99000000" Offset="0" />
+                    <GradientStop Color="#33000000" Offset="0.1" />
+                    <GradientStop Color="#00000000" Offset="0.18" />
                 </LinearGradientBrush>
             </Rectangle.Fill>
         </Rectangle>
         <Rectangle Grid.Row="0">
             <Rectangle.Fill>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                    <GradientStop Color="{ThemeResource ShadeStrongColor}" Offset="0" />
-                    <GradientStop Color="{ThemeResource ShadeMidColor}" Offset="0.5" />
-                    <GradientStop Color="{ThemeResource ShadeClearColor}" Offset="1" />
+                    <GradientStop Color="#CC000000" Offset="0" />
+                    <GradientStop Color="#66000000" Offset="0.5" />
+                    <GradientStop Color="#00000000" Offset="1" />
                 </LinearGradientBrush>
             </Rectangle.Fill>
         </Rectangle>

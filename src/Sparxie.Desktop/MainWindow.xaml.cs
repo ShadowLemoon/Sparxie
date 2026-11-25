@@ -43,6 +43,13 @@ public sealed partial class MainWindow : Window
         VisibilityChanged += (_, _) => UpdateWindowHidden();
         _viewModel.Settings.Saved += ApplyCloseBehavior;
         _viewModel.Settings.Saved += ApplyTheme;
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(MainWindowViewModel.IsProfilesVisible) or nameof(MainWindowViewModel.IsSettingsOpen))
+            {
+                ApplyTitleBarColors();
+            }
+        };
         if (Content is FrameworkElement themeRoot)
         {
             themeRoot.ActualThemeChanged += (_, _) => UpdateThemeDependents();
@@ -452,15 +459,20 @@ public sealed partial class MainWindow : Window
         ApplyTitleBarColors();
     }
 
-    /// <summary>系统最小化 / 最大化 / 关闭按钮压在壁纸上，随主题换成白色或深色图标，悬停 / 按下给半透明底。</summary>
+    /// <summary>
+    /// 标题栏下面是什么决定它的颜色：主页上压着游戏背景图和深色渐变，固定用白字；配置页（跨标题栏的主题色遮罩）跟随主题。
+    /// 右上角的系统按钮在设置抽屉打开时压在抽屉面板上，浅色主题下同样要换成深色图标。
+    /// </summary>
     private void ApplyTitleBarColors()
     {
+        AppTitleBar.RequestedTheme = _viewModel.IsProfilesVisible ? ElementTheme.Default : ElementTheme.Dark;
+
         if (_titleBar is null)
         {
             return;
         }
 
-        var light = IsLightTheme;
+        var light = IsLightTheme && (_viewModel.IsProfilesVisible || _viewModel.IsSettingsOpen);
         var ink = light ? Windows.UI.Color.FromArgb(0xFF, 0x14, 0x16, 0x1A) : Colors.White;
         byte tone = light ? (byte)0x00 : (byte)0xFF;
         _titleBar.ButtonForegroundColor = ink;

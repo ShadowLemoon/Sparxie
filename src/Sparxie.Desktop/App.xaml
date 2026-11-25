@@ -23,12 +23,6 @@
                     <SolidColorBrush x:Key="GlassHoverBrush" Color="#29FFFFFF" />
                     <SolidColorBrush x:Key="WindowBaseBrush" Color="#FF111315" />
                     <SolidColorBrush x:Key="PageScrimBrush" Color="#B3111315" />
-                    <Color x:Key="ShadeStrongColor">#CC000000</Color>
-                    <Color x:Key="ShadeBottomColor">#99000000</Color>
-                    <Color x:Key="ShadeMidColor">#66000000</Color>
-                    <Color x:Key="ShadeSoftColor">#33000000</Color>
-                    <Color x:Key="ShadeStripColor">#88000000</Color>
-                    <Color x:Key="ShadeClearColor">#00000000</Color>
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Light">
                     <SolidColorBrush x:Key="GlassPanelBrush" Color="#F2F5F6F8" />
@@ -41,12 +35,6 @@
                     <SolidColorBrush x:Key="GlassHoverBrush" Color="#14000000" />
                     <SolidColorBrush x:Key="WindowBaseBrush" Color="#FFF3F4F6" />
                     <SolidColorBrush x:Key="PageScrimBrush" Color="#CCE9ECF1" />
-                    <Color x:Key="ShadeStrongColor">#E6FFFFFF</Color>
-                    <Color x:Key="ShadeBottomColor">#99FFFFFF</Color>
-                    <Color x:Key="ShadeMidColor">#80FFFFFF</Color>
-                    <Color x:Key="ShadeSoftColor">#33FFFFFF</Color>
-                    <Color x:Key="ShadeStripColor">#B3FFFFFF</Color>
-                    <Color x:Key="ShadeClearColor">#00FFFFFF</Color>
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
             <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
