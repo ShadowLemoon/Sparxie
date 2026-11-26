@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Sparxie.Desktop.Services;
 using Sparxie.Desktop.ViewModels;
 
 namespace Sparxie.Desktop.Views;
@@ -82,31 +83,45 @@ public sealed partial class SettingsDrawer : UserControl
         }
     }
 
-    private async void ImportPluginZipClick(object sender, RoutedEventArgs e)
-    {
-        var picker = new Windows.Storage.Pickers.FileOpenPicker { SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Downloads };
-        picker.FileTypeFilter.Add(".zip");
-        await ImportPluginAsync(picker, async () => (await picker.PickSingleFileAsync())?.Path);
-    }
+    private async void ImportPluginZipClick(object sender, RoutedEventArgs e) =>
+        await ImportPluginAsync(async windowId =>
+        {
+            var picker = new Microsoft.Windows.Storage.Pickers.FileOpenPicker(windowId)
+            {
+                SuggestedStartLocation = Microsoft.Windows.Storage.Pickers.PickerLocationId.Downloads,
+            };
+            picker.FileTypeFilter.Add(".zip");
+            return (await picker.PickSingleFileAsync())?.Path;
+        });
 
-    private async void ImportPluginFolderClick(object sender, RoutedEventArgs e)
-    {
-        var picker = new Windows.Storage.Pickers.FolderPicker { SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Downloads };
-        picker.FileTypeFilter.Add("*");
-        await ImportPluginAsync(picker, async () => (await picker.PickSingleFolderAsync())?.Path);
-    }
+    private async void ImportPluginFolderClick(object sender, RoutedEventArgs e) =>
+        await ImportPluginAsync(async windowId =>
+        {
+            var picker = new Microsoft.Windows.Storage.Pickers.FolderPicker(windowId)
+            {
+                SuggestedStartLocation = Microsoft.Windows.Storage.Pickers.PickerLocationId.Downloads,
+            };
+            return (await picker.PickSingleFolderAsync())?.Path;
+        });
 
-    private async Task ImportPluginAsync(object picker, Func<Task<string?>> pick)
+    private async Task ImportPluginAsync(Func<Microsoft.UI.WindowId, Task<string?>> pick)
     {
         if (DataContext is not MainWindowViewModel viewModel || App.MainWindow is not { } window)
         {
             return;
         }
 
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(window));
-        if (await pick() is { Length: > 0 } path)
+        try
         {
-            await viewModel.Settings.Plugins.ImportAsync(path);
+            if (await pick(window.AppWindow.Id) is { Length: > 0 } path)
+            {
+                await viewModel.Settings.Plugins.ImportAsync(path);
+            }
+        }
+        catch (Exception ex)
+        {
+            DesktopLog.Write("选择插件失败", ex);
+            viewModel.Settings.Plugins.ReportPickerProblem(ex.Message);
         }
     }
 
