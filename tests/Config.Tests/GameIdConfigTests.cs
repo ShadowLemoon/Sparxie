@@ -78,13 +78,15 @@ public sealed class GameIdConfigTests : IDisposable
     [InlineData("Ext.acme.demo")]
     [InlineData("")]
     [InlineData("unknownGame")]
-    public void id语法非法视为配置损坏(string game)
+    public void id语法非法的Profile被移出(string game)
     {
         File.WriteAllText(ConfigPath, ConfigWithGame(game));
 
         var result = new AppConfigStore(ConfigPath).Load();
 
-        Assert.Equal(ConfigLoadState.RestoredFromCorrupt, result.State);
+        Assert.Equal(ConfigLoadState.Repaired, result.State);
+        Assert.Empty(result.Config.Profiles);
+        Assert.NotNull(result.BackupPath);
     }
 
     [Fact]

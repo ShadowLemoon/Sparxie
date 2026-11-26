@@ -16,6 +16,9 @@ public sealed class DesktopDataService
 
     public AppConfig Config { get; private set; } = new();
 
+    /// <summary>上次加载时修复、移出或恢复了什么；正常加载为空。</summary>
+    public IReadOnlyList<string> LoadChanges { get; private set; } = [];
+
     /// <summary>界面偏好，存放在 config.json 的 desktop 段。</summary>
     public DesktopSettings Preferences => Config.Desktop ??= new DesktopSettings();
 
@@ -29,6 +32,12 @@ public sealed class DesktopDataService
             throw new InvalidOperationException(result.Error?.Message ?? "配置加载失败");
         }
 
+        foreach (var change in result.Changes)
+        {
+            DesktopLog.Write($"配置 {result.State}: {change}");
+        }
+
+        LoadChanges = result.Changes;
         Config = result.Config;
     }
 

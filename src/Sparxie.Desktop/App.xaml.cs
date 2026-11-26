@@ -54,6 +54,11 @@ public partial class App : Application
             new ProfileManagerViewModel(data),
             new SettingsViewModel(data),
             settingsPanel);
+        if (LaunchErrorInfo.FromConfigChanges(data.LoadChanges) is { } configProblem)
+        {
+            viewModel.Home.ShowStartupProblem(configProblem);
+        }
+
         if (!AppPaths.IsWritable)
         {
             // 绿色便携：不悄悄把数据写到 AppData。写不进程序目录时明确告诉用户，由用户决定怎么处理。

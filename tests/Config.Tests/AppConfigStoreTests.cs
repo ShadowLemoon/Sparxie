@@ -155,46 +155,6 @@ public class AppConfigStoreTests : IDisposable
     }
 
     [Fact]
-    public void 非法game枚举时备份并生成空白配置()
-    {
-        File.WriteAllText(ConfigPath, """
-            {
-              "schemaVersion": 1,
-              "selectedProfileId": null,
-              "profiles": [{ "id": "p1", "displayName": "x", "game": "wow", "executablePath": "C:\\x.exe" }]
-            }
-            """);
-
-        var store = new AppConfigStore(ConfigPath);
-        var result = store.Load();
-
-        Assert.Equal(ConfigLoadState.RestoredFromCorrupt, result.State);
-        Assert.NotNull(result.BackupPath);
-        Assert.Empty(result.Config.Profiles);
-    }
-
-    [Fact]
-    public void 重复profileId时备份并生成空白配置()
-    {
-        File.WriteAllText(ConfigPath, """
-            {
-              "schemaVersion": 1,
-              "selectedProfileId": null,
-              "profiles": [
-                { "id": "p1", "displayName": "a", "game": "genshin", "executablePath": "C:\\a.exe" },
-                { "id": "p1", "displayName": "b", "game": "genshin", "executablePath": "C:\\b.exe" }
-              ]
-            }
-            """);
-
-        var store = new AppConfigStore(ConfigPath);
-        var result = store.Load();
-
-        Assert.Equal(ConfigLoadState.RestoredFromCorrupt, result.State);
-        Assert.NotNull(result.BackupPath);
-    }
-
-    [Fact]
     public void 已有异常备份不会被覆盖()
     {
         var corrupt = "garbage"u8.ToArray();
