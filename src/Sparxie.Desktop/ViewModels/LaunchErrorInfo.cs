@@ -14,6 +14,11 @@ public sealed record LaunchErrorInfo(string Title, string Hint, string Detail)
         return Build(title, string.IsNullOrWhiteSpace(message) ? state : message!);
     }
 
+    /// <summary>加载配置时做过修复、移出或恢复：告诉用户，免得配置少了却不知道原因。没有改动返回 null。</summary>
+    public static LaunchErrorInfo? FromConfigChanges(IReadOnlyList<string> changes) => changes.Count == 0
+        ? null
+        : new LaunchErrorInfo("配置文件有问题，已自动处理", "原文件保留在程序目录里。请核对下面列出的改动。", string.Join("\n", changes));
+
     /// <summary>是否是需要给用户展示的失败终态（正常退出不算）。</summary>
     public static bool IsFailureState(string state) => state is "Failed" or "HostCrashedBeforeRunning" or "HostCrashedAfterRunning";
 

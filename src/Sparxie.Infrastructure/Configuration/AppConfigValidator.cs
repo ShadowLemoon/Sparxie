@@ -30,70 +30,81 @@ public static class AppConfigValidator
         var ids = new HashSet<string>(StringComparer.Ordinal);
         foreach (var profile in config.Profiles)
         {
-            if (string.IsNullOrWhiteSpace(profile.Id))
-            {
-                errors.Add("profile.id 不能为空");
-            }
-            else if (!ids.Add(profile.Id))
+            if (!string.IsNullOrWhiteSpace(profile.Id) && !ids.Add(profile.Id))
             {
                 errors.Add($"重复的 profile.id: {profile.Id}");
             }
 
-            if (string.IsNullOrWhiteSpace(profile.DisplayName))
+            errors.AddRange(ValidateProfile(profile));
+        }
+
+        return errors;
+    }
+
+    /// <summary>单个 Profile 的规则（id 是否重复由整份校验判断）。</summary>
+    public static IReadOnlyList<string> ValidateProfile(GameProfile profile)
+    {
+        var errors = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(profile.Id))
+        {
+            errors.Add("profile.id 不能为空");
+        }
+
+        if (string.IsNullOrWhiteSpace(profile.DisplayName))
+        {
+            errors.Add($"profile {profile.Id} 的 displayName 不能为空");
+        }
+
+        // 只有 id 语法非法才算损坏；语法合法但目录里没有（插件缺失）的 id 保留配置，
+        // 只跳过白名单与内置专用设置检查，避免一个未知游戏让整份配置被重置。
+        if (!GameIds.IsValidId(profile.Game))
+        {
+            errors.Add($"profile {profile.Id} 的 game 非法: {profile.Game}");
+        }
+
+        if (string.IsNullOrWhiteSpace(profile.ExecutablePath))
+        {
+            // 空路径 = 未完成配置（UI 允许先建 Profile 占位后填路径）；
+            // 启动时由 SessionHost 边界拒绝（ExecutableNotFound）。
+            // 非空时必须通过游戏类型 EXE 白名单。
+        }
+        else if (profile.BuiltInGame is not null && !GameExecutables.IsAllowed(profile.Game, profile.ExecutablePath))
+        {
+            errors.Add($"profile {profile.Id} 的 EXE 名称不在白名单: {Path.GetFileName(profile.ExecutablePath)}");
+        }
+
+        if (LaunchSettingsRules.Validate(profile.Launch) is { } launchError)
+        {
+            errors.Add($"profile {profile.Id} 的启动设置不合法：{launchError}");
+        }
+
+        if (profile.BuiltInGame is null)
+        {
+            // 非内置游戏：不识别 hoyo 段，原样保留。
+        }
+        else if (profile.BuiltInGame == GameType.ZenlessZoneZero)
+        {
+            if (profile.Hoyo is not null)
             {
-                errors.Add($"profile {profile.Id} 的 displayName 不能为空");
+                errors.Add($"profile {profile.Id} 的绝区零不应包含 hoyo 设置");
+            }
+        }
+        else if (profile.Hoyo is { } hoyo)
+        {
+            ValidateFps(errors, profile.Id, nameof(HoyoProfileSettings.TargetFps), hoyo.TargetFps);
+            ValidateFps(errors, profile.Id, nameof(HoyoProfileSettings.BackgroundFps), hoyo.BackgroundFps);
+            ValidateFps(errors, profile.Id, nameof(HoyoProfileSettings.GenshinPreset30Fps), hoyo.GenshinPreset30Fps);
+            ValidateFps(errors, profile.Id, nameof(HoyoProfileSettings.GenshinPreset60Fps), hoyo.GenshinPreset60Fps);
+
+            if (hoyo.GenshinTouchUiScalePercent is < MinTouchUiScalePercent or > MaxTouchUiScalePercent)
+            {
+                errors.Add($"profile {profile.Id} 的 genshinTouchUiScalePercent 超出 {MinTouchUiScalePercent}–{MaxTouchUiScalePercent}");
             }
 
-            // 只有 id 语法非法才算损坏；语法合法但目录里没有（插件缺失）的 id 保留配置，
-            // 只跳过白名单与内置专用设置检查，避免一个未知游戏让整份配置被重置。
-            if (!GameIds.IsValidId(profile.Game))
+            if (!Enum.IsDefined(hoyo.ProcessPriority))
             {
-                errors.Add($"profile {profile.Id} 的 game 非法: {profile.Game}");
-            }
-
-            if (string.IsNullOrWhiteSpace(profile.ExecutablePath))
-            {
-                // 空路径 = 未完成配置（UI 允许先建 Profile 占位后填路径）；
-                // 启动时由 SessionHost 边界拒绝（ExecutableNotFound）。
-                // 非空时必须通过游戏类型 EXE 白名单。
-            }
-            else if (profile.BuiltInGame is not null && !GameExecutables.IsAllowed(profile.Game, profile.ExecutablePath))
-            {
-                errors.Add($"profile {profile.Id} 的 EXE 名称不在白名单: {Path.GetFileName(profile.ExecutablePath)}");
-            }
-
-            if (LaunchSettingsRules.Validate(profile.Launch) is { } launchError)
-            {
-                errors.Add($"profile {profile.Id} 的启动设置不合法：{launchError}");
-            }
-
-            if (profile.BuiltInGame is null)
-            {
-                // 非内置游戏：不识别 hoyo 段，原样保留。
-            }
-            else if (profile.BuiltInGame == GameType.ZenlessZoneZero)
-            {
-                if (profile.Hoyo is not null)
-                {
-                    errors.Add($"profile {profile.Id} 的绝区零不应包含 hoyo 设置");
-                }
-            }
-            else if (profile.Hoyo is { } hoyo)
-            {
-                ValidateFps(errors, profile.Id, nameof(HoyoProfileSettings.TargetFps), hoyo.TargetFps);
-                ValidateFps(errors, profile.Id, nameof(HoyoProfileSettings.BackgroundFps), hoyo.BackgroundFps);
-                ValidateFps(errors, profile.Id, nameof(HoyoProfileSettings.GenshinPreset30Fps), hoyo.GenshinPreset30Fps);
-                ValidateFps(errors, profile.Id, nameof(HoyoProfileSettings.GenshinPreset60Fps), hoyo.GenshinPreset60Fps);
-
-                if (hoyo.GenshinTouchUiScalePercent is < MinTouchUiScalePercent or > MaxTouchUiScalePercent)
-                {
-                    errors.Add($"profile {profile.Id} 的 genshinTouchUiScalePercent 超出 {MinTouchUiScalePercent}–{MaxTouchUiScalePercent}");
-                }
-
-                if (!Enum.IsDefined(hoyo.ProcessPriority))
-                {
-                    errors.Add($"profile {profile.Id} 的 processPriority 非法");
-                }
+                errors.Add($"profile {profile.Id} 的 processPriority 非法");
             }
         }
 
