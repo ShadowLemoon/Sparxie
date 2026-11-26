@@ -43,13 +43,11 @@ public sealed class BrokerService : SparxieBroker.SparxieBrokerBase
             throw new RpcException(new Status(StatusCode.InvalidArgument, error.Value.Message));
         }
 
-        var response = new PingResponse
+        return Task.FromResult(new PingResponse
         {
             ProtocolVersion = RpcContract.ProtocolVersion,
             BrokerVersion = BrokerVersion,
-        };
-        response.Capabilities.AddRange(RpcContract.Capabilities);
-        return Task.FromResult(response);
+        });
     }
 
     public override Task<StartSessionResponse> StartSession(StartSessionRequest request, ServerCallContext context)
