@@ -27,7 +27,7 @@ extern "C" {
 #endif
 
 #define SPX_MODULE_ABI_MAJOR 1u
-#define SPX_MODULE_ABI_MINOR 0u
+#define SPX_MODULE_ABI_MINOR 1u
 
 typedef enum SpxError {
     SPX_OK = 0,
@@ -45,7 +45,8 @@ enum {
     SPX_CAP_CREATES_PROCESS = 1, /* 模块自己创建游戏进程（并负责绑定宿主给的 Job）；否则宿主创建并传 game_pid */
     SPX_CAP_INJECTS = 2,         /* 会向游戏进程注入代码；宿主在安装确认中醒目提示 */
     SPX_CAP_NEEDS_ARGS = 4,      /* 需要宿主生成的命令行参数 */
-    SPX_CAP_HOT_PARAMS = 8       /* 支持 set_param 热调 */
+    SPX_CAP_HOT_PARAMS = 8,      /* 支持 set_param 热调 */
+    SPX_CAP_DISABLE_TOUCH_UI = 16 /* 可选：支持宿主传入 SpxLaunchRequest.disable_touch_ui（关闭触屏界面） */
 };
 
 typedef struct SpxStr {
@@ -100,6 +101,8 @@ typedef struct SpxLaunchRequest {
     SpxStr log_dir;
     SpxStr data_dir;
     const SpxHostApi* host; /* 追加字段：size 不覆盖它时视为没有宿主服务 */
+    uint32_t disable_touch_ui; /* ABI 1.1 追加：非 0 表示关闭触屏界面（键鼠/手柄模式）；size 不覆盖它时视为 0 */
+    uint32_t reserved0; /* 保留对齐字段，当前固定为 0 */
 } SpxLaunchRequest;
 
 typedef struct SpxModuleApi {

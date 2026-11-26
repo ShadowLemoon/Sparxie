@@ -47,7 +47,7 @@ public sealed class ProfileManagerTests
     }
 
     [Fact]
-    public void 触屏开关支持Hoyo与绝区零并拒绝插件游戏()
+    public void 触屏开关支持内置游戏与插件游戏()
     {
         var config = new AppConfig();
         ProfileManager.Add(config, Create("sr-cn", "星铁", GameType.StarRail, @"D:\Games\StarRail.exe"));
@@ -56,6 +56,7 @@ public sealed class ProfileManagerTests
 
         Assert.False(config.Profiles[0].DisableTouchUi);
         Assert.False(config.Profiles[1].DisableTouchUi);
+        Assert.False(config.Profiles[2].DisableTouchUi);
 
         var updated = ProfileManager.Update(config, "sr-cn", new ProfileMutation(DisableTouchUi: true));
         Assert.True(updated.DisableTouchUi);
@@ -69,7 +70,9 @@ public sealed class ProfileManagerTests
         Assert.Null(zzzUpdated.Hoyo);
         Assert.True(ProfileManager.Update(config, "zzz-cn", new ProfileMutation(DisplayName: "绝区零 键鼠")).DisableTouchUi);
 
-        Assert.Throws<LauncherException>(() => ProfileManager.Update(config, "plug-1", new ProfileMutation(DisableTouchUi: true)));
+        var plugUpdated = ProfileManager.Update(config, "plug-1", new ProfileMutation(DisableTouchUi: true));
+        Assert.True(plugUpdated.DisableTouchUi);
+        Assert.True(ProfileManager.Update(config, "plug-1", new ProfileMutation(DisplayName: "插件游戏 键鼠")).DisableTouchUi);
     }
 
     [Fact]

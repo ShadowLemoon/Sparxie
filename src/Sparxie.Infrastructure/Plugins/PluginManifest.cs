@@ -8,12 +8,13 @@ namespace Sparxie.Infrastructure.Plugins;
 public sealed class PluginManifest
 {
     public const int SupportedAbiMajor = 1;
+    public const int SupportedAbiMinor = 1;
     public const int MaxManifestBytes = 64 * 1024;
     public const string ModuleFileName = "module.dll";
 
     private static readonly HashSet<string> KnownCaps = new(StringComparer.Ordinal)
     {
-        "createsProcess", "injects", "needsArgs", "hotParams",
+        "createsProcess", "injects", "needsArgs", "hotParams", "disableTouchUi",
     };
 
     // 禁止作为游戏 EXE 白名单的系统进程名，避免插件把白名单扩成任意进程注入。

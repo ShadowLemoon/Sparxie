@@ -66,12 +66,13 @@ public sealed class PluginEnableDetailsTests
     [Fact]
     public void 能力标签包含needsArgs和注册表钩子()
     {
-        var entry = Entry("""["needsArgs", "hotParams"]""", """, "registryHooks": { "keys": ["Software\\Vendor\\Game"] }""");
+        var entry = Entry("""["needsArgs", "hotParams", "disableTouchUi"]""", """, "registryHooks": { "keys": ["Software\\Vendor\\Game"] }""");
 
         var labels = PluginsViewModel.CapabilityLabels(entry.Manifest!).ToList();
 
         Assert.Contains("需要启动参数", labels);
         Assert.Contains("支持热调", labels);
+        Assert.Contains("支持关闭触屏界面", labels);
         Assert.Contains(labels, label => label.Contains("注册表"));
         Assert.Contains(PluginsViewModel.BuildEnableDetails(entry, null).RiskSentences, text => text.Contains("注册表") && text.Contains("恢复"));
     }

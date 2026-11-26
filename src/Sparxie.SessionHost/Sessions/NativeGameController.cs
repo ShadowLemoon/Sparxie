@@ -21,13 +21,30 @@ public sealed class NativeGameController(PluginEntry entry) : IGameController
     private NativePluginLibrary? _library;
     private NativePluginSession? _session;
     private RegistryHookSession? _registryHooks;
+    private bool _skipPlugin;
     private bool _aborted;
     private bool _disposed;
 
     public bool CreatesProcess => entry.Manifest!.HasCap("createsProcess");
 
+    public bool SupportsDisableTouchUi => entry.Manifest!.HasCap("disableTouchUi");
+
+    internal bool SkippedPlugin => _skipPlugin;
+
     public async Task PrepareLaunchAsync(ProfileSnapshot profile, CancellationToken cancellationToken)
     {
+        if (profile.DisableTouchUi && !SupportsDisableTouchUi)
+        {
+            if (CreatesProcess)
+            {
+                throw new NotSupportedException($"插件 {entry.Id} 未声明支持关闭触屏界面（disableTouchUi）");
+            }
+
+            // 纯注入型插件未声明自己处理 disableTouchUi 时：宿主跳过加载与注入，直接启动游戏进程。
+            _skipPlugin = true;
+            return;
+        }
+
         _library = NativePluginLibrary.Load(entry);
         _session = new NativePluginSession(_library);
 
@@ -40,12 +57,17 @@ public sealed class NativeGameController(PluginEntry entry) : IGameController
         // 设置按 manifest 的 settingsSchema 归一化（补默认值、夹范围、丢未知键），任何输入都不是拒绝会话的理由。
         var settingsJson = PluginSettingsSchema.ToJson(entry.Manifest!.Schema.Normalize(PluginSettingsSchema.ParseObject(profile.SettingsJson)));
         _registryHooks = CreateRegistryHooks();
-        await _session.CreateAsync(profile.ExecutablePath, arguments, settingsJson, logDir, dataDir, CallTimeout, _registryHooks).ConfigureAwait(false);
+        await _session.CreateAsync(profile.ExecutablePath, arguments, settingsJson, logDir, dataDir, CallTimeout, _registryHooks, profile.DisableTouchUi).ConfigureAwait(false);
         await _session.PrepareLaunchAsync(CallTimeout).ConfigureAwait(false);
     }
 
     public async Task InstallAsync(Process? gameProcess, IntPtr jobHandle, HoyoProfileSettings? hoyo, CancellationToken cancellationToken)
     {
+        if (_skipPlugin)
+        {
+            return;
+        }
+
         var session = _session ?? throw new InvalidOperationException("插件会话未创建");
 
         // 只有模块自己创建进程时才由模块绑定 Job；其余进程已由 SessionHost 绑定。
@@ -58,7 +80,9 @@ public sealed class NativeGameController(PluginEntry entry) : IGameController
     }
 
     public Task PostInstallAsync(CancellationToken cancellationToken) =>
-        (_session ?? throw new InvalidOperationException("插件会话未创建")).PostInstallAsync(CallTimeout);
+        _skipPlugin
+            ? Task.CompletedTask
+            : (_session ?? throw new InvalidOperationException("插件会话未创建")).PostInstallAsync(CallTimeout);
 
     public async Task AbortAsync(CancellationToken cancellationToken)
     {
@@ -93,6 +117,11 @@ public sealed class NativeGameController(PluginEntry entry) : IGameController
 
     public Task SetParamAsync(string key, long value, CancellationToken cancellationToken)
     {
+        if (_skipPlugin)
+        {
+            throw new NotSupportedException("当前未加载插件（已关闭触屏界面），不支持热调");
+        }
+
         if (!entry.Manifest!.HasCap("hotParams"))
         {
             throw new NotSupportedException("该模块不支持热调");

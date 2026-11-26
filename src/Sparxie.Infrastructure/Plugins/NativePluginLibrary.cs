@@ -76,7 +76,7 @@ public sealed class NativePluginLibrary : IDisposable
             }
 
             var queryFn = Marshal.GetDelegateForFunctionPointer<QueryFn>(query);
-            var rc = queryFn(PluginManifest.SupportedAbiMajor, 0, out var apiPtr);
+            var rc = queryFn(PluginManifest.SupportedAbiMajor, PluginManifest.SupportedAbiMinor, out var apiPtr);
             if (rc != SpxOk || apiPtr == IntPtr.Zero)
             {
                 throw new PluginLoadException($"sparxie_module_query 返回 {rc}");
@@ -144,6 +144,7 @@ public sealed class NativePluginLibrary : IDisposable
         if (manifest.HasCap("injects")) { caps |= 2; }
         if (manifest.HasCap("needsArgs")) { caps |= 4; }
         if (manifest.HasCap("hotParams")) { caps |= 8; }
+        if (manifest.HasCap("disableTouchUi")) { caps |= 16; }
         return caps;
     }
 
@@ -217,6 +218,8 @@ public sealed class NativePluginLibrary : IDisposable
         public SpxStr LogDir;
         public SpxStr DataDir;
         public IntPtr Host;
+        public uint DisableTouchUi;
+        public uint Reserved0;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -361,7 +364,7 @@ public sealed class NativePluginSession : IDisposable
 
     public bool CreatesProcess => _library.Entry.Manifest!.HasCap("createsProcess");
 
-    public Task CreateAsync(string exePath, string arguments, string settingsJson, string logDir, string dataDir, TimeSpan timeout, RegistryHookSession? registryHooks = null) =>
+    public Task CreateAsync(string exePath, string arguments, string settingsJson, string logDir, string dataDir, TimeSpan timeout, RegistryHookSession? registryHooks = null, bool disableTouchUi = false) =>
         RunAsync("create_session", timeout, () =>
         {
             var handles = new List<IntPtr>();
@@ -386,6 +389,8 @@ public sealed class NativePluginSession : IDisposable
                     LogDir = Str(logDir),
                     DataDir = Str(dataDir),
                     Host = registryHooks is null ? IntPtr.Zero : BuildHostApi(registryHooks),
+                    DisableTouchUi = disableTouchUi ? 1u : 0u,
+                    Reserved0 = 0,
                 };
                 var result = NativePluginLibrary.SpxResult.New();
                 var rc = _library.Functions.CreateSession(ref request, ref result, out var session);

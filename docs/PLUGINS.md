@@ -36,7 +36,7 @@ Sparxie 可以加载第三方提供的游戏模块（插件）。主仓库和主
 
 - `id`：必须匹配 `^ext\.[a-z0-9-]{2,32}\.[a-z0-9-]{2,32}$`，**必须与目录名一致**，不能占用内置游戏 id。
 - `exeNames`：1–8 个不含路径的 `*.exe`。启动时 EXE 必须在这个白名单里；`explorer.exe`、`cmd.exe`、`powershell.exe` 等系统进程名被禁止。这个黑名单只是防误配置，**不是安全边界**：插件本身就是管理员权限的原生代码，能做的事远多于"启动哪个程序"。
-- `caps`：`createsProcess`（模块自己创建游戏进程）、`injects`（会向游戏注入代码，启用确认里会醒目提示）、`needsArgs`（需要宿主生成命令行参数）、`hotParams`（支持热调）。必须与模块 `get_info` 返回的能力位**完全一致**。
+- `caps`：`createsProcess`（模块自己创建游戏进程）、`injects`（会向游戏注入代码，启用确认里会醒目提示）、`needsArgs`（需要宿主生成命令行参数）、`hotParams`（支持热调）、`disableTouchUi`（可选：插件自己处理宿主传入的 `SpxLaunchRequest.disable_touch_ui`，在关闭触屏界面时保留帧率解锁等其余能力）。必须与模块 `get_info` 返回的能力位**完全一致**。
 - `plugin.json` 不超过 64 KB。
 
 ## 图标、背景与自动查找（可选）
@@ -99,6 +99,7 @@ Sparxie 可以加载第三方提供的游戏模块（插件）。主仓库和主
 - 模块自己创建游戏进程时（`createsProcess`），宿主在 `install` 前调用 `attach_job`，模块创建进程后必须立即把它加入该 Job。
 - 宿主服务（注册表钩子）只在声明了 `registryHooks` 时才会传入，否则 `host` 为空。
 - `create_session` 里的 `settings_json` 是按 `settingsSchema` 归一化之后的设置，见下一节。
+- **可选的关闭触屏界面（ABI 1.1）：** `SpxLaunchRequest` 末尾按 `size` 追加了 `uint32_t disable_touch_ui`（非 0 表示关闭触屏界面；`size` 未覆盖时视为 0）。插件声明了 `disableTouchUi`（`SPX_CAP_DISABLE_TOUCH_UI`）能力时，宿主照常加载插件并传入 `disable_touch_ui`；未声明该能力的非 `createsProcess` 插件，在配置开启 `disableTouchUi` 时宿主会直接跳过插件加载与注入、照常启动游戏；未声明该能力的 `createsProcess` 插件，宿主会拒绝该次启动并返回不支持错误，避免静默绕过插件的进程创建逻辑。
 
 ## 插件设置（settingsSchema）
 

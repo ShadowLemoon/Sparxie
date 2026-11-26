@@ -73,10 +73,6 @@ public static class ProfileManager
         {
             updated.Game = newGameId;
             updated.Hoyo = UsesHoyoSettings(newGameId) ? updated.Hoyo ?? new HoyoProfileSettings() : null;
-            if (updated.BuiltInGame is null)
-            {
-                updated.DisableTouchUi = false;
-            }
 
             // 原路径属于旧游戏白名单，换游戏后必然非法；调用方未同时给出新路径时清空回占位状态。
             if (string.IsNullOrWhiteSpace(mutation.ExecutablePath))
@@ -188,11 +184,6 @@ public static class ProfileManager
 
         if (mutation.DisableTouchUi is { } disableTouchUi)
         {
-            if (profile.BuiltInGame is null)
-            {
-                throw Fail("插件游戏不支持内置触屏开关");
-            }
-
             profile.DisableTouchUi = disableTouchUi;
         }
 

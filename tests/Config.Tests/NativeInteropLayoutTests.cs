@@ -16,7 +16,7 @@ public sealed class NativeInteropLayoutTests
         Assert.Equal(16, Marshal.SizeOf<NativePluginLibrary.SpxStr>());
         Assert.Equal(16 + (512 * 2), Marshal.SizeOf<NativePluginLibrary.SpxResult>());
         Assert.Equal(88, Marshal.SizeOf<NativePluginLibrary.SpxModuleInfo>());
-        Assert.Equal(96, Marshal.SizeOf<NativePluginLibrary.SpxLaunchRequest>());
+        Assert.Equal(104, Marshal.SizeOf<NativePluginLibrary.SpxLaunchRequest>());
         Assert.Equal(48, Marshal.SizeOf<NativePluginLibrary.SpxHostApi>());
         Assert.Equal(96, Marshal.SizeOf(typeof(NativePluginLibrary).GetNestedType("ApiRaw", System.Reflection.BindingFlags.NonPublic)!));
     }
@@ -27,8 +27,17 @@ public sealed class NativeInteropLayoutTests
         Assert.Equal(16, (int)Marshal.OffsetOf<NativePluginLibrary.SpxResult>(nameof(NativePluginLibrary.SpxResult.Message)));
         Assert.Equal(4, (int)Marshal.OffsetOf<NativePluginLibrary.SpxResult>(nameof(NativePluginLibrary.SpxResult.ErrorCode)));
         Assert.Equal(88, (int)Marshal.OffsetOf<NativePluginLibrary.SpxLaunchRequest>(nameof(NativePluginLibrary.SpxLaunchRequest.Host)));
+        Assert.Equal(96, (int)Marshal.OffsetOf<NativePluginLibrary.SpxLaunchRequest>(nameof(NativePluginLibrary.SpxLaunchRequest.DisableTouchUi)));
+        Assert.Equal(100, (int)Marshal.OffsetOf<NativePluginLibrary.SpxLaunchRequest>(nameof(NativePluginLibrary.SpxLaunchRequest.Reserved0)));
         Assert.Equal(16, (int)Marshal.OffsetOf<NativePluginLibrary.SpxHostApi>(nameof(NativePluginLibrary.SpxHostApi.Context)));
         Assert.Equal(24, (int)Marshal.OffsetOf<NativePluginLibrary.SpxHostApi>(nameof(NativePluginLibrary.SpxHostApi.RegistrySetDword)));
+    }
+
+    [Fact]
+    public void disableTouchUi能力位映射与头文件一致()
+    {
+        var manifest = new PluginManifest { Caps = ["disableTouchUi"] };
+        Assert.Equal(16u, NativePluginLibrary.CapsFromManifest(manifest));
     }
 
     [Fact]

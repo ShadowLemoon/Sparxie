@@ -569,6 +569,7 @@ public sealed class PluginsViewModel : ObservableObject
         if (manifest.HasCap("createsProcess")) { yield return "自行创建游戏进程"; }
         if (manifest.HasCap("needsArgs")) { yield return "需要启动参数"; }
         if (manifest.HasCap("hotParams")) { yield return "支持热调"; }
+        if (manifest.HasCap("disableTouchUi")) { yield return "支持关闭触屏界面"; }
         if (manifest.RegistryHooks is { Keys.Count: > 0 }) { yield return "会修改注册表（仅限声明的 HKCU 项）"; }
     }
 
