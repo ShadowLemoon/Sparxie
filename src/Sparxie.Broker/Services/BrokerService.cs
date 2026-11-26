@@ -16,7 +16,7 @@ namespace Sparxie.Broker.Services;
 /// </summary>
 public sealed class BrokerService : SparxieBroker.SparxieBrokerBase
 {
-    public const string BrokerVersion = "0.2.0";
+    public const string BrokerVersion = "0.2.1";
 
     private readonly ILogger<BrokerService> _logger;
     private readonly SessionRegistry _registry;
