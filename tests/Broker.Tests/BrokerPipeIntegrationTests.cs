@@ -98,7 +98,6 @@ public sealed class BrokerPipeIntegrationTests : IAsyncLifetime
 
         Assert.Equal(RpcContract.ProtocolVersion, response.ProtocolVersion);
         Assert.Equal(BrokerService.BrokerVersion, response.BrokerVersion);
-        Assert.Equal(RpcContract.Capabilities, response.Capabilities);
     }
 
     [Fact]

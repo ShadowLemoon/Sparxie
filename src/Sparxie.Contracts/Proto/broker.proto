@@ -13,8 +13,6 @@ message PingRequest {
 message PingResponse {
   int32 protocol_version = 1;
   string broker_version = 2;
-  // 当前 Broker 支持的可选能力，旧 Broker 不返回此字段（外部启动器据此判断功能是否可用）。
-  repeated string capabilities = 3;
 }
 
 // 不可变 Profile 快照：UI 侧归一化，Broker 边界重新验证。
