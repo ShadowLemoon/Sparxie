@@ -28,6 +28,34 @@ public class ProfileSnapshotValidatorTests
         Assert.Null(ProfileSnapshotValidator.Validate(Valid()));
     }
 
+    [Fact]
+    public void 触屏载荷关闭但FPS解锁开启通过()
+    {
+        var profile = Valid();
+        profile.Hoyo.FpsUnlockEnabled = true;
+        profile.Hoyo.TouchUiEnabled = false;
+        Assert.Null(ProfileSnapshotValidator.Validate(profile));
+    }
+
+    [Fact]
+    public void 触屏载荷与FPS解锁都关闭被拒绝()
+    {
+        var profile = Valid();
+        profile.Hoyo.FpsUnlockEnabled = false;
+        profile.Hoyo.TouchUiEnabled = false;
+        Assert.NotNull(ProfileSnapshotValidator.Validate(profile));
+    }
+
+    [Fact]
+    public void 旧快照缺省触屏字段且FPS解锁关闭仍通过()
+    {
+        // 缺省 = 触屏开启（既有「纯触屏」会话）。
+        var profile = Valid();
+        profile.Hoyo.FpsUnlockEnabled = false;
+        Assert.False(profile.Hoyo.HasTouchUiEnabled);
+        Assert.Null(ProfileSnapshotValidator.Validate(profile));
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("wow")]

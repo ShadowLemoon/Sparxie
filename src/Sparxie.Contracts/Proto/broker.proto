@@ -13,6 +13,8 @@ message PingRequest {
 message PingResponse {
   int32 protocol_version = 1;
   string broker_version = 2;
+  // 当前 Broker 支持的可选能力，旧 Broker 不返回此字段（外部启动器据此判断功能是否可用）。
+  repeated string capabilities = 3;
 }
 
 // 不可变 Profile 快照：UI 侧归一化，Broker 边界重新验证。
@@ -27,6 +29,7 @@ message HoyoSettings {
   int32 genshin_preset_60_fps = 8;
   bool genshin_touch_ui_scale_override_enabled = 9;
   int32 genshin_touch_ui_scale_percent = 10;
+  optional bool touch_ui_enabled = 11;
 }
 
 // 启动设置：width/height 为 0 表示不修改；fullscreen 0 不修改 / 1 全屏 / 2 窗口；borderless 为 true 时自动加 -popupwindow。
