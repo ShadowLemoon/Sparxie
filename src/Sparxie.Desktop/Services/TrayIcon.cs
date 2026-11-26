@@ -49,6 +49,7 @@ internal sealed class TrayIcon : IDisposable
             return;
         }
 
+        UseDarkMenus();
         EnsureWindow();
         _icon = LoadAppIcon();
         var data = CreateData();
@@ -151,6 +152,21 @@ internal sealed class TrayIcon : IDisposable
         }
 
         return DefWindowProc(hwnd, message, wParam, lParam);
+    }
+
+    /// <summary>
+    /// Win32 弹出菜单不受 XAML 主题影响，默认是浅色；应用界面固定深色，这里让本进程的原生菜单也固定深色。
+    /// uxtheme 的这两个函数未公开，只能按序号导入；135 号从 Windows 10 1903 起才是 SetPreferredAppMode。
+    /// </summary>
+    private static void UseDarkMenus()
+    {
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 18362))
+        {
+            return;
+        }
+
+        SetPreferredAppMode(PreferredAppModeForceDark);
+        FlushMenuThemes();
     }
 
     private void ShowMenu()
@@ -266,6 +282,14 @@ internal sealed class TrayIcon : IDisposable
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hwnd);
+
+    private const int PreferredAppModeForceDark = 2;
+
+    [DllImport("uxtheme.dll", EntryPoint = "#135")]
+    private static extern int SetPreferredAppMode(int mode);
+
+    [DllImport("uxtheme.dll", EntryPoint = "#136")]
+    private static extern void FlushMenuThemes();
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr GetModuleHandle(string? moduleName);
