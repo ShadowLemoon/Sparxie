@@ -173,13 +173,12 @@ public sealed partial class ProfileManagerPage : Page
                 return;
             }
 
-            var picker = new Windows.Storage.Pickers.FileOpenPicker
+            // Windows App SDK 的选择器：管理员权限运行时也能用（UWP 的 Windows.Storage.Pickers 不行）。
+            var picker = new Microsoft.Windows.Storage.Pickers.FileOpenPicker(window.AppWindow.Id)
             {
-                SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.ComputerFolder,
-                ViewMode = Windows.Storage.Pickers.PickerViewMode.List,
+                SuggestedStartLocation = Microsoft.Windows.Storage.Pickers.PickerLocationId.ComputerFolder,
+                ViewMode = Microsoft.Windows.Storage.Pickers.PickerViewMode.List,
             };
-            WinRT.Interop.InitializeWithWindow.Initialize(
-                picker, WinRT.Interop.WindowNative.GetWindowHandle(window));
             picker.FileTypeFilter.Add(".exe");
 
             var file = await picker.PickSingleFileAsync();

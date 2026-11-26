@@ -341,6 +341,13 @@ public sealed class PluginsViewModel : ObservableObject
         : $"{what}：{ex.Message}";
 
     /// <summary>拖放里有不能导入的内容（不是 .zip 或文件夹）或数量太多时的提示；没有可导入的项时它就是最终结果。</summary>
+    public void ReportPickerProblem(string reason)
+    {
+        _notices.Clear();
+        Message = $"打开选择窗口失败：{reason}";
+        Refresh();
+    }
+
     public void ReportDropProblem(PluginDropFilter.Result picked)
     {
         var parts = new List<string>();
