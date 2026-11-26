@@ -28,6 +28,51 @@ public class ProfileSnapshotValidatorTests
         Assert.Null(ProfileSnapshotValidator.Validate(Valid()));
     }
 
+    [Fact]
+    public void 触屏载荷关闭但FPS解锁开启通过()
+    {
+        var profile = Valid();
+        profile.Hoyo.FpsUnlockEnabled = true;
+        profile.DisableTouchUi = true;
+        Assert.Null(ProfileSnapshotValidator.Validate(profile));
+    }
+
+    [Fact]
+    public void 触屏载荷与FPS解锁都关闭被拒绝()
+    {
+        var profile = Valid();
+        profile.Hoyo.FpsUnlockEnabled = false;
+        profile.DisableTouchUi = true;
+        Assert.NotNull(ProfileSnapshotValidator.Validate(profile));
+    }
+
+    [Fact]
+    public void 默认关闭触屏为false且FPS解锁关闭仍通过()
+    {
+        // 默认 disableTouchUi = false（既有「纯触屏」会话）。
+        var profile = Valid();
+        profile.Hoyo.FpsUnlockEnabled = false;
+        Assert.False(profile.DisableTouchUi);
+        Assert.Null(ProfileSnapshotValidator.Validate(profile));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void 绝区零快照支持关闭触屏且无需Hoyo设置(bool disableTouchUi)
+    {
+        var profile = new ProfileSnapshot
+        {
+            ProfileId = "zzz-1",
+            DisplayName = "绝区零",
+            Game = "zenlessZoneZero",
+            ExecutablePath = @"D:\Games\ZenlessZoneZero.exe",
+            DisableTouchUi = disableTouchUi,
+        };
+
+        Assert.Null(ProfileSnapshotValidator.Validate(profile));
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("wow")]

@@ -154,6 +154,12 @@ public static class ConfigReader
             DropUnreadableFields<HoyoProfileSettings>(node, "hoyo", label, notes);
             DropUnreadableFields<LaunchSettings>(node, "launch", label, notes);
 
+            if (node["disableTouchUi"] is { } disableTouchUi && (disableTouchUi is not JsonValue disableTouchUiVal || !disableTouchUiVal.TryGetValue<bool>(out _)))
+            {
+                node.Remove("disableTouchUi");
+                notes.Add($"{label} 的 disableTouchUi 无法读取（{disableTouchUi.ToJsonString()}），已用默认值");
+            }
+
             if (node["settings"] is { } settings && settings is not JsonObject)
             {
                 node.Remove("settings");

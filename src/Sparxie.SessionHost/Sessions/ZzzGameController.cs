@@ -5,7 +5,8 @@ using Sparxie.Contracts.Rpc;
 namespace Sparxie.SessionHost.Sessions;
 
 /// <summary>
-/// 绝区零 Runtime 控制器（按 ZZZTouchLauncher v2 重构）：只负责把 ZZZTouchRuntime 注入游戏进程。
+/// 绝区零 Runtime 控制器（按 ZZZTouchLauncher v2 重构）：默认把 ZZZTouchRuntime 注入游戏进程；
+/// 当外部启动器在快照里把 <c>disable_touch_ui</c> 设为 true 时，不注入任何 DLL，直接启动游戏。
 /// v2 的 Runtime 在游戏进程内固定触屏布局、合成多指触点，因此<b>不再读写任何游戏配置</b>
 /// （不备份/改写 GENERAL_DATA.bin，也没有恢复记录），崩溃或异常退出都没有配置残留。
 /// 触屏布局必须在游戏启动、界面建好之前固定，所以只支持“启动时注入”，不支持游戏已在运行时中途注入。
@@ -26,6 +27,7 @@ public sealed class ZzzGameController : IGameController
     /// <summary>持钩线程等待游戏退出时检查停止信号的间隔（毫秒）。</summary>
     private const uint HookPollMs = 500;
 
+    private bool _disableTouchUi;
     private bool _released;
     private Thread? _hookOwner;
     private ManualResetEventSlim? _stopOwner;
@@ -37,6 +39,11 @@ public sealed class ZzzGameController : IGameController
 
     public string SessionId => _sessionId;
 
+    internal bool DisableTouchUi => _disableTouchUi;
+
+    /// <summary><c>disable_touch_ui = false</c>（缺省）时注入运行库；<c>true</c> 时跳过注入直接启动。</summary>
+    internal static bool ShouldInject(ProfileSnapshot profile) => !profile.DisableTouchUi;
+
     public Task PrepareLaunchAsync(ProfileSnapshot profile, CancellationToken cancellationToken)
     {
         // 不再有启动前的配置处理；只确认 EXE 存在，早失败比让游戏起不来再报错清楚。
@@ -45,6 +52,7 @@ public sealed class ZzzGameController : IGameController
             throw new FileNotFoundException("绝区零 EXE 不存在", profile.ExecutablePath);
         }
 
+        _disableTouchUi = profile.DisableTouchUi;
         return Task.CompletedTask;
     }
 
@@ -58,6 +66,12 @@ public sealed class ZzzGameController : IGameController
         if (gameProcess is null)
         {
             throw new InvalidOperationException("ZZZ 游戏进程未创建");
+        }
+
+        if (_disableTouchUi)
+        {
+            // 关闭触屏时直接启动游戏，不加载 ZZZTouchCore.dll，也不注入 ZZZTouchRuntime.dll。
+            return;
         }
 
         var targetPid = (uint)gameProcess.Id;

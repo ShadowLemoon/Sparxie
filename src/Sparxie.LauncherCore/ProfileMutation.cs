@@ -22,6 +22,7 @@ public sealed record ProfileMutation(
     int? GenshinPreset60Fps = null,
     bool? GenshinTouchUiScaleOverrideEnabled = null,
     int? GenshinTouchUiScalePercent = null,
+    bool? DisableTouchUi = null,
     LaunchSettings? Launch = null,
     string? GameId = null,
     System.Text.Json.Nodes.JsonObject? PluginSettings = null)
@@ -49,6 +50,7 @@ public sealed record ProfileMutation(
         || Game.HasValue
         || GameId is not null
         || PluginSettings is not null
+        || DisableTouchUi.HasValue
         || HasHoyoSettings
         || HasGenshinSettings
         || Launch is not null;

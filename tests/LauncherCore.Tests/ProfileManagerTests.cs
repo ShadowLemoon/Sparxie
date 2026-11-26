@@ -47,6 +47,32 @@ public sealed class ProfileManagerTests
     }
 
     [Fact]
+    public void 触屏开关支持Hoyo与绝区零并拒绝插件游戏()
+    {
+        var config = new AppConfig();
+        ProfileManager.Add(config, Create("sr-cn", "星铁", GameType.StarRail, @"D:\Games\StarRail.exe"));
+        ProfileManager.Add(config, Create("zzz-cn", "绝区零", GameType.ZenlessZoneZero, @"D:\Games\ZenlessZoneZero.exe"));
+        ProfileManager.Add(config, new ProfileMutation(Id: "plug-1", DisplayName: "插件游戏", GameId: "ext.acme.demo"));
+
+        Assert.False(config.Profiles[0].DisableTouchUi);
+        Assert.False(config.Profiles[1].DisableTouchUi);
+
+        var updated = ProfileManager.Update(config, "sr-cn", new ProfileMutation(DisableTouchUi: true));
+        Assert.True(updated.DisableTouchUi);
+        Assert.True(updated.Hoyo!.FpsUnlockEnabled);
+
+        // 复制/保存路径都经 Clone：开关不能在这里丢失。
+        Assert.True(ProfileManager.Update(config, "sr-cn", new ProfileMutation(TargetFps: 144)).DisableTouchUi);
+
+        var zzzUpdated = ProfileManager.Update(config, "zzz-cn", new ProfileMutation(DisableTouchUi: true));
+        Assert.True(zzzUpdated.DisableTouchUi);
+        Assert.Null(zzzUpdated.Hoyo);
+        Assert.True(ProfileManager.Update(config, "zzz-cn", new ProfileMutation(DisplayName: "绝区零 键鼠")).DisableTouchUi);
+
+        Assert.Throws<LauncherException>(() => ProfileManager.Update(config, "plug-1", new ProfileMutation(DisableTouchUi: true)));
+    }
+
+    [Fact]
     public void 选择和删除默认Profile按约定回落()
     {
         var config = new AppConfig();

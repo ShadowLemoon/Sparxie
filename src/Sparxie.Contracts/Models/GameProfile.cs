@@ -27,6 +27,12 @@ public sealed class GameProfile
     /// <summary>仅原神/星铁适用；绝区零为 null。</summary>
     public HoyoProfileSettings? Hoyo { get; set; }
 
+    /// <summary>
+    /// 关闭触屏界面（默认 false = 开启触屏；true 时原神/星铁保留 PC 界面仅做 FPS 解锁等，绝区零不注入 DLL 直接启动）。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool DisableTouchUi { get; set; }
+
     /// <summary>分辨率 / 窗口模式 / 附加命令行参数；没有任何设置时为 null（不写入配置）。</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public LaunchSettings? Launch { get; set; }

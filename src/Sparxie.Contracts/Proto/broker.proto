@@ -47,6 +47,8 @@ message ProfileSnapshot {
   LaunchSettings launch = 6;
   // 第三方插件游戏的设置（JSON 对象文本）：UI 侧按 plugin.json 的 settingsSchema 生成，SessionHost 归一化后传给插件；内置游戏为空。
   string settings_json = 7;
+  // 关闭触屏界面（缺省 false = 开启触屏；true 时原神/星铁仅保留帧率解锁等 PC 界面会话，绝区零不注入 DLL 直接启动）。
+  bool disable_touch_ui = 8;
 }
 
 message StartSessionRequest {

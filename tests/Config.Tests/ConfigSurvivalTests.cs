@@ -67,15 +67,15 @@ public sealed class ConfigSurvivalTests : IDisposable
     public void 超范围和类型错误的字段改回默认值_其他字段不动()
     {
         var result = Load("""
-            { "id": "good", "displayName": "星铁", "game": "starRail", "executablePath": "C:\\S\\StarRail.exe",
-              "hoyo": { "touchUiEnabled": false, "targetFps": 9999, "backgroundFps": "快", "genshinTouchUiScalePercent": 1, "processPriority": "realtime", "backgroundFpsLimitEnabled": false },
+            { "id": "good", "displayName": "星铁", "game": "starRail", "executablePath": "C:\\S\\StarRail.exe", "disableTouchUi": true,
+              "hoyo": { "targetFps": 9999, "backgroundFps": "快", "genshinTouchUiScalePercent": 1, "processPriority": "realtime", "backgroundFpsLimitEnabled": false },
               "launch": { "width": 100, "height": 100, "fullscreen": "yes", "borderless": true, "extraArguments": "-x\n-y" } }
             """);
 
         Assert.Equal(ConfigLoadState.Repaired, result.State);
         var profile = Assert.Single(result.Config.Profiles);
         var hoyo = profile.Hoyo!;
-        Assert.False(hoyo.TouchUiEnabled);
+        Assert.True(profile.DisableTouchUi);
         Assert.False(hoyo.BackgroundFpsLimitEnabled);
         Assert.Equal(120, hoyo.TargetFps);
         Assert.Equal(10, hoyo.BackgroundFps);
@@ -108,6 +108,19 @@ public sealed class ConfigSurvivalTests : IDisposable
         Assert.Equal("good", profile.DisplayName);
         Assert.Equal(string.Empty, profile.ExecutablePath);
         Assert.Null(profile.Hoyo);
+    }
+
+    [Fact]
+    public void 触屏关闭开关正常保留_类型错误时恢复默认()
+    {
+        var kept = Load("""{ "id": "zzz-pc", "displayName": "绝区零 键鼠", "game": "zenlessZoneZero", "executablePath": "C:\\Z\\ZenlessZoneZero.exe", "disableTouchUi": true }""");
+        Assert.Equal(ConfigLoadState.Loaded, kept.State);
+        Assert.True(Assert.Single(kept.Config.Profiles).DisableTouchUi);
+
+        var repaired = Load("""{ "id": "zzz-bad", "displayName": "绝区零", "game": "zenlessZoneZero", "executablePath": "C:\\Z\\ZenlessZoneZero.exe", "disableTouchUi": "yes" }""");
+        Assert.Equal(ConfigLoadState.Repaired, repaired.State);
+        Assert.False(Assert.Single(repaired.Config.Profiles).DisableTouchUi);
+        Assert.Contains(repaired.Changes, change => change.Contains("disableTouchUi"));
     }
 
     [Fact]
