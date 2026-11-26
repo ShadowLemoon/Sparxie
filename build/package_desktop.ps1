@@ -50,9 +50,7 @@ $notices = @(
     @((Join-Path $repo 'THIRD-PARTY-NOTICES.md'), 'THIRD-PARTY-NOTICES.md'),
     @((Join-Path $repo 'native/HoyoTouchCore/upstream/LICENSE'), 'UPSTREAM-LICENSE-MIT.txt'),
     @((Join-Path $repo 'native/HoyoTouchCore/adapter/licenses/inih-LICENSE.txt'), 'inih-LICENSE.txt'),
-    @((Join-Path $repo 'docs/RUNTIME-NOTICE.md'), 'RUNTIME-NOTICE.md'),
-    # optional features of this Broker, read by tools that start Sparxie before they run it
-    @((Join-Path $repo 'build/capabilities.json'), 'capabilities.json')
+    @((Join-Path $repo 'docs/RUNTIME-NOTICE.md'), 'RUNTIME-NOTICE.md')
 )
 foreach ($n in $notices) { Copy-Item $n[0] (Join-Path $app $n[1]) -Force }
 
