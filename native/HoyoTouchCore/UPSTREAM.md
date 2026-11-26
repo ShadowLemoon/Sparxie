@@ -16,11 +16,22 @@ git subtree add --squash --prefix=native/HoyoTouchCore/upstream \
     <上游仓库> HEAD
 ```
 
+以后同步上游：
+
+```bash
+git subtree pull --squash --prefix=native/HoyoTouchCore/upstream \
+    https://github.com/winTEuser/Genshin_StarRail_fps_unlocker.git master
+```
+
+subtree 靠历史里的 `git-subtree-dir` / `git-subtree-split` 记录找上次同步的基线。
+**带 subtree 提交（含本次重建和以后每次同步）的分支只能用合并提交或快进合入，不能 squash、rebase。**
+
 ## 当前基线
 
 - 上游提交：`4ba09224c68b8a82ec041517b144ee3287884a8c`
 - 导入日期：2026-08-15
-- subtree 提交：`git log --oneline --grep="Add.*upstream" -1` 或 `git log --oneline -- native/HoyoTouchCore/upstream | tail -n 1`
+- 2026-11-26 重建 subtree 记录（历史整理时丢失）；导入时的目录与该上游提交的文件树一致。
+- subtree 记录：`git log --grep="^git-subtree-dir: native/HoyoTouchCore/upstream" -1`
 
 ## 保持原样约束
 
