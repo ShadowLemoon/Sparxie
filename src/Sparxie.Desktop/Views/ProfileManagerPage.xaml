@@ -182,6 +182,24 @@
                             <StackPanel x:Name="HoyoRightColumn" Grid.Column="0" Grid.Row="1" Spacing="16" VerticalAlignment="Top">
                             <Border Style="{StaticResource GlassCard}" Padding="20,12"
                                     Visibility="{Binding IsHoyoGame, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Grid ColumnSpacing="16" MinHeight="56">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel VerticalAlignment="Center" Spacing="2">
+                                        <TextBlock Text="触屏界面" />
+                                        <TextBlock Text="触屏界面和帧率解锁至少开启一项" Style="{StaticResource CaptionText}" TextWrapping="Wrap"
+                                                   Visibility="{Binding ShowTouchUiRule, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    </StackPanel>
+                                    <ToggleSwitch Grid.Column="1" MinWidth="0" OnContent="" OffContent="" VerticalAlignment="Center"
+                                                  IsOn="{Binding TouchUiEnabled, Mode=TwoWay}"
+                                                  IsEnabled="{Binding CanToggleTouchUi}"
+                                                  AutomationProperties.Name="启用触屏界面" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource GlassCard}" Padding="20,12"
+                                    Visibility="{Binding IsHoyoGame, Converter={StaticResource BoolToVisibilityConverter}}">
                                 <StackPanel>
                                     <TextBlock Text="帧率" Style="{StaticResource SectionHeading}" Margin="0,4,0,8" />
 
@@ -196,6 +214,7 @@
                                         </StackPanel>
                                         <ToggleSwitch Grid.Column="1" MinWidth="0" OnContent="" OffContent="" VerticalAlignment="Center"
                                                       IsOn="{Binding FpsUnlockEnabled, Mode=TwoWay}"
+                                                      IsEnabled="{Binding CanToggleFpsUnlock}"
                                                       AutomationProperties.Name="启用 FPS 解锁" />
                                         <controls:NumberStepper Grid.Column="2" VerticalAlignment="Center"
                                                                 Minimum="10" Maximum="1000" Step="1"
@@ -254,7 +273,7 @@
                                 </StackPanel>
                             </Border>
                                 <Border Style="{StaticResource GlassCard}"
-                                        Visibility="{Binding IsGenshin, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        Visibility="{Binding ShowGenshinTouchUiScale, Converter={StaticResource BoolToVisibilityConverter}}">
                                     <Grid ColumnSpacing="12" MinHeight="72">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
