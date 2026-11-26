@@ -401,9 +401,7 @@ public sealed class ProfileManagerViewModel : ObservableObject
                 or nameof(ProfileEditorViewModel.PathHint) or nameof(ProfileEditorViewModel.HasPathHint)
                 or nameof(ProfileEditorViewModel.CommandLinePreview) or nameof(ProfileEditorViewModel.ResolutionControlsEnabled)
                 or nameof(ProfileEditorViewModel.PresetEnabled) or nameof(ProfileEditorViewModel.CustomEnabled)
-                or nameof(ProfileEditorViewModel.HasPluginFields) or nameof(ProfileEditorViewModel.CanToggleTouchUi)
-                or nameof(ProfileEditorViewModel.CanToggleFpsUnlock) or nameof(ProfileEditorViewModel.ShowTouchUiRule)
-                or nameof(ProfileEditorViewModel.ShowGenshinTouchUiScale))
+                or nameof(ProfileEditorViewModel.HasPluginFields))
         {
             return;
         }
@@ -491,7 +489,6 @@ public sealed class ProfileEditorViewModel : ObservableObject
     private string _displayName = string.Empty;
     private GameKey _game;
     private string _executablePath = string.Empty;
-    private bool _touchUiEnabled = true;
     private bool _fpsUnlockEnabled = true;
     private double _targetFps = 120;
     private bool _backgroundFpsLimitEnabled = true;
@@ -620,7 +617,6 @@ public sealed class ProfileEditorViewModel : ObservableObject
             OnPropertyChanged(nameof(PathHint));
             OnPropertyChanged(nameof(HasPathHint));
             OnPropertyChanged(nameof(IsGenshin));
-            OnPropertyChanged(nameof(ShowGenshinTouchUiScale));
             RebuildPluginFields(null); // 换了游戏：旧游戏的设置不适用，按新游戏的 schema 重建（默认值）
         }
     }
@@ -641,48 +637,7 @@ public sealed class ProfileEditorViewModel : ObservableObject
     public string PathHint => ExecutablePathCheck.Describe(Game.Id, ExecutablePathCheck.Check(Game.Id, ExecutablePath));
 
     public bool HasPathHint => PathHint.Length > 0;
-    public bool TouchUiEnabled
-    {
-        get => _touchUiEnabled;
-        set
-        {
-            if (SetProperty(ref _touchUiEnabled, value))
-            {
-                NotifyTouchUiRule();
-            OnPropertyChanged(nameof(ShowGenshinTouchUiScale));
-            }
-        }
-    }
-
-    public bool FpsUnlockEnabled
-    {
-        get => _fpsUnlockEnabled;
-        set
-        {
-            if (SetProperty(ref _fpsUnlockEnabled, value))
-            {
-                NotifyTouchUiRule();
-            }
-        }
-    }
-
-    // 触屏界面和帧率解锁至少开一个（两个都关时没有可安装的内容，Broker 会拒绝）：只剩一个开着时锁住它。
-    public bool CanToggleTouchUi => FpsUnlockEnabled || !TouchUiEnabled;
-
-    public bool CanToggleFpsUnlock => TouchUiEnabled || !FpsUnlockEnabled;
-
-    public bool ShowTouchUiRule => !TouchUiEnabled || !FpsUnlockEnabled;
-
-    /// <summary>触控 UI 缩放随触屏界面一起安装，关掉触屏界面后不起作用。</summary>
-    public bool ShowGenshinTouchUiScale => IsGenshin && TouchUiEnabled;
-
-    private void NotifyTouchUiRule()
-    {
-        OnPropertyChanged(nameof(CanToggleTouchUi));
-        OnPropertyChanged(nameof(CanToggleFpsUnlock));
-        OnPropertyChanged(nameof(ShowTouchUiRule));
-    }
-
+    public bool FpsUnlockEnabled { get => _fpsUnlockEnabled; set => SetProperty(ref _fpsUnlockEnabled, value); }
     public double TargetFps { get => _targetFps; set => SetProperty(ref _targetFps, value); }
     public bool BackgroundFpsLimitEnabled { get => _backgroundFpsLimitEnabled; set => SetProperty(ref _backgroundFpsLimitEnabled, value); }
     public double BackgroundFps { get => _backgroundFps; set => SetProperty(ref _backgroundFps, value); }
@@ -923,7 +878,6 @@ public sealed class ProfileEditorViewModel : ObservableObject
         DisplayName = profile.DisplayName,
         Game = new GameKey(profile.Game),
         ExecutablePath = profile.ExecutablePath,
-        TouchUiEnabled = profile.Hoyo?.TouchUiEnabled ?? true,
         FpsUnlockEnabled = profile.Hoyo?.FpsUnlockEnabled ?? true,
         TargetFps = profile.Hoyo?.TargetFps ?? 120,
         BackgroundFpsLimitEnabled = profile.Hoyo?.BackgroundFpsLimitEnabled ?? true,
@@ -958,7 +912,6 @@ public sealed class ProfileEditorViewModel : ObservableObject
         GameId: Game.Id,
         PluginSettings: BuildPluginSettings(),
         ExecutablePath: string.IsNullOrWhiteSpace(ExecutablePath) ? null : ExecutablePath,
-        TouchUiEnabled: IsHoyoGame ? TouchUiEnabled : null,
         FpsUnlockEnabled: IsHoyoGame ? FpsUnlockEnabled : null,
         TargetFps: IsHoyoGame ? ToFps(TargetFps, 120) : null,
         BackgroundFpsLimitEnabled: IsHoyoGame ? BackgroundFpsLimitEnabled : null,
